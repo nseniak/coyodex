@@ -7,7 +7,7 @@ Run either way (needs an editable install: `make deps`):
 
 **Why this layer exists.** The 894 tests that came before it all assert what the code does WHEN
 CALLED. A build agent reads only `method.md` and the `method/` docs, so a command the method
-never names is unreachable no matter how well it is tested — `coyodex reconcile` shipped fully
+never names is unreachable no matter how well it is tested — `coyomap reconcile` shipped fully
 working, fully tested, and ran ZERO times across four measured builds while every one of them
 hand-wrote the file it generates (one was 24 KB, 139 rules, 882 id assignments). That is a
 defect no unit test can see, because nothing is wrong with the unit.
@@ -36,7 +36,7 @@ they check.
 
 **History.** Three of these tests failed when the layer landed; the failures were the
 deliverable. All three findings have since been fixed in the CLI, the method docs and the
-validator (`coyodex dump` / `reconcile` / `fix dedup-relation` are named in the method,
+validator (`coyomap dump` / `reconcile` / `fix dedup-relation` are named in the method,
 `preindex --report` honours `--root`, and the unowned-entity advisory carries a real escape),
 so the suite is green and each test is now a standing regression gate on the fix.
 """
@@ -51,16 +51,16 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
-from coyodex import balance_lib
+from coyomap import balance_lib
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TOOLS = REPO_ROOT / "tools" / "coyodex"
+TOOLS = REPO_ROOT / "tools" / "coyomap"
 
 #: Every doc a build agent actually reads. `internal/` is explicitly NOT the method.
 METHOD_DOCS: tuple[Path, ...] = (
     (REPO_ROOT / "method.md"),
     *sorted((REPO_ROOT / "method").glob("*.md")),
-    (REPO_ROOT / "skill" / "coyodex" / "SKILL.md"),
+    (REPO_ROOT / "skill" / "coyomap" / "SKILL.md"),
 )
 
 #: command name -> the module implementing it, as `cli.py` dispatches.
@@ -113,9 +113,9 @@ def make_method_text() -> str:
 
 
 def make_cli_commands() -> tuple[str, ...]:
-    """The command names `coyodex --help` advertises, read from the USAGE text itself so a new
+    """The command names `coyomap --help` advertises, read from the USAGE text itself so a new
     command joins this test automatically."""
-    from coyodex.cli import USAGE
+    from coyomap.cli import USAGE
     body = USAGE.split("Commands:", 1)[1].split("\nGlobal:", 1)[0]
     names: list[str] = []
     for line in body.splitlines():
@@ -126,8 +126,8 @@ def make_cli_commands() -> tuple[str, ...]:
 
 
 def make_fix_verbs() -> tuple[str, ...]:
-    """The second-level verbs `coyodex fix` dispatches, read from its own verb table."""
-    from coyodex.fix import _VERBS
+    """The second-level verbs `coyomap fix` dispatches, read from its own verb table."""
+    from coyomap.fix import _VERBS
     return tuple(sorted(_VERBS))
 
 
@@ -136,9 +136,9 @@ def make_doc_flag_pairs() -> tuple[tuple[str, str, str], ...]:
 
     Attribution is span-scoped, never proximity-scoped: a flag counts for a command only when
     both appear inside the SAME code span (a fenced block or one inline-code run). Proximity
-    attribution mis-assigns `git status --porcelain` to whatever coyodex command was mentioned
+    attribution mis-assigns `git status --porcelain` to whatever coyomap command was mentioned
     last, which is how a contract test starts reporting noise and stops being read."""
-    cmd_pat = re.compile(r"coyodex\s+(" + "|".join(map(re.escape, COMMAND_MODULE)) + r")\b")
+    cmd_pat = re.compile(r"coyomap\s+(" + "|".join(map(re.escape, COMMAND_MODULE)) + r")\b")
     span_pat = re.compile(r"```[a-z]*\n(.*?)```|`([^`]+)`", re.S)
     pairs: list[tuple[str, str, str]] = []
     for doc in METHOD_DOCS:
@@ -398,7 +398,7 @@ def _loaded_names(fn: ast.FunctionDef) -> frozenset[str]:
 def _flag_sites(fn: ast.FunctionDef) -> tuple[tuple[str, bool], ...]:
     """(flag, the value this occurrence produces is consumed) for every `--flag` literal in `fn`.
 
-    coyodex parses argv by hand (no argparse anywhere — see `cli.py`'s dependency firewall), so
+    coyomap parses argv by hand (no argparse anywhere — see `cli.py`'s dependency firewall), so
     "the parser accepts it" is "the flag literal is in the code that runs". The literal alone is
     not enough: `_ignored_root = _arg(argv, "--root")` mentions the flag and throws the answer
     away, which is EXACTLY the measured defect. So an occurrence sitting in an assignment whose
@@ -448,23 +448,23 @@ def test_every_cli_command_is_named_in_the_method():
     not `--help`. Failed when this layer landed, on `dump` and `reconcile`; both are named in the
     method now, so this is the standing gate on the next command that forgets to be."""
     text = make_method_text()
-    missing = [c for c in make_cli_commands() if f"coyodex {c}" not in text]
+    missing = [c for c in make_cli_commands() if f"coyomap {c}" not in text]
     assert not missing, (
         "CLI commands named nowhere in the method docs, so no build can reach them: "
         + ", ".join(missing)
         + " — every one of these is a working, tested command that a build agent has no way to "
-          "learn about. `coyodex reconcile` is the measured case: four builds hand-wrote the "
+          "learn about. `coyomap reconcile` is the measured case: four builds hand-wrote the "
           "file it generates instead of running it.")
 
 
 def test_every_fix_verb_is_named_in_the_method():
-    """`coyodex fix` dispatches three verbs and the method must name every one. Failed when this
+    """`coyomap fix` dispatches three verbs and the method must name every one. Failed when this
     layer landed, on `dedup-relation` — which resolves a BLOCKING validate error, so a lead who
     hit that error had no documented way out and hand-edited the model instead. Now documented."""
     text = make_method_text()
     missing = [v for v in make_fix_verbs() if v not in text]
     assert not missing, (
-        "`coyodex fix` verbs named nowhere in the method docs: " + ", ".join(missing))
+        "`coyomap fix` verbs named nowhere in the method docs: " + ", ".join(missing))
 
 
 # --- (b) every flag the method tells a build to pass is accepted ----------------------
@@ -482,7 +482,7 @@ def test_every_flag_the_method_prescribes_is_accepted_by_that_command():
     bad: list[str] = []
     for cmd, flag, loc in make_doc_flag_pairs():
         if flag not in make_code_flag_literals(cmd):
-            bad.append(f"{loc}: `coyodex {cmd} {flag}` — no executable code in "
+            bad.append(f"{loc}: `coyomap {cmd} {flag}` — no executable code in "
                        f"{COMMAND_MODULE[cmd]}.py names it (a comment, a docstring or the USAGE "
                        "text does not count)")
     assert not bad, "Flags the method prescribes that the command does not accept:\n  " + "\n  ".join(bad)
@@ -492,7 +492,7 @@ def test_a_mode_flag_does_not_silently_swallow_the_flags_its_mode_ignores():
     """The other half of (b), and the one that bites: a flag can be *accepted* by the command
     and *ignored* by the mode.
 
-    `coyodex preindex --report --root <other-repo>` is the measured case. `preindex.py` reads
+    `coyomap preindex --report --root <other-repo>` is the measured case. `preindex.py` reads
     `--root` in `main()`, so the flag-existence check above passes — but `--report` branched into
     `report()`, which read only `--in`, so `--root` was silently dropped and the CWD's pre-index
     was reported instead of the named repo's. Silently using the wrong repo is worse than
@@ -516,7 +516,7 @@ def test_a_mode_flag_does_not_silently_swallow_the_flags_its_mode_ignores():
     switches = {"--report", "--help", "--in", "--depth", "--top"}
     ignored = sorted((main_flags - report_flags) - switches)
     assert not ignored, (
-        "`coyodex preindex --report` accepts these flags and silently ignores them: "
+        "`coyomap preindex --report` accepts these flags and silently ignores them: "
         + ", ".join(f"{f} (parsed, then discarded)" if f in discarded else f"{f} (never read)"
                     for f in ignored)
         + " — `--root` is the one that matters: if --report reads only `--in` (a CWD-relative "
@@ -931,7 +931,7 @@ if __name__ == "__main__":
 
 
 def test_every_advertised_command_has_a_module_in_the_flag_audit_table():
-    """COMMAND_MODULE parity with `coyodex --help`.
+    """COMMAND_MODULE parity with `coyomap --help`.
 
     `finalize` shipped absent from this table, so the flag audit below silently skipped the two flags
     method.md prescribes for it. A missing row does not fail anything — it just stops auditing — which
@@ -971,7 +971,7 @@ def test_every_balance_exceptions_literal_the_method_prescribes_is_read_by_a_too
 
     `security-granularity` shipped as the first literal the method told a build to record under a
     machine-read heading that no tool read — so a build would have written a line nothing consumed,
-    and a typo in it would have been undetectable. That is the `coyodex reconcile` failure class (a
+    and a typo in it would have been undetectable. That is the `coyomap reconcile` failure class (a
     working, tested, unreachable thing) one rung down, and the heading-level test could not see it
     because the HEADING was read; only this literal was not.
 
@@ -1007,7 +1007,7 @@ def make_documented_json_blocks() -> list[tuple[str, str, str]]:
         text = doc.read_text(encoding="utf-8")
         for hit in re.finditer(r"```json\n(.*?)```", text, re.S):
             before = text[max(0, hit.start() - 800):hit.start()].lower()
-            if "--rules" in before or "coyodex reconcile" in before:
+            if "--rules" in before or "coyomap reconcile" in before:
                 kind = "reconcile-rules"
             elif "reconcile" in before or "drop_edges" in before:
                 kind = "reconcile"
@@ -1034,12 +1034,12 @@ def test_every_documented_json_block_is_valid_json():
 def test_every_reconcile_example_in_the_method_loads_through_the_real_loader():
     """A build copies these blocks verbatim, so a shape the loader rejects is a doc-shaped bug.
 
-    This is the class the `.coyodex/.ignore` example proved: the method showed `pattern  # comment`,
+    This is the class the `.coyomap/.ignore` example proved: the method showed `pattern  # comment`,
     the parser treated the whole line as one pattern, three live patterns matched nothing, and the
     build deleted the file instead of fixing the syntax. The fix was worth little until a test read the
     example out of the REAL doc — so the same discipline applies to the JSON the method teaches, and
     `drop_edges`'s shape was undocumented until a build read `reconcile.py`'s source to find it."""
-    from coyodex.reconcile import ReconcileError, load_reconcile
+    from coyomap.reconcile import ReconcileError, load_reconcile
 
     examples = [(src, raw) for src, kind, raw in make_documented_json_blocks()
                 if kind == "reconcile"]
@@ -1053,9 +1053,9 @@ def test_every_reconcile_example_in_the_method_loads_through_the_real_loader():
 
 
 def test_every_reconcile_rules_example_in_the_method_is_accepted_by_the_generator():
-    """The `coyodex reconcile --rules` input shape, same reasoning. It ran 0 times in 3 measured
+    """The `coyomap reconcile --rules` input shape, same reasoning. It ran 0 times in 3 measured
     builds, so its documented example is the only thing a build has to go on."""
-    from coyodex.reconcile_build import RuleError, load_rules
+    from coyomap.reconcile_build import RuleError, load_rules
 
     examples = [(src, raw) for src, kind, raw in make_documented_json_blocks()
                 if kind == "reconcile-rules"]
@@ -1067,7 +1067,7 @@ def test_every_reconcile_rules_example_in_the_method_is_accepted_by_the_generato
             try:
                 rules = load_rules(p)
             except RuleError as e:
-                raise AssertionError(f"{src} is not loadable by `coyodex reconcile --rules`: {e}") from e
+                raise AssertionError(f"{src} is not loadable by `coyomap reconcile --rules`: {e}") from e
         assert rules, f"{src} parsed to zero rules — the example teaches nothing"
 
 
@@ -1079,7 +1079,7 @@ def test_every_scoped_runs_in_literal_appears_in_the_method_prose():
 
     The existing test only checks method-literal -> tool. `runs-in` is still a recognised literal
     (it is what the "silences nothing" complaint keys off), so that direction stayed green."""
-    from coyodex.balance_lib import RUNS_IN_SCOPES
+    from coyomap.balance_lib import RUNS_IN_SCOPES
     prose = "\n".join((REPO_ROOT / rel).read_text(encoding="utf-8")
                       for rel in ("method.md", "method/model.md"))
     missing = [scope for scope in RUNS_IN_SCOPES if f"`{scope}`" not in prose]
@@ -1094,7 +1094,7 @@ def test_every_worklist_theme_is_named_in_the_method():
     on listing eight themes for two releases, so a lead batching by the method's list had no bucket
     for the decision layer. Nothing caught it — the flag audit checks commands and flags, not the
     vocabulary the payload carries."""
-    from coyodex.audit_model import _THEMES
+    from coyomap.audit_model import _THEMES
     prose = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
     marker = "closed, most-dangerous-first set ("
     at = prose.find(marker)
@@ -1165,14 +1165,14 @@ def test_the_method_hands_every_contract_over_with_the_verb_not_a_copy():
     # `--slots` / `--fill` / `--from-batches` forms that write the brief (and, for harvest, record
     # the budget — a hand-filled copy records nothing, which is why the method prescribes them).
     for name in ("harvest", "trace", "rules", "skeptic", "tests"):
-        hits = re.findall(rf"coyodex contract {name}(?: >|\s+--(?:slots|fill|from-batches))", flat)
+        hits = re.findall(rf"coyomap contract {name}(?: >|\s+--(?:slots|fill|from-batches))", flat)
         assert hits, f"method.md never hands the {name} contract over with the verb"
 
 
 def test_the_method_no_longer_teaches_copying_a_template_by_hand():
     """Both shapes of the old instruction, so neither can come back quietly."""
     prose = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
-    for dead in ("cp COYODEX_HOME/method/templates", "cat COYODEX_HOME/method/templates"):
+    for dead in ("cp COYOMAP_HOME/method/templates", "cat COYOMAP_HOME/method/templates"):
         assert dead not in prose, f"method.md still teaches `{dead}`"
 
 
@@ -1265,7 +1265,7 @@ def test_the_retro_method_carries_the_four_habits_that_produced_its_own_correcti
 def test_the_build_method_names_every_capability_shipped_for_it():
     """A capability the method never names is unreachable, however well it is tested.
 
-    This file's docstring already records the shape: `coyodex reconcile` shipped fully working and
+    This file's docstring already records the shape: `coyomap reconcile` shipped fully working and
     fully tested and ran ZERO times across four measured builds, while every one of them hand-wrote
     the file it generates. Check (b) tests one direction — a flag the method names is accepted.
     This is the other direction, for the capabilities added because a build could not do without
@@ -1384,7 +1384,7 @@ def test_the_app_shell_routes_have_a_surface_to_belong_to():
     assert "belong to the web surface they serve" in method, (
         "method.md no longer says where the built-asset route and the single-page catch-all go, so "
         "the advisory that flags them has no fix that satisfies it")
-    guard = (REPO_ROOT / "tools" / "coyodex"
+    guard = (REPO_ROOT / "tools" / "coyomap"
              / "validate_model.py").read_text(encoding="utf-8")
     at = guard.index("_PLUMBING_EP_KINDS = frozenset(")
     note = " ".join(guard[at:at + 1400].split())
@@ -1397,8 +1397,8 @@ def test_the_absence_of_an_outside_edge_is_reported_not_silent():
     """The other half of the same bug. Every interface check is gated on `m.interfaces` being
     non-empty — correct, since they need one to check — which made a WHOLLY ABSENT section the one
     state nothing said a word about. A half-authored section was flagged; a missing one was silent."""
-    from coyodex.model import Dep, EntryPoint, ProjectModel
-    from coyodex.validate_model import _check_interfaces
+    from coyomap.model import Dep, EntryPoint, ProjectModel
+    from coyomap.validate_model import _check_interfaces
     m = ProjectModel(title="T", goal="G")
     m.deps = [Dep(id="D1", name="Stripe", kind="service", type="payments")]
     m.entry_points = [EntryPoint(id="EP1", kind="http-route", activation="external",
@@ -1415,30 +1415,30 @@ def test_the_absence_of_an_outside_edge_is_reported_not_silent():
 #: table that forgot it — which is the list an adversarial review had to hand over by hand when
 #: `interfaces` was added, one prefix at a time, and two sites still slipped through afterwards.
 PARTIAL_ID_REGISTRIES: dict[tuple[str, frozenset[str]], str] = {
-    ("coyodex/grammar.py", frozenset({"BLK", "BR", "CAP", "HP", "R", "SF"})):
+    ("coyomap/grammar.py", frozenset({"BLK", "BR", "CAP", "HP", "R", "SF"})):
         "_STEP_ENDPOINT_ID: a flow STEP endpoint is a backbone element or a surface — never a "
         "capability, a happy-path step, a sub-flow or a role (a role is classified by is_role_id, "
         "separately, and teaching this one `R` would blank the actor-attribution check)",
-    ("coyodex/records.py", frozenset({"BLK", "BR", "D", "S", "SD", "SF"})):
+    ("coyomap/records.py", frozenset({"BLK", "BR", "D", "S", "SD", "SF"})):
         "ID_KEY: the adjudication vocabulary — only the families that HAVE a recordable advisory",
-    ("coyodex/records.py", frozenset({"D", "S", "SD"})):
+    ("coyomap/records.py", frozenset({"D", "S", "SD"})):
         "BALANCE_KEY: ID_KEY plus `BLK`, `BR` and `SF`, for the 'Balance exceptions' family alone — "
         "the granularity checks adjudicate a thin block, a rule in no block and a "
         "single-reference sub-flow, none of which ID_KEY can key. Its own key rather than a wider "
         "ID_KEY, for the reason IFACE_KEY states one entry down",
-    ("coyodex/records.py", frozenset({"BLK", "BR", "D", "S", "SD"})):
+    ("coyomap/records.py", frozenset({"BLK", "BR", "D", "S", "SD"})):
         "IFACE_KEY: ID_KEY plus `SF`, for the 'Interface exceptions' family alone. Shared machinery "
         "can carry a step naming a pipe, and the edit goes on the SUB-FLOW under its own id, so that "
         "family must be able to adjudicate one. Its own key rather than a wider ID_KEY, which would "
         "let every other family adjudicate a sub-flow it has no check for",
-    ("coyodex/impact_ripple.py", frozenset({"R"})):
+    ("coyomap/impact_ripple.py", frozenset({"R"})):
         "_ID_RE: change-impact targets. A ROLE carries no anchor of its own (only a relation's "
         "grant line does), so it is never a ripple target",
     # idOf and the broker-diagram binder both parse ids out of DRAWN mermaid node ids. A capability,
     # a rule, a role and a sub-flow are drawn as no such box; the binder additionally draws no
     # happy-path step, which is why the two gaps differ by `HP`.
-    ("coyodex/viewer/viewer.js", frozenset({"BLK", "BR", "CAP", "R", "SF"})): "idOf",
-    ("coyodex/viewer/viewer.js", frozenset({"BLK", "BR", "CAP", "HP", "R", "SF"})): "broker binder",
+    ("coyomap/viewer/viewer.js", frozenset({"BLK", "BR", "CAP", "R", "SF"})): "idOf",
+    ("coyomap/viewer/viewer.js", frozenset({"BLK", "BR", "CAP", "HP", "R", "SF"})): "broker binder",
 }
 
 
@@ -1447,7 +1447,7 @@ def _id_registry_sites() -> dict[str, set[str]]:
 
     Discovered, not listed: a registry nobody remembered to add to a hand-written list is exactly the
     failure this guards, so the test must find the sites itself."""
-    from coyodex.model import ID_ARRAYS
+    from coyomap.model import ID_ARRAYS
     known = set(ID_ARRAYS.values())
     out: dict[str, set[str]] = {}
     for path in sorted([*(TOOLS.rglob("*.py")), *(TOOLS.rglob("*.js"))]):
@@ -1471,7 +1471,7 @@ def test_every_id_prefix_registry_carries_the_whole_vocabulary():
 
     Each site either carries every `ID_ARRAYS` prefix or says in `PARTIAL_ID_REGISTRIES` why it does
     not. This is the list that had to be assembled by hand when `interfaces` landed."""
-    from coyodex.model import ID_ARRAYS
+    from coyomap.model import ID_ARRAYS
     known = set(ID_ARRAYS.values())
     gaps = []
     for site, found in _id_registry_sites().items():
@@ -1496,17 +1496,17 @@ def test_every_populated_map_section_reaches_the_rendered_view():
     import dataclasses
     import os
 
-    from coyodex.model import ProjectModel, load_model_path
-    from coyodex.views import model_to_markdown
+    from coyomap.model import ProjectModel, load_model_path
+    from coyomap.views import model_to_markdown
 
     # This test READS THE CLONE'S OWN MAP on purpose, which `resolve_map_path` refuses without the
     # opt-in — the refusal exists because two builds reached that map by accident after a `cd`.
     # Setting it here is the same statement of intent a deliberate self-map run makes.
-    os.environ["COYODEX_SELF_MAP"] = "1"
+    os.environ["COYOMAP_SELF_MAP"] = "1"
     try:
-        m = load_model_path(REPO_ROOT / ".coyodex" / "project-map.json")
+        m = load_model_path(REPO_ROOT / ".coyomap" / "project-map.json")
     finally:
-        os.environ.pop("COYODEX_SELF_MAP", None)
+        os.environ.pop("COYOMAP_SELF_MAP", None)
     md = model_to_markdown(m)
     #: The fields a row can be FOUND BY in the rendered table, most identifying first. An entry
     #: point renders no id (the T4 table is Kind | Trigger | Code entity | …), so it is found by its
@@ -1539,7 +1539,7 @@ _AGENT_CONTRACTS = ("harvest-contract.md", "trace-contract.md", "rules-contract.
 
 
 def _contract_agent_half(name: str) -> str:
-    from coyodex.contract import agent_half
+    from coyomap.contract import agent_half
     from pathlib import Path as _P
     root = _P(__file__).resolve().parent.parent
     return agent_half((root / "method" / "templates" / name).read_text(encoding="utf-8"))
@@ -1558,7 +1558,7 @@ def test_every_agent_contract_forbids_opening_a_previous_map():
                if "do not open a previous map" not in _contract_agent_half(n).lower()]
     assert not missing, (
         f"the independence rule is missing from {missing}. It lives in method/dispatch.md, which "
-        f"only the lead reads, and a trace agent opened `.coyodex/dev-rebuilds/` nine times.")
+        f"only the lead reads, and a trace agent opened `.coyomap/dev-rebuilds/` nine times.")
 
 
 def test_the_skeptic_contract_sends_a_reader_to_a_guards_callers():
@@ -1574,14 +1574,14 @@ def test_the_skeptic_contract_sends_a_reader_to_a_guards_callers():
 # advice silently stopped adjudicating, with nothing saying so.
 
 def _map_with_record(heading: str, body: str):
-    from coyodex.model import ExtraSection, ProjectModel
+    from coyomap.model import ExtraSection, ProjectModel
     m = ProjectModel(title="t", goal="g")
     m.extras = [ExtraSection(heading=heading, body=body)]
     return m
 
 
 def test_a_MERGED_balance_record_adjudicates_every_key_on_the_line():
-    from coyodex import records
+    from coyomap import records
     m = _map_with_record("Balance exceptions",
                          "- SF3, SF9, BLK2, BR7: one reason, four elements\n")
     keys = records.recorded_keys(m, "balance exceptions")
@@ -1589,7 +1589,7 @@ def test_a_MERGED_balance_record_adjudicates_every_key_on_the_line():
 
 
 def test_a_MERGED_naming_record_adjudicates_every_key_on_the_line():
-    from coyodex import records
+    from coyomap import records
     m = _map_with_record("Naming exceptions", "- D3, D7, D9: nothing they do reveals a role\n")
     assert {"D3", "D7", "D9"} <= records.recorded_keys(m, "naming exceptions")
 
@@ -1606,10 +1606,10 @@ def test_every_map_reader_goes_through_the_guard():
     a NEW reader added later that reads the file itself, which no runtime test would notice."""
     import re
     from pathlib import Path
-    root = Path(__file__).resolve().parents[1] / "tools" / "coyodex"
+    root = Path(__file__).resolve().parents[1] / "tools" / "coyomap"
     raw_read = re.compile(r"load_model\(\s*(?:Path\()?[\w.]+\)?\.read_text\(")
-    # The VIEWER is exempt, by design. `coyodex serve` displays every registered project INCLUDING
-    # coyodex's own, and reading your own map to draw it is the normal case there, not an accident.
+    # The VIEWER is exempt, by design. `coyomap serve` displays every registered project INCLUDING
+    # coyomap's own, and reading your own map to draw it is the normal case there, not an accident.
     # The guard exists for BUILD verbs, where the map being read is supposed to be the analysed
     # repo's and a `cd` can silently make it the tool's.
     exempt_dirs = {"viewer"}
@@ -1623,7 +1623,7 @@ def test_every_map_reader_goes_through_the_guard():
                 offenders.append(f"{path.relative_to(root)}:{n}: {line.strip()[:80]}")
     assert not offenders, (
         "map read(s) bypassing `resolve_map_path` — a build whose shell folder drifted into the "
-        "clone reads coyodex's own map through these and gets a healthy answer about the wrong "
+        "clone reads coyomap's own map through these and gets a healthy answer about the wrong "
         "product:\n  " + "\n  ".join(offenders))
 
 
@@ -1632,12 +1632,12 @@ def test_the_refusal_is_one_line_at_every_door_not_a_traceback():
     without swallowing schema errors — and a dozen `main`s would each have to grow one. `cli.py`
     catches `WrongMapError` once."""
     import io, contextlib, os
-    from coyodex import cli
-    was = os.environ.pop("COYODEX_SELF_MAP", None)
+    from coyomap import cli
+    was = os.environ.pop("COYOMAP_SELF_MAP", None)
     try:
-        for argv in (["dump", ".coyodex/project-map.json"],
-                     ["balance", ".coyodex/project-map.json"],
-                     ["validate", ".coyodex/project-map.json"]):
+        for argv in (["dump", ".coyomap/project-map.json"],
+                     ["balance", ".coyomap/project-map.json"],
+                     ["validate", ".coyomap/project-map.json"]):
             err = io.StringIO()
             with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
                 code = cli.main(argv)
@@ -1646,29 +1646,29 @@ def test_the_refusal_is_one_line_at_every_door_not_a_traceback():
             assert "Traceback" not in err.getvalue(), argv
     finally:
         if was is not None:
-            os.environ["COYODEX_SELF_MAP"] = was
+            os.environ["COYOMAP_SELF_MAP"] = was
 
 
 def test_a_deliberate_self_map_is_still_allowed_at_every_door():
     import io, contextlib, os
-    from coyodex import cli
-    os.environ["COYODEX_SELF_MAP"] = "1"
+    from coyomap import cli
+    os.environ["COYOMAP_SELF_MAP"] = "1"
     try:
         with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
-            assert cli.main(["dump", ".coyodex/project-map.json", "--id", "C1"]) == 0
+            assert cli.main(["dump", ".coyomap/project-map.json", "--id", "C1"]) == 0
     finally:
-        os.environ.pop("COYODEX_SELF_MAP", None)
+        os.environ.pop("COYOMAP_SELF_MAP", None)
 
 
 # --- the closing verb has to be REACHABLE (build review, 2026-09-02) ------------------------------
-# `coyodex ship` ran ZERO times on a build that then hand-typed its thirteen steps over 57 turns.
+# `coyomap ship` ran ZERO times on a build that then hand-typed its thirteen steps over 57 turns.
 # It was never avoided for a bad reason: it was named once, in a document read 540 turns earlier and
 # never reopened, and sat on help line 62 under the lead's own `head -60`.
 
 def test_ship_is_in_the_first_lines_of_the_help():
-    """A build reads `coyodex --help | head -60`. That is a fact about how it reads, not a thing to
+    """A build reads `coyomap --help | head -60`. That is a fact about how it reads, not a thing to
     argue with."""
-    from coyodex.cli import USAGE
+    from coyomap.cli import USAGE
     lines = USAGE.splitlines()
     at = next(i for i, l in enumerate(lines) if l.startswith("  ship "))
     assert at < 20, f"`ship` is at help line {at + 1}; a `head -60` reader must meet it"
@@ -1679,7 +1679,7 @@ def test_the_report_the_note_is_written_from_names_the_closing_verb():
     `Next:` lines the tools print — and none of them said `ship`."""
     import io, contextlib, json, tempfile
     from pathlib import Path
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         wl = Path(td) / "w.json"
         wl.write_text(json.dumps({"worklist": [{"claim": "c1"}]}), encoding="utf-8")
@@ -1690,11 +1690,11 @@ def test_the_report_the_note_is_written_from_names_the_closing_verb():
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             assert main(["report", "--worklist", str(wl), "--verdicts", str(v)]) == 0
-    assert "Next: coyodex ship" in out.getvalue(), out.getvalue()[-300:]
+    assert "Next: coyomap ship" in out.getvalue(), out.getvalue()[-300:]
 
 
 def test_the_closing_step_list_carries_no_pasteable_commands():
-    """The thirteen steps used to sit as ready-to-paste lines directly under "…and `coyodex ship`
+    """The thirteen steps used to sit as ready-to-paste lines directly under "…and `coyomap ship`
     RUNS it", and that is what the build copied. A reference must not read as a script."""
     from pathlib import Path
     text = (Path(__file__).resolve().parents[1] / "method.md").read_text(encoding="utf-8")
@@ -1702,7 +1702,7 @@ def test_the_closing_step_list_carries_no_pasteable_commands():
     block = block[:block.index("13. commit the map")]
     # The two `ship` invocations are the point of the block and stay runnable; nothing else does.
     runnable = [l.strip() for l in block.splitlines()
-                if "coyodex " in l and "ship" not in l and l.strip().startswith(("coyodex", "."))]
+                if "coyomap " in l and "ship" not in l and l.strip().startswith(("coyomap", "."))]
     assert not runnable, f"pasteable alternatives under the ship paragraph: {runnable}"
 
 

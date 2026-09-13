@@ -1,0 +1,191 @@
+{
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Method",
+      "purpose": "Holds the instructions a coding agent follows to build, check and ship a map. Most of this product's logic lives here, not in code.",
+      "source": "method.md:1",
+      "confidence": "verified"
+    },
+    {
+      "id": "S10",
+      "name": "Map content instructions",
+      "parent": "S1",
+      "purpose": "Says what a map must contain, one section at a time. It runs from the product story down to the code.",
+      "source": "method.md:26",
+      "confidence": "inferred"
+    },
+    {
+      "id": "S11",
+      "name": "Build process instructions",
+      "parent": "S1",
+      "purpose": "Says how a build runs. Which mode to enter, how to split the work, how to verify it, how to close.",
+      "source": "method.md:1330",
+      "confidence": "inferred"
+    },
+    {
+      "id": "S12",
+      "name": "Specs and worker briefs",
+      "parent": "S1",
+      "purpose": "The stored shape of a map, the briefs handed to fan-out workers, and the checks that keep the instructions honest.",
+      "source": "method/",
+      "confidence": "inferred"
+    },
+    {
+      "id": "S13",
+      "name": "Delivery and documentation",
+      "parent": "S1",
+      "purpose": "How a coding agent finds this product, and what a person reads before using or changing it.",
+      "source": "skill/",
+      "confidence": "inferred"
+    },
+    {
+      "id": "S2",
+      "name": "Map data and checks",
+      "purpose": "Defines what a map is and merges each worker's rows into one. Refuses a map that is not well formed.",
+      "source": "tools/coyomap/model.py:1",
+      "confidence": "verified",
+      "tech": "Python",
+      "tech_source": "pyproject.toml:9"
+    },
+    {
+      "id": "S20",
+      "name": "Map data",
+      "parent": "S2",
+      "purpose": "The typed shape of a map, its shared words, and the merge that turns many workers' rows into one map.",
+      "source": "tools/coyomap/model.py:1",
+      "confidence": "verified"
+    },
+    {
+      "id": "S21",
+      "name": "Map checks",
+      "parent": "S2",
+      "purpose": "Five families of check that ask whether a map is well formed, from its shape to its stored data.",
+      "source": "tools/coyomap/validate_model.py:1",
+      "confidence": "verified"
+    },
+    {
+      "id": "S3",
+      "name": "Build and upkeep commands",
+      "purpose": "The commands a coding agent runs during a build. Sizing, grouping, challenging the claims, closing, and measuring a later code change.",
+      "source": "tools/coyomap/cli.py:1",
+      "confidence": "inferred",
+      "tech": "Python",
+      "tech_source": "pyproject.toml:9"
+    },
+    {
+      "id": "S30",
+      "name": "Command surface",
+      "parent": "S3",
+      "purpose": "What a person types, and what the briefing says before any work starts. Also what the run records about itself.",
+      "source": "tools/coyomap/cli.py:1",
+      "confidence": "inferred"
+    },
+    {
+      "id": "S31",
+      "name": "Build steps",
+      "parent": "S3",
+      "purpose": "Sizing the code and leaving parts of it out. Assigning every element to its group, and measuring how crowded each screen is.",
+      "source": "tools/coyomap/preindex.py:1",
+      "confidence": "inferred"
+    },
+    {
+      "id": "S32",
+      "name": "Verification and close",
+      "parent": "S3",
+      "purpose": "Turns the map against itself and records how its claims held up. Applies the fixes, then runs the closing sequence.",
+      "source": "tools/coyomap/audit_model.py:1",
+      "confidence": "inferred"
+    },
+    {
+      "id": "S4",
+      "name": "Map viewer",
+      "purpose": "Turns a stored map into pictures and serves them beside the project's own code. Draws the page a person reads.",
+      "source": "tools/coyomap/viewer/",
+      "confidence": "verified"
+    },
+    {
+      "id": "S40",
+      "name": "View data",
+      "parent": "S4",
+      "purpose": "Builds every diagram and every page's facts from the stored map, on demand.",
+      "source": "tools/coyomap/views.py:1",
+      "confidence": "verified",
+      "tech": "Python",
+      "tech_source": "pyproject.toml:9"
+    },
+    {
+      "id": "S41",
+      "name": "Map server",
+      "parent": "S4",
+      "purpose": "Serves the viewer page, the map data and the project's own files, on this machine only.",
+      "source": "tools/coyomap/viewer/serve.py:1",
+      "confidence": "verified",
+      "tech": "Python",
+      "tech_source": "pyproject.toml:9"
+    },
+    {
+      "id": "S42",
+      "name": "Page frame",
+      "parent": "S4",
+      "purpose": "Loads a map into the browser and holds the tabs and the trail. Keeps the address in step with the screen.",
+      "source": "tools/coyomap/viewer/viewer.js:1",
+      "confidence": "inferred",
+      "tech": "JavaScript",
+      "tech_source": "pyproject.toml:56"
+    },
+    {
+      "id": "S43",
+      "name": "Diagrams and cards",
+      "parent": "S4",
+      "purpose": "Draws the boxes, answers a click, explains the selected thing, and shows the code behind it.",
+      "source": "tools/coyomap/viewer/viewer.js:1265",
+      "confidence": "inferred",
+      "tech": "JavaScript",
+      "tech_source": "pyproject.toml:56"
+    },
+    {
+      "id": "S44",
+      "name": "View pages",
+      "parent": "S4",
+      "purpose": "The screens themselves: what the product does, what it stores, what it decides, and what a change touched.",
+      "source": "tools/coyomap/viewer/viewer.js:10089",
+      "confidence": "inferred",
+      "tech": "JavaScript",
+      "tech_source": "pyproject.toml:56"
+    },
+    {
+      "id": "S5",
+      "name": "Method quality",
+      "purpose": "Answers the two questions a person changing the instructions has. Did the maps get worse, and what did that run reveal?",
+      "source": "eval/",
+      "confidence": "verified",
+      "tech": "Python",
+      "tech_source": "pyproject.toml:48"
+    },
+    {
+      "id": "S50",
+      "name": "Map scoring",
+      "parent": "S5",
+      "purpose": "Measures one map and compares it against an accepted one. Also tests whether the challengers catch a planted falsehood.",
+      "source": "eval/tools/coyomap_eval/profile.py:1",
+      "confidence": "verified"
+    },
+    {
+      "id": "S51",
+      "name": "Build review",
+      "parent": "S5",
+      "purpose": "Reads what a build actually did and what it cost, and refuses to review a run that has not finished.",
+      "source": "eval/tools/coyomap_eval/transcript.py:1",
+      "confidence": "verified"
+    },
+    {
+      "id": "S52",
+      "name": "Eval upkeep",
+      "parent": "S5",
+      "purpose": "Files an old map out of the way, and bundles a map with the chat that made it. Keeps the numbers written in the code honest.",
+      "source": "eval/tools/coyomap_eval/archive.py:1",
+      "confidence": "verified"
+    }
+  ]
+}

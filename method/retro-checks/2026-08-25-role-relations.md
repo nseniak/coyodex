@@ -3,7 +3,7 @@
 Change: role relations — `roles[].relations` ({kind: becomes, role, at} / {kind: includes, role})
 in the model + schema, the instruction under the Roles rule in method.md, referential validation,
 and the viewer's actor page reading them (hero meta + greyed before-segment) · method.md,
-method/model.md, method/project-map.schema.json, tools/coyodex/model.py, validate_model.py,
+method/model.md, method/project-map.schema.json, tools/coyomap/model.py, validate_model.py,
 views.py, viewer.
 
 Escalation: if check 3 or 4 fails (invented relations), run the eval before accepting the map.
@@ -21,7 +21,7 @@ Escalation: if check 3 or 4 fails (invented relations), run the eval before acce
    includes B AND B includes A), or `includes` links roles whose permission sets the code never
    nests.
 3. expect: every `relations[].role` and `relations[].at` in the built map resolves to a defined
-   `Rn` / `UCn` (`coyodex validate` reports zero undefined-ID references from relations).
+   `Rn` / `UCn` (`coyomap validate` reports zero undefined-ID references from relations).
    regression sign: validate reports a relation id that resolves to nothing.
 4. expect: zero relations invented where the code gives no ground — every `becomes` names an `at`
    use case that really performs the transition.

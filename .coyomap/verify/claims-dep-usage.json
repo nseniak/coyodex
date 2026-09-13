@@ -1,0 +1,108 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "dep-usage",
+ "claims": [
+  {
+   "claim": "C27 queries D90",
+   "anchor": "tools/coyomap/provenance.py:125",
+   "detail": "From: C27 = Build log (tools/coyomap/provenance.py:327); entry points: An operator runs `coyomap provenance show` to list the sessions that built this map. (tools/coyomap/provenance.py:308); An operator runs `coyomap provenance stamp` to record which session built this map, and when. (tools/coyomap/provenance.py:327); An operator runs `coyomap timings record` to write down what each fan-out slice took. (tools/coyomap/timings.py:439); An operator runs `coyomap timings order` to see one phase's slices, longest first. (tools/coyomap/timings.py:449); An operator runs `coyomap timings show` to see every phase that has a timing record. (tools/coyomap/timings.py:456); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C27's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C27 reads D95",
+   "anchor": "tools/coyomap/provenance.py:209",
+   "detail": "From: C27 = Build log (tools/coyomap/provenance.py:327); entry points: An operator runs `coyomap provenance show` to list the sessions that built this map. (tools/coyomap/provenance.py:308); An operator runs `coyomap provenance stamp` to record which session built this map, and when. (tools/coyomap/provenance.py:327); An operator runs `coyomap timings record` to write down what each fan-out slice took. (tools/coyomap/timings.py:439); An operator runs `coyomap timings order` to see one phase's slices, longest first. (tools/coyomap/timings.py:449); An operator runs `coyomap timings show` to see every phase that has a timing record. (tools/coyomap/timings.py:456); To: D95 = Coding agent (platform: AI coding assistant — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C27's code to confirm it reaches D95; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C27 writes D91",
+   "anchor": "tools/coyomap/provenance.py:232",
+   "detail": "From: C27 = Build log (tools/coyomap/provenance.py:327); entry points: An operator runs `coyomap provenance show` to list the sessions that built this map. (tools/coyomap/provenance.py:308); An operator runs `coyomap provenance stamp` to record which session built this map, and when. (tools/coyomap/provenance.py:327); An operator runs `coyomap timings record` to write down what each fan-out slice took. (tools/coyomap/timings.py:439); An operator runs `coyomap timings order` to see one phase's slices, longest first. (tools/coyomap/timings.py:449); An operator runs `coyomap timings show` to see every phase that has a timing record. (tools/coyomap/timings.py:456); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C27's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C49 queries D90",
+   "anchor": "tools/coyomap/impact_git.py:50",
+   "detail": "From: C49 = Change impact (tools/coyomap/impact_git.py:285); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C49's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C50 writes D91",
+   "anchor": "tools/map_backup.py:391",
+   "detail": "From: C50 = Map and transcript backup (tools/map_backup.py:391); entry points: A build records which conversation produced this map. (tools/map_backup.py:452); An operator archives a project's map with the conversation that built it. (tools/map_backup.py:478); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C50's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C69 requests D161",
+   "anchor": "tools/coyomap/viewer/viewer.js:14100",
+   "detail": "From: C69 = Source column (tools/coyomap/viewer/viewer.js:13894); To: D161 = cdnjs (service: content delivery network — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C69's code to confirm it reaches D161; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C83 calls D92",
+   "anchor": "tools/coyomap/viewer/serve.py:895",
+   "detail": "From: C83 = Map server (tools/coyomap/viewer/serve.py:869); entry points: A map page opened in developer mode asks the server every second whether the viewer's files changed. (tools/coyomap/viewer/serve.py:225); Opening the server's home address lists every project folder opened before, each one openable or removable. (tools/coyomap/viewer/serve.py:640); Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened. (tools/coyomap/viewer/serve.py:677); Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map. (tools/coyomap/viewer/serve.py:688); Posting to `/api/open` remembers a folder and starts serving the map inside it. (tools/coyomap/viewer/serve.py:700); Posting to `/api/forget` drops a folder from the remembered list and stops serving its map. (tools/coyomap/viewer/serve.py:708); +14 more; To: D92 = Web browser (platform: desktop browser — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C83's code to confirm it reaches D92; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C70 calls D93",
+   "anchor": "tools/coyomap/viewer/viewer.js:14925",
+   "detail": "From: C70 = Viewer shell (tools/coyomap/viewer/viewer.js:14609); entry points: Opening `#v=overview` shows the sentences saying what the product is for. (tools/coyomap/viewer/viewer.html:117); Opening `#v=features` lists everything the product does, one card per feature. (tools/coyomap/viewer/viewer.html:118); Opening `#v=hp` shows the product's one successful run, end to end. (tools/coyomap/viewer/viewer.html:119); Opening `#v=interfaces` shows every place the product meets the outside world. (tools/coyomap/viewer/viewer.html:120); Opening `#v=rules` shows the decisions the product makes, grouped by area. (tools/coyomap/viewer/viewer.html:126); Opening `#v=domain` shows the things the product knows about. (tools/coyomap/viewer/viewer.html:127); +7 more; To: D93 = Code editor (platform: desktop editor — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C70's code to confirm it reaches D93; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C70 requests D94",
+   "anchor": "tools/coyomap/viewer/viewer.js:14928",
+   "detail": "From: C70 = Viewer shell (tools/coyomap/viewer/viewer.js:14609); entry points: Opening `#v=overview` shows the sentences saying what the product is for. (tools/coyomap/viewer/viewer.html:117); Opening `#v=features` lists everything the product does, one card per feature. (tools/coyomap/viewer/viewer.html:118); Opening `#v=hp` shows the product's one successful run, end to end. (tools/coyomap/viewer/viewer.html:119); Opening `#v=interfaces` shows every place the product meets the outside world. (tools/coyomap/viewer/viewer.html:120); Opening `#v=rules` shows the decisions the product makes, grouped by area. (tools/coyomap/viewer/viewer.html:126); Opening `#v=domain` shows the things the product knows about. (tools/coyomap/viewer/viewer.html:127); +7 more; To: D94 = GitHub (service: code host — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C70's code to confirm it reaches D94; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C70 requests D96",
+   "anchor": "tools/coyomap/viewer/viewer.html:19",
+   "detail": "From: C70 = Viewer shell (tools/coyomap/viewer/viewer.js:14609); entry points: Opening `#v=overview` shows the sentences saying what the product is for. (tools/coyomap/viewer/viewer.html:117); Opening `#v=features` lists everything the product does, one card per feature. (tools/coyomap/viewer/viewer.html:118); Opening `#v=hp` shows the product's one successful run, end to end. (tools/coyomap/viewer/viewer.html:119); Opening `#v=interfaces` shows every place the product meets the outside world. (tools/coyomap/viewer/viewer.html:120); Opening `#v=rules` shows the decisions the product makes, grouped by area. (tools/coyomap/viewer/viewer.html:126); Opening `#v=domain` shows the things the product knows about. (tools/coyomap/viewer/viewer.html:127); +7 more; To: D96 = jsDelivr (service: content delivery network — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C70's code to confirm it reaches D96; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C105 queries D90",
+   "anchor": "eval/tools/coyomap_eval/arrows.py:184",
+   "detail": "From: C105 = Lost arrows (eval/tools/coyomap_eval/arrows.py:152); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C105's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C113 reads D91",
+   "anchor": "eval/tools/coyomap_eval/mutate.py:112",
+   "detail": "From: C113 = Skeptic recall test (eval/tools/coyomap_eval/mutate.py:236); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C113's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C107 reads D105",
+   "anchor": "eval/tools/coyomap_eval/transcript.py:328",
+   "detail": "From: C107 = Transcript reader (eval/tools/coyomap_eval/transcript.py:442); To: D105 = Coding agent chat logs (platform: agent harness — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C107's code to confirm it reaches D105; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C108 reads D105",
+   "anchor": "eval/tools/coyomap_eval/cost.py:272",
+   "detail": "From: C108 = Build cost (eval/tools/coyomap_eval/cost.py:620); To: D105 = Coding agent chat logs (platform: agent harness — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C108's code to confirm it reaches D105; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C110 reads D105",
+   "anchor": "eval/tools/coyomap_eval/retro_precheck.py:216",
+   "detail": "From: C110 = Retro precheck (eval/tools/coyomap_eval/retro_precheck.py:198); To: D105 = Coding agent chat logs (platform: agent harness — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C110's code to confirm it reaches D105; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C111 queries D90",
+   "anchor": "eval/tools/coyomap_eval/ledger.py:87",
+   "detail": "From: C111 = Ledger check (eval/tools/coyomap_eval/ledger.py:110); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C111's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C85 persists D91",
+   "anchor": "tools/coyomap/viewer/recents.py:44",
+   "detail": "From: C85 = Remembered projects (tools/coyomap/viewer/recents.py:22); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C85's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
+  }
+ ]
+}

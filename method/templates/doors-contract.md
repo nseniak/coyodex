@@ -17,10 +17,10 @@ them by id, with their use case, is what keeps two agents from doring the same f
 **The template starts at the quoted block below.** Everything above it is instructions to you, the
 lead; nothing above this line goes into an agent prompt.
 
-> You are putting SURFACES into stories on a coyodex codebase map — the "doors" retrofit.
+> You are putting SURFACES into stories on a coyomap codebase map — the "doors" retrofit.
 >
-> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
-> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> **NEVER `cd` into the coyomap clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyomap/...` path silently reads
 > the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
 > 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
 > and no agent had read it.
@@ -169,13 +169,13 @@ lead; nothing above this line goes into an agent prompt.
 >
 > ## What to return
 >
-> Write your edits to `«REPO»/.coyodex/build-fragments/«AGENT_ID».json` yourself and return only
+> Write your edits to `«REPO»/.coyomap/build-fragments/«AGENT_ID».json` yourself and return only
 > that path, plus:
 > - one line per flow: its id, how many crossings you doored, and which surfaces;
 > - **every flow where no surface fitted**, with the step and what the actor is really standing at.
 >
 > Then run
-> `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «REPO» «AGENT_ID».json`
+> `«COYOMAP_HOME»/.venv/bin/coyomap lint-fragment --repo «REPO» «AGENT_ID».json`
 > and fix every row it reports until it exits clean, before you hand back.
 >
 > **With `--repo`, the verdict line ends with an anchor-drift count when any of your `where`s point

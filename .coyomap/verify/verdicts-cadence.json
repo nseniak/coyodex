@@ -1,0 +1,25 @@
+{
+ "grounding": [
+  {
+   "claim": "Entry point [poller] A map page opened in developer mode asks the server every second whether the viewer's files changed. runs on cadence 'every 1s'",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:222",
+   "skeptic": "cadence",
+   "note": "Opened the anchor: line 222 of the injected _DEV_RELOAD_SCRIPT declares `var seen = null, EVERY = 1000;` and line 223 re-arms with `setTimeout(poll, EVERY)`, so the poll of `api/dev-reload` (line 225) repeats every 1000 ms = 1 s. The script is injected only under --dev (serve.py:729-735 sends the plain shell when `self.dev` is false), and the endpoint answers `dev_stamp()` (serve.py:209-218), the newest mtime across the served frontend files and the tool's Python — i.e. whether the viewer's files changed."
+  },
+  {
+   "claim": "Entry point [startup-hook] Starting the server reads the remembered folders and loads every map still found there. runs on cadence 'on-boot'",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:885",
+   "skeptic": "cadence",
+   "note": "Opened the anchor: line 885 inside `serve()` is `Handler.projects = build_projects(store.list())`, run once during startup before `ThreadingHTTPServer`/`serve_forever` (lines 886, 895). `store.list()` returns the persisted recents list read from the JSON file at RecentsStore.__init__/reload (recents.py:27-39, 88-89), and `build_projects` (serve.py:269-283) calls `load_project`, which returns None for any recents folder whose map file is missing or unloadable (serve.py:114-125) — so only maps still found there are loaded. No disk scan, matching the docstring at serve.py:871."
+  },
+  {
+   "claim": "Entry point [poller] The viewer's code changed on disk, so the map server restarts. runs on cadence 'every 1s'",
+   "grounded": true,
+   "evidence": "tools/devserve.py:91",
+   "skeptic": "cadence",
+   "note": "Opened the anchor: line 91 is `time.sleep(POLL_S)` at the head of the watch loop, and POLL_S is 1.0 at devserve.py:29, so the loop wakes once a second. Each pass recomputes `sources_stamp(watch_root)` where watch_root is `<repo>/tools/coyomap` (line 86) and, on a change, prints 'a Python source changed — restarting', stops the server process and re-spawns it (lines 98-103). So a 1 s poll of the viewer/tool sources does restart the map server."
+  }
+ ]
+}

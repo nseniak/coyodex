@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the model layer (`coyodex.model`) — round-trip, deterministic
+"""Tests for the model layer (`coyomap.model`) — round-trip, deterministic
 serialization, and structural (schema) validation on load.
 
 Run either way (needs an editable install: `make deps`):
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from coyodex.model import (
+from coyomap.model import (
     Component,
     Dep,
     Edge,
@@ -40,7 +40,7 @@ from coyodex.model import (
     remap_element_ids,
     to_canonical_json,
 )
-from coyodex import grammar
+from coyomap import grammar
 
 
 # --- id remap (the mutable twin of validate_model._referenced_ids) --------------
@@ -65,7 +65,7 @@ def make_component_ref_model(cid: str) -> ProjectModel:
 def test_remap_covers_every_referenced_id_site():
     # DRIFT GUARD: remap must rewrite every place _referenced_ids READS, or a merged-away id would
     # survive as a dangling reference. Remap the id everywhere, then assert it is referenced nowhere.
-    from coyodex.validate_model import _referenced_ids
+    from coyomap.validate_model import _referenced_ids
     m = make_component_ref_model("C9")
     assert "C9" in _referenced_ids(m)                 # sanity: the fixture really references it
     remap_element_ids(m, {"C9": "C1"})
@@ -76,7 +76,7 @@ def test_remap_covers_every_referenced_id_site():
 def test_remap_covers_store_dep():
     # WS-A1 lockstep: `store.dep` is a reference site — a dep merge must re-point it, and
     # _referenced_ids must read it (so a dangling store.dep is a validate problem, not silence).
-    from coyodex.validate_model import _referenced_ids
+    from coyomap.validate_model import _referenced_ids
     m = ProjectModel(title="t", goal="g")
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL"),
               Dep(id="D9", name="Postgres dup", kind="datastore", type="SQL")]
@@ -277,7 +277,7 @@ def test_load_rejects_suffixed_id():
 
 
 def test_absent_optional_fields_take_defaults():
-    minimal = {"format": "coyodex-map", "title": "T",
+    minimal = {"format": "coyomap-map", "title": "T",
                "components": [{"id": "C1", "name": "Only"}]}
     m = load_model(json.dumps(minimal))
     assert m.components[0].purpose == ""

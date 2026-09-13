@@ -1,4 +1,4 @@
-# LLM-judge rubric — coyodex map quality
+# LLM-judge rubric — coyomap map quality
 
 Each dimension is scored **0–4**. N judges score independently; the eval takes the **median** per
 dimension. A judge is given the produced `project-map.md` and read access to the source repo, and must

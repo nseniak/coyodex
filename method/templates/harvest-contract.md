@@ -7,7 +7,7 @@ as-is, and every build "copied" it by rewriting it. So the instruction is mechan
 1. Take the quoted block below and strip the leading `> ` from every line.
 2. Fill ONLY the «angle-bracket» slots — per agent, that is the file list, the background blurb,
    the **use cases the slice serves**, the component budget and the agent id; per build, the repo
-   path and `COYODEX_HOME`.
+   path and `COYOMAP_HOME`.
 3. Change nothing else. If a rule reads wrong for this repo, fix it HERE, once, so the next build
    inherits the fix instead of re-deriving it.
 
@@ -29,10 +29,10 @@ verified/inferred discipline, which keeps the barrier synthesis clean.
 **The template starts at the quoted block below.** Everything above it is instructions to you, the
 lead; nothing above this line goes into an agent prompt.
 
-> You are harvesting «SLICE_KIND» facts for a coyodex codebase map.
+> You are harvesting «SLICE_KIND» facts for a coyomap codebase map.
 >
-> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
-> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> **NEVER `cd` into the coyomap clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyomap/...` path silently reads
 > the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
 > 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
 > and no agent had read it.
@@ -160,7 +160,7 @@ lead; nothing above this line goes into an agent prompt.
 > agent owning one slice could not parse at all: it reads as "return one section".)
 >
 > Your output is **ONE JSON fragment** — a partial map model per
-> [model.md](«COYODEX_HOME»/method/model.md), each entry using that array's exact field names.
+> [model.md](«COYOMAP_HOME»/method/model.md), each entry using that array's exact field names.
 >
 > **THE FIELD NAMES, so you do not have to go and find them.** Required fields are in bold; omit an
 > optional one you have no value for (but see the "nothing is configured" rule below).
@@ -182,11 +182,11 @@ lead; nothing above this line goes into an agent prompt.
 > This table exists because the brief used to give field names for `components` only and say "see
 > the schema" without saying where it is. Two agents out of two went and opened `model.md`, and one
 > opened `grammar.py` as well, to author rows the brief had told them to author. **WRITE the fragment to
-> `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
+> `«repo»/.coyomap/build-fragments/«agent-id».json` yourself and return only that path plus a
 > one-line inventory (row count per array)** — never inline the fragment in your reply: a large
 > fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
 > and a truncated fragment fails `assemble`. An empty slice is an empty array plus a one-line note.
-> **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
+> **Anchor formats** (`assemble` does not fix these up — write them right, or `coyomap validate`
 > rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
 > `deps[].where_configured`, `edges[].where`, `entry_points[].source`, `evidence[].file`,
 > `run_commands[].source`, `non_entity_types[].source`,
@@ -217,12 +217,12 @@ lead; nothing above this line goes into an agent prompt.
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
 > **WRITE A DRAFT AS YOU GO (required).** Do not hold the fragment in your head until the end: an
 > agent that dies mid-run (API outage, machine sleep) loses ALL its reading. Write incremental
-> progress to `«repo»/.coyodex/build-fragments/«agent-id».draft.json` and RENAME it to
+> progress to `«repo»/.coyomap/build-fragments/«agent-id».draft.json` and RENAME it to
 > `«agent-id».json` only when complete. Spell it `«agent-id».draft.json`, never
 > `«agent-id».json.draft` and never a doubled suffix: `assemble` SKIPS any path ending
 > `.draft.json`, which is what keeps a half-written fragment out of the glob — and what makes a
 > fragment left with that name never assemble at all. The RENAME is what makes your work land.
-> **Fields you must NOT author** (the lead assigns them after the fan-out, through `coyodex
+> **Fields you must NOT author** (the lead assigns them after the fan-out, through `coyomap
 > reconcile`; a fragment carrying one is either rejected or silently wrong): `runs_in` — the
 > deployment-unit names are minted by a DIFFERENT slice running beside you, so a plausible guess
 > like `["backend"]` passes your own lint and hard-fails the lead's `validate`; `subsystem`;
@@ -241,7 +241,7 @@ lead; nothing above this line goes into an agent prompt.
 > run and you get a partial read you believe is complete. Write `echo "===="`. Measured on one
 > build: 61 truncated command lines across 18 of 71 agents.
 > **SELF-CHECK BEFORE RETURNING (required):** run
-> `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «repo» --expect «N» «your-fragment».json` and
+> `«COYOMAP_HOME»/.venv/bin/coyomap lint-fragment --repo «repo» --expect «N» «your-fragment».json` and
 > fix every row it reports until it exits clean — this catches schema / anchor-format / extra-key /
 > missing-file errors in YOUR context (in parallel), so nothing bounces back from the lead's
 > `assemble`. Pass `--expect «N»` with the component budget this slice was dispatched with: it is
@@ -273,8 +273,8 @@ lead; nothing above this line goes into an agent prompt.
 > problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
 > invocations were narrowed on one, 71 of 101 on the next.
 >
-> **Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+> **Do not open a previous map.** Not one under `.coyomap/dev-rebuilds/`, not a
 > `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
 > its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
 > more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
-> copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.
+> copying. If you need an element's record, it is in THIS map — `coyomap dump` reads it.

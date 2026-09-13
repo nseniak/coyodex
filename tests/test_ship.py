@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex ship` — the closing sequence as one command.
+"""Tests for `coyomap ship` — the closing sequence as one command.
 
 Run either way (needs an editable install: `make deps`):
     python3 tests/test_ship.py
@@ -14,7 +14,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from coyodex import ship
+from coyomap import ship
 
 
 # --- builders -------------------------------------------------------------------
@@ -23,7 +23,7 @@ def make_repo(tmp: str, *, fragments: bool = True, worklist: bool = True,
               verdicts: bool = True, reconcile: bool = True) -> Path:
     """A repo skeleton holding exactly the closing sequence's inputs."""
     repo = Path(tmp) / "repo"
-    out = repo / ".coyodex"
+    out = repo / ".coyomap"
     (out / "build-fragments").mkdir(parents=True)
     (out / "verify").mkdir(parents=True)
     if fragments:
@@ -131,7 +131,7 @@ def test_the_record_written_at_step_6_is_named_by_every_assemble_after_it_on_the
         note = repo / "note.txt"
         note.write_text("a note")
         steps = ship.build_plan(make_inputs(repo, note_file=note))
-        record = str(repo / ".coyodex" / "build-fragments" / "grounding.json")
+        record = str(repo / ".coyomap" / "build-fragments" / "grounding.json")
         assert not Path(record).exists(), "the case is a record that is NOT there when ship starts"
         assembles = [st for st in steps if st.argv[0] == "assemble"]
         assert len(assembles) == 3, [st.title for st in assembles]
@@ -230,7 +230,7 @@ if __name__ == "__main__":
 
 def _ship_dirs(tmp: Path, pinned_claims: list[str], files: dict[str, list[str]]) -> Path:
     import json as _json
-    out = tmp / ".coyodex"
+    out = tmp / ".coyomap"
     (out / "verify").mkdir(parents=True)
     (out / "build-fragments").mkdir(parents=True)
     (out / "verify" / "worklist.json").write_text(
@@ -243,7 +243,7 @@ def _ship_dirs(tmp: Path, pinned_claims: list[str], files: dict[str, list[str]])
 
 
 def _plan_argvs(out: Path, tmp: Path):
-    from coyodex.ship import ShipInputs, build_plan
+    from coyomap.ship import ShipInputs, build_plan
     s = ShipInputs(map_path=out / "project-map.json", repo=tmp, out=out,
                    header=out / "build-fragments" / "header.json",
                    md=out / "project-map.md", gate_block=out / "verify" / "gate-block.md",
@@ -278,7 +278,7 @@ def test_a_file_that_STRADDLES_the_pin_is_dropped_too():
     the identical "9 verdict claim(s) are not in the pinned worklist" — the failure the docstring
     quotes. The set the build needed by hand was the files with no post-pin claim at all."""
     import tempfile
-    from coyodex.ship import ShipInputs, post_pin_verdicts
+    from coyomap.ship import ShipInputs, post_pin_verdicts
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         (tmp / "note.txt").write_text("a note", encoding="utf-8")
@@ -311,7 +311,7 @@ def _grounding(repo: Path, **fields) -> None:
               "claims_superseded": 0, "claims_added_since": 0}
     record.update(fields)
     # where `ship`'s own plan sends `grounding write --out`: beside the header fragment.
-    (repo / ".coyodex" / "build-fragments" / "grounding.json").write_text(
+    (repo / ".coyomap" / "build-fragments" / "grounding.json").write_text(
         json.dumps({"grounding": record}), encoding="utf-8")
 
 
@@ -348,7 +348,7 @@ def test_an_unreadable_grounding_record_makes_ship_silent_not_wrong():
     with tempfile.TemporaryDirectory() as tmp:
         repo = make_repo(tmp)
         assert ship._coverage_line(make_inputs(repo)) == ""
-        (repo / ".coyodex" / "build-fragments" / "grounding.json").write_text(
+        (repo / ".coyomap" / "build-fragments" / "grounding.json").write_text(
             "{not json", encoding="utf-8")
         assert ship._coverage_line(make_inputs(repo)) == ""
 
@@ -360,7 +360,7 @@ def test_step_2_counts_drift_coverage_at_the_pinned_worklists_tier():
     with tempfile.TemporaryDirectory() as td:
         repo = make_repo(td)
         assert "--with-behavioural" not in ship.build_plan(make_inputs(repo))[0].argv
-        (repo / ".coyodex" / "verify" / "worklist.json").write_text(
+        (repo / ".coyomap" / "verify" / "worklist.json").write_text(
             '{"worklist": [{"claim": "UC1 step 1: R1 → C1 — send the token", "theme": "behaviour"}]}',
             encoding="utf-8")
         step2 = ship.build_plan(make_inputs(repo))[0]
@@ -376,7 +376,7 @@ def test_the_newest_archived_map_is_the_access_baseline_unless_one_is_given():
         note = repo / "note.txt"
         note.write_text("n")
         for n in ("0002", "0010"):
-            d = repo / ".coyodex" / "dev-rebuilds" / n
+            d = repo / ".coyomap" / "dev-rebuilds" / n
             d.mkdir(parents=True)
             (d / "project-map.json").write_text("{}")
         fin = ship.build_plan(make_inputs(repo, note_file=note))[-1].argv

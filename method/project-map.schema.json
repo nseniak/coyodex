@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://coyodex.dev/schemas/project-map.schema.json",
-  "title": "coyodex project map",
-  "description": "Auto-generated from tools/coyodex/model.py \u2014 documentation and IDE-autocomplete use only; NOT used by `coyodex validate` (see this module's docstring, and method/model.md, for why). Regenerate with `python -m coyodex.json_schema > method/project-map.schema.json`.",
+  "$id": "https://coyomap.dev/schemas/project-map.schema.json",
+  "title": "coyomap project map",
+  "description": "Auto-generated from tools/coyomap/model.py \u2014 documentation and IDE-autocomplete use only; NOT used by `coyomap validate` (see this module's docstring, and method/model.md, for why). Regenerate with `python -m coyomap.json_schema > method/project-map.schema.json`.",
   "type": "object",
   "properties": {
     "format": {
       "type": "string",
-      "const": "coyodex-map"
+      "const": "coyomap-map"
     },
     "title": {
       "type": "string"
@@ -41,7 +41,7 @@
         "string",
         "null"
       ],
-      "description": "short commit sha of the COYODEX build that produced this map \u2014 not the analysed repo's. Two maps are only comparable against the tools that made them; absent on maps built before this was stamped."
+      "description": "short commit sha of the COYOMAP build that produced this map \u2014 not the analysed repo's. Two maps are only comparable against the tools that made them; absent on maps built before this was stamped."
     },
     "tool_committed": {
       "type": [
@@ -615,7 +615,7 @@
         },
         "extra": {
           "type": "object",
-          "description": "freeform authored columns \u2014 any JSON value, agent-chosen keys. The ONE place with no fixed meaning: a key `coyodex validate` gives an enforced shape to, or that the method documents as a convention, graduates to a real field instead and is then rejected here under its old spelling (this is how `files`/`evidence`/`package`/`alternative` were promoted)."
+          "description": "freeform authored columns \u2014 any JSON value, agent-chosen keys. The ONE place with no fixed meaning: a key `coyomap validate` gives an enforced shape to, or that the method documents as a convention, graduates to a real field instead and is then rejected here under its old spelling (this is how `files`/`evidence`/`package`/`alternative` were promoted)."
         }
       },
       "required": [
@@ -771,7 +771,7 @@
         },
         "extra": {
           "type": "object",
-          "description": "freeform authored columns \u2014 any JSON value, agent-chosen keys. The ONE place with no fixed meaning: a key `coyodex validate` gives an enforced shape to, or that the method documents as a convention, graduates to a real field instead and is then rejected here under its old spelling (this is how `files`/`evidence`/`package`/`alternative` were promoted)."
+          "description": "freeform authored columns \u2014 any JSON value, agent-chosen keys. The ONE place with no fixed meaning: a key `coyomap validate` gives an enforced shape to, or that the method documents as a convention, graduates to a real field instead and is then rejected here under its old spelling (this is how `files`/`evidence`/`package`/`alternative` were promoted)."
         }
       },
       "required": [

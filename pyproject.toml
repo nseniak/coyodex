@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "coyodex"
+name = "coyomap"
 description = "Build and maintain a top-down, drillable map of a codebase."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,14 +13,14 @@ dynamic = ["version"]
 dependencies = []
 
 [project.optional-dependencies]
-# Polyglot symbol/import extraction for `coyodex preindex` only. tree-sitter is a
+# Polyglot symbol/import extraction for `coyomap preindex` only. tree-sitter is a
 # deliberate, scoped exception to the stdlib-only rule (see internal/docs/design-notes.md).
 preindex = [
     "tree-sitter>=0.21",
     "tree-sitter-language-pack>=0.2",
 ]
 # Test + type-check tooling. Installed into the repo-local venv by `make dev`, so the gates
-# run against the editable package (coyodex importable, no cwd/sys.path tricks).
+# run against the editable package (coyomap importable, no cwd/sys.path tricks).
 dev = [
     "pytest>=8",
     "pyright>=1.1",
@@ -32,25 +32,25 @@ dev = [
 ]
 
 [project.scripts]
-coyodex = "coyodex.cli:main"
-# The method-quality eval is a self-contained package (eval/tools/coyodex_eval) with its own command.
-coyodex-eval = "coyodex_eval.cli:main"
+coyomap = "coyomap.cli:main"
+# The method-quality eval is a self-contained package (eval/tools/coyomap_eval) with its own command.
+coyomap-eval = "coyomap_eval.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "eval/tests"]
 
 [tool.setuptools]
 # src-layout with the source root named `tools/` (so the repo root reads as method/ + tools/ +
-# skill/ — the method and the tools it drives). The package on disk is tools/coyodex/, imported
-# as `coyodex`; the dir name matches the import name, so static tools (pyright) resolve it.
-# The eval is a SEPARATE, self-contained package under eval/tools/coyodex_eval (imported as
-# `coyodex_eval`); it depends on `coyodex` core but the core has no reference back to it.
-package-dir = { "" = "tools", "coyodex_eval" = "eval/tools/coyodex_eval" }
-packages = ["coyodex", "coyodex.viewer", "coyodex_eval"]
+# skill/ — the method and the tools it drives). The package on disk is tools/coyomap/, imported
+# as `coyomap`; the dir name matches the import name, so static tools (pyright) resolve it.
+# The eval is a SEPARATE, self-contained package under eval/tools/coyomap_eval (imported as
+# `coyomap_eval`); it depends on `coyomap` core but the core has no reference back to it.
+package-dir = { "" = "tools", "coyomap_eval" = "eval/tools/coyomap_eval" }
+packages = ["coyomap", "coyomap.viewer", "coyomap_eval"]
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
 
 [tool.setuptools.package-data]
-# The generic frontend `coyodex serve` ships from /static/ (the viewer.html shell + css + js); wheel them in.
-"coyodex.viewer" = ["viewer.html", "viewer.css", "viewer.js"]
+# The generic frontend `coyomap serve` ships from /static/ (the viewer.html shell + css + js); wheel them in.
+"coyomap.viewer" = ["viewer.html", "viewer.css", "viewer.js"]

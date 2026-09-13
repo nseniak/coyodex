@@ -2,7 +2,7 @@
 
 Change (2026-09-04): `validate` gains an advisory — an interface with `facing: user` that no use
 case reaches draws one line, naming the two honest fixes (draw the step, or say `facing: operator`)
-and one escape (`In: <why>` under an "Interface exceptions" extras heading) · tools/coyodex/
+and one escape (`In: <why>` under an "Interface exceptions" extras heading) · tools/coyomap/
 validate_model.py. NO method text changed, and no live map was hand-fixed.
 
 Escalation: if check 1 fails on a rebuild of argus, a build is reading its own `validate` warnings

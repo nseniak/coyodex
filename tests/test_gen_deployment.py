@@ -7,10 +7,10 @@ Run either way (needs an editable install: `make deps`):
 """
 from __future__ import annotations
 
-from coyodex.model import (Component, Dep, DeploymentRow, Edge, Group, MessagingRow, ProjectModel,
+from coyomap.model import (Component, Dep, DeploymentRow, Edge, Group, MessagingRow, ProjectModel,
                            VariantTag)
-from coyodex.views import model_to_graph
-from coyodex.viewer import gen_viewer as G
+from coyomap.views import model_to_graph
+from coyomap.viewer import gen_viewer as G
 
 
 # --- builders -------------------------------------------------------------------
@@ -820,7 +820,7 @@ def test_can_coexist_is_symmetric_and_open_on_an_untagged_side():
 
 def _model_with_units(units: list[str], deps: list[tuple[str, str]],
                       hosted_in: str | None) -> "ProjectModel":
-    from coyodex.model import Component, Dep, DeploymentRow, ProjectModel
+    from coyomap.model import Component, Dep, DeploymentRow, ProjectModel
     m = ProjectModel(title="D", goal="g")
     m.deployment = [DeploymentRow(unit=u, runs_on="a box") for u in units]
     m.deps = [Dep(id=f"D{i+1}", name=n, kind=k) for i, (n, k) in enumerate(deps)]
@@ -829,7 +829,7 @@ def _model_with_units(units: list[str], deps: list[tuple[str, str]],
 
 
 def test_an_empty_unit_excused_by_a_matching_system_dep_is_still_disclosed():
-    from coyodex.validate_model import validate_model
+    from coyomap.validate_model import validate_model
     m = _model_with_units(["backend", "nginx"], [("nginx", "platform")], hosted_in="backend")
     problems, warnings = validate_model(m)[:2]
     assert not problems, problems
@@ -841,7 +841,7 @@ def test_an_empty_unit_excused_by_a_matching_system_dep_is_still_disclosed():
 
 
 def test_a_unit_that_hosts_something_is_not_disclosed():
-    from coyodex.validate_model import validate_model
+    from coyomap.validate_model import validate_model
     m = _model_with_units(["nginx"], [("nginx", "platform")], hosted_in="nginx")
     warnings = validate_model(m)[1]
     assert not [w for w in warnings if "excused because the name" in w], warnings

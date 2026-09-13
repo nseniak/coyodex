@@ -1,9 +1,9 @@
 # The 2026-08-29 retro batch: what each fix should change about the next build
 
 Change: 27 fixes from the mcpolis retrospective of 2026-08-29, plus the two rules that were in one
-agent contract and needed to be in five · `tools/coyodex/{grounding,validate_model,finalize,
+agent contract and needed to be in five · `tools/coyomap/{grounding,validate_model,finalize,
 lint_fragment,audit_model,prose,ship,timings,fix,reconcile,contract}.py`,
-`eval/tools/coyodex_eval/{transcript,process_scorecard,profile}.py`, `method.md`,
+`eval/tools/coyomap_eval/{transcript,process_scorecard,profile}.py`, `method.md`,
 `method/templates/*-contract.md`.
 
 Escalation: if check 2 or check 6 fails, run the eval before accepting the map — both mean a claim
@@ -11,7 +11,7 @@ reached the map without the reading the record says it had.
 
 ## Checks
 
-1. expect: `coyodex grounding lint --agent-transcripts <the directory a dispatch result names>`
+1. expect: `coyomap grounding lint --agent-transcripts <the directory a dispatch result names>`
    runs to completion and reports `evidence check covered N of N row(s)` with N the full verdict-row
    count. On the motivating build it died with `AttributeError` and the check covered 0 of 1,085.
    regression sign: any traceback from that flag, or a `grounding.note` that says the pass could not
@@ -27,8 +27,8 @@ reached the map without the reading the record says it had.
    same count.** regression sign: the two numbers disagree, or `finalize`'s advisory names a command
    whose output does not reproduce it.
 
-3. expect: `.coyodex/fanout-timings.json` EXISTS after the build and holds one row per fan-out
-   phase, written by `coyodex timings record --lines-from`. `timings order --phase harvest` prints
+3. expect: `.coyomap/fanout-timings.json` EXISTS after the build and holds one row per fan-out
+   phase, written by `coyomap timings record --lines-from`. `timings order --phase harvest` prints
    an order rather than "no timings recorded".
    regression sign: the file is absent, or the transcript shows a `for … set -- $s` loop again —
    zsh does not word-split, and all 35 such calls on the motivating build exited 2 into `/dev/null`.
@@ -44,7 +44,7 @@ reached the map without the reading the record says it had.
    regression sign: a grep of the per-agent transcripts' tool-call inputs finds one. One trace agent
    did it nine times on the motivating build and no assertion could see it.
 
-6. expect: `coyodex ship` runs its closing sequence to the end in TWO invocations, and `finalize`
+6. expect: `coyomap ship` runs its closing sequence to the end in TWO invocations, and `finalize`
    runs exactly once. `grounding write` no longer refuses the verdict set: `ship` now hands it only
    the files whose claims are all in the pinned worklist, and NAMES the ones it dropped.
    regression sign: three or more `ship` runs, a hand-run tail, or `finalize`'s "the record's delta
@@ -59,7 +59,7 @@ reached the map without the reading the record says it had.
    regression sign: "every one of the N file(s) … is still named by an access rule" printed on a map
    that recorded exceptions. That sentence reached a commit message on the motivating build.
 
-9. expect: `coyodex-eval transcript --full` renders the operator's own turns, and renders no skill
+9. expect: `coyomap-eval transcript --full` renders the operator's own turns, and renders no skill
    body or `<system-reminder>` as `(operator)`.
    regression sign: zero `(operator)` lines on a session that had a conversation, or a machine-text
    turn labelled as a person.

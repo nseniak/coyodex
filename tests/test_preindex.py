@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the structural pre-index (coyodex.preindex + coyodex.preindex_lib).
+"""Tests for the structural pre-index (coyomap.preindex + coyomap.preindex_lib).
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_preindex.py
@@ -19,8 +19,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import preindex, preindex_lib, validate_analysis  # tool #4: compression-coverage check
-from coyodex.validate_analysis import _REF_INLINE, _REF_LINK, strip_anchor
+from coyomap import preindex, preindex_lib, validate_analysis  # tool #4: compression-coverage check
+from coyomap.validate_analysis import _REF_INLINE, _REF_LINK, strip_anchor
 
 
 # --- builders -------------------------------------------------------------------
@@ -39,7 +39,7 @@ def refs_from_markdown(text: str, root: Path) -> set[str]:
         if c.startswith(rootstr):
             c = c[len(rootstr):]
         c = c.strip("/")
-        if c and not c.startswith(".coyodex") and (root / c).exists():
+        if c and not c.startswith(".coyomap") and (root / c).exists():
             refs.add(c)
     return refs
 
@@ -52,7 +52,7 @@ def check_compression_coverage(text: str, root: Path) -> list[str]:
 
 def make_temp_repo(files: dict[str, str], git: bool = True) -> Path:
     """Write a throwaway tree; optionally make it a git repo with one commit."""
-    root = Path(tempfile.mkdtemp(prefix="coyodex_preindex_"))
+    root = Path(tempfile.mkdtemp(prefix="coyomap_preindex_"))
     for rel, content in files.items():
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -191,7 +191,7 @@ def test_coverage_reports_language_without_symbol_extractor() -> None:
 
 def test_full_run_emits_coverage_block() -> None:
     root = make_temp_repo({"a.py": "class A:\n    pass\n"}, git=True)
-    out = root / ".coyodex" / "preindex.json"
+    out = root / ".coyomap" / "preindex.json"
     walk = preindex_lib.iter_source_files(root)
     churn, git_ok = preindex_lib.git_churn(root, None)
     weight, _ = preindex.build_weight(walk.files, root, churn, None)
@@ -260,8 +260,8 @@ def test_validator_does_not_read_preindex_json_gr4() -> None:
     root = make_plugin_repo(12)
     collapsed = "| **C1** | Plugins | S1 | one box | [plugins/](plugins/) | |\n"
     before = check_compression_coverage(collapsed, root)
-    (root / ".coyodex").mkdir(exist_ok=True)
-    (root / ".coyodex" / "preindex.json").write_text(
+    (root / ".coyomap").mkdir(exist_ok=True)
+    (root / ".coyomap" / "preindex.json").write_text(
         json.dumps({"weight": {"path": ".", "children": []}, "LIE": "plugins fully drilled"})
     )
     after = check_compression_coverage(collapsed, root)
@@ -332,18 +332,18 @@ def test_compression_skips_non_product_dirs() -> None:
 
 
 # --- --report: WHICH pre-index does it read? ------------------------------------
-# The method has build agents run the CLI from the coyodex clone, so the CWD is routinely not
+# The method has build agents run the CLI from the coyomap clone, so the CWD is routinely not
 # the analysed repo. `--report` used to read only `--in` (a CWD-relative default) while
 # accepting-and-dropping `--root`, so it printed the CURRENT repo's pre-index under the other
 # repo's name — right-looking output, wrong repo, no visible symptom.
 
 def make_report_artifact(root: Path, marker: str, expected: int) -> Path:
-    """A minimal but real-shaped `<root>/.coyodex/preindex.json`, tagged with a distinctive
+    """A minimal but real-shaped `<root>/.coyomap/preindex.json`, tagged with a distinctive
     `root` marker and E so any report can be traced back to the file it actually read."""
-    out = root / ".coyodex" / "preindex.json"
+    out = root / ".coyomap" / "preindex.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({
-        "tool": "coyodex preindex", "root": marker,
+        "tool": "coyomap preindex", "root": marker,
         "weight": {"path": ".", "loc": 1, "file_count": 1, "churn": 0,
                    "lang": "python", "children": []},
         "granularity": {"expected_components": expected, "band": [1, 2], "per_dir": {}},
@@ -394,7 +394,7 @@ def test_report_in_wins_over_root() -> None:
 
 
 def test_report_without_in_or_root_still_reads_the_cwd() -> None:
-    """The fallback is unchanged: neither flag means `./.coyodex/preindex.json`, so every
+    """The fallback is unchanged: neither flag means `./.coyomap/preindex.json`, so every
     existing invocation from inside the analysed repo keeps working exactly as before."""
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
@@ -428,7 +428,7 @@ def test_report_missing_preindex_names_the_path_it_looked_for() -> None:
         (tmp / "empty-repo").mkdir()
         code, out = run_report(["--root", str(tmp / "empty-repo")])
     assert code == 2, out
-    assert str(tmp / "empty-repo" / ".coyodex" / "preindex.json") in out, out
+    assert str(tmp / "empty-repo" / ".coyomap" / "preindex.json") in out, out
 
 
 if __name__ == "__main__":
@@ -448,11 +448,11 @@ if __name__ == "__main__":
 # ── GR1, checked instead of only announced ───────────────────────────────────────────────────────
 
 def make_repo_with_fragments(*names: str) -> Path:
-    """A repo whose `.coyodex/build-fragments/` holds the named fragments."""
+    """A repo whose `.coyomap/build-fragments/` holds the named fragments."""
     root = Path(tempfile.mkdtemp())
     (root / "src").mkdir()
     (root / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
-    frags = root / ".coyodex" / "build-fragments"
+    frags = root / ".coyomap" / "build-fragments"
     frags.mkdir(parents=True)
     for n in names:
         body = ({"use_cases": [{"id": "UC1", "name": "Do it"}]}
@@ -465,9 +465,9 @@ def test_gr1_reports_not_met_when_no_behavioral_draft_exists():
     """The NOTE has been printed on every run for as long as it has existed, and a live build read
     it and went straight into a 14-agent structural harvest; its behavioral fragment landed 79
     turns later. A printed rule nobody reads is fixed by checking it."""
-    from coyodex.preindex import _gr1_status
+    from coyomap.preindex import _gr1_status
     root = make_repo_with_fragments("ep-routes.json", "sec.json")
-    status = _gr1_status(root, root / ".coyodex" / "preindex.json")
+    status = _gr1_status(root, root / ".coyomap" / "preindex.json")
     assert "GR1 NOT MET" in status
 
 
@@ -475,29 +475,29 @@ def test_gr1_is_decided_by_content_not_by_filename():
     """`behavioral.json` is a habit, not a contract — the method names no such file. Keying on the
     name gives a false NOT MET to a build that called it something else, which teaches readers to
     ignore the warning, and is satisfied by an empty file."""
-    from coyodex.preindex import _gr1_status
+    from coyomap.preindex import _gr1_status
     root = make_repo_with_fragments("sec.json")
-    frags = root / ".coyodex" / "build-fragments"
+    frags = root / ".coyomap" / "build-fragments"
     (frags / "L1-usecases.json").write_text(
         json.dumps({"happy_path": [{"n": 1, "uc": "UC1", "text": "t"}]}), encoding="utf-8")
-    assert "GR1 met" in _gr1_status(root, root / ".coyodex" / "preindex.json")
+    assert "GR1 met" in _gr1_status(root, root / ".coyomap" / "preindex.json")
     (frags / "empty-behavioral.json").write_text("{}", encoding="utf-8")
     root2 = make_repo_with_fragments("behavioral.json")
-    (root2 / ".coyodex" / "build-fragments" / "behavioral.json").write_text("{}", encoding="utf-8")
-    assert "GR1 NOT MET" in _gr1_status(root2, root2 / ".coyodex" / "preindex.json")
+    (root2 / ".coyomap" / "build-fragments" / "behavioral.json").write_text("{}", encoding="utf-8")
+    assert "GR1 NOT MET" in _gr1_status(root2, root2 / ".coyomap" / "preindex.json")
 
 
 def test_gr1_reports_met_when_the_behavioral_fragment_is_present():
-    from coyodex.preindex import _gr1_status
+    from coyomap.preindex import _gr1_status
     root = make_repo_with_fragments("behavioral.json", "sec.json")
-    status = _gr1_status(root, root / ".coyodex" / "preindex.json")
+    status = _gr1_status(root, root / ".coyomap" / "preindex.json")
     assert "GR1 met" in status and "behavioral.json" in status
 
 
 def test_gr1_reads_the_scanned_root_not_the_out_path():
     """`--out` is routinely pointed at a scratch path; keying off its parent reported
     "no build-fragments" for a repo holding 33 of them."""
-    from coyodex.preindex import _gr1_status
+    from coyomap.preindex import _gr1_status
     root = make_repo_with_fragments("behavioral.json")
     elsewhere = Path(tempfile.mkdtemp()) / "scratch" / "preindex.json"
     assert "GR1 met" in _gr1_status(root, elsewhere)

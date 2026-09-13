@@ -1,0 +1,10 @@
+{
+  "schema": "coyomap/prose-verdict/v1",
+  "verdicts": [
+    {
+      "where": "glossary 'component'",
+      "flag": "unknown word",
+      "detail": "module sized — not defined what size qualifies as module-sized"
+    }
+  ]
+}

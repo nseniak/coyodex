@@ -2,7 +2,7 @@
 
 **This file is not part of the method.** It lives under `internal/`, which the method tells a
 build agent to ignore, and nothing in `method.md` or `method/` points here. It is for the
-coyodex author.
+coyomap author.
 
 **Why it exists.** Almost every rule in the method was added after a real build got something
 wrong, and for a long time the account of that build lived inside the rule, in the prompt every
@@ -23,7 +23,7 @@ a test failing.
 
 **Scope, stated honestly.** What moved is the evidence that was in the agent-facing method PROSE.
 The same accounts still appear in places an agent does not read as instructions — CLI `--help` text
-and code docstrings under `tools/coyodex/` — so this file is not the only copy in the repo.
+and code docstrings under `tools/coyomap/` — so this file is not the only copy in the repo.
 
 **Format.** One entry per moved account, in the order the rules appear in the method.
 
@@ -110,7 +110,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 ### R14 — The two shell hazards, as measured
 - **Where**: `method.md`
 - **Anchor**: `**Two shell hazards this method's own commands keep hitting.** Both are invisible`
-- **Evidence**: Both cost a live build real turns. One build `cd`-ed into the clone and reported "7 of 74 isolated entities" read off coyodex's own self-map. The zsh word-splitting trap was got wrong twice on `coyodex fix dedup-edge --keep` (which is why that `--help` documents it), then a third time on `--verdicts` — which is what moved the warning into the method, where it covers every flag.
+- **Evidence**: Both cost a live build real turns. One build `cd`-ed into the clone and reported "7 of 74 isolated entities" read off coyomap's own self-map. The zsh word-splitting trap was got wrong twice on `coyomap fix dedup-edge --keep` (which is why that `--help` documents it), then a third time on `--verdicts` — which is what moved the warning into the method, where it covers every flag.
 
 ### R15 — Hand-written scripts measured against the verb table
 - **Where**: `method.md`
@@ -120,7 +120,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 ### R16 — Why preindex --report exists
 - **Where**: `method.md`
 - **Anchor**: `Use it instead of hand-parsing`
-- **Evidence**: All four measured builds wrote a throwaway `python3 -c "json.load(open('.coyodex/preindex.json'))…"` to get exactly this, because the doc forbade hand-parsing without offering a read command. `preindex --help` used to run a full pre-index and overwrite the artifact.
+- **Evidence**: All four measured builds wrote a throwaway `python3 -c "json.load(open('.coyomap/preindex.json'))…"` to get exactly this, because the doc forbade hand-parsing without offering a read command. `preindex --help` used to run a full pre-index and overwrite the artifact.
 
 ### R17 — How far builds drift from E
 - **Where**: `method.md`
@@ -460,7 +460,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 ### R82 — A map that cost hours and hundreds of dollars, left in one working tree
 - **Where**: `method.md`
 - **Anchor**: `**Then actually commit.** The build is not over at `finalize`. Stopping there`
-- **Evidence**: A live build ran the gates, wrote the report, and stopped — leaving `.coyodex/` untracked, so the map it had just spent 103 minutes and hundreds of dollars building existed only in one working tree. Two of the scorecard's assertions have never had an opportunity to score on that project, because both read the commit.
+- **Evidence**: A live build ran the gates, wrote the report, and stopped — leaving `.coyomap/` untracked, so the map it had just spent 103 minutes and hundreds of dollars building existed only in one working tree. Two of the scorecard's assertions have never had an opportunity to score on that project, because both read the commit.
 
 ### R83 — Nine advisories neither fixed nor recorded
 - **Where**: `method.md`
@@ -624,7 +624,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R115 — The re-read nobody ever did
 - **Where**: `method.md`
-- **Anchor**: `**`coyodex validate <map> --ignore-exceptions`** — not a hand-edited copy of`
+- **Anchor**: `**`coyomap validate <map> --ignore-exceptions`** — not a hand-edited copy of`
 - **Evidence**: The message used to ask for a re-read against a hand-edited copy of the map with the record removed. No build ever did it, which is why `--ignore-exceptions` exists.
 
 ### R116 — Two routes that traded ids

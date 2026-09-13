@@ -8,7 +8,7 @@ to every check downstream. Two properties are pinned here:
     analysis asks, so a new file that was never `git add`-ed cannot be visible to `analyze` as
     an addition while being absent from the sizing and the coverage checks;
   * ignoring is git's answer, never ours — a nested `.gitignore` and `.git/info/exclude` hold
-    here without a line of pattern code in coyodex, which is the reason to shell out at all.
+    here without a line of pattern code in coyomap, which is the reason to shell out at all.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from coyodex.preindex_lib import iter_source_files
+from coyomap.preindex_lib import iter_source_files
 
 # The developer's own git config is NOT part of what these tests assert: a global `core.excludesFile`
 # would silently change which files git reports, so every repo here is built in isolation (the same
@@ -86,7 +86,7 @@ def test_a_gitignored_file_is_not_walked():
 
 
 def test_a_nested_gitignore_holds():
-    """git applies a `.gitignore` at any depth. coyodex parses none of this — the point of asking
+    """git applies a `.gitignore` at any depth. coyomap parses none of this — the point of asking
     git rather than re-implementing the rules is that every form of them works for free."""
     with tempfile.TemporaryDirectory() as td:
         root = make_git_repo(Path(td))

@@ -1,0 +1,304 @@
+{
+  "components": [
+    {
+      "id": "C100",
+      "name": "Eval command line",
+      "purpose": "Routes each typed eval sub-command to the checker that answers it. Loads that checker only when it is asked for.",
+      "source": "eval/tools/coyomap_eval/cli.py:69",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/cli.py",
+        "eval/tools/coyomap_eval/__init__.py"
+      ],
+      "depends_on": "Every other checker in this tool, each opened at the moment its sub-command is typed."
+    },
+    {
+      "id": "C101",
+      "name": "Map profile",
+      "purpose": "Reduces one built map to the numbers two builds can be compared on. Two maps of one project never share wording, so counts are what survives.",
+      "source": "eval/tools/coyomap_eval/profile.py:430",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/profile.py",
+        "eval/tools/coyomap_eval/legacy_map.py"
+      ],
+      "depends_on": "The main tool's own map reader and its two checkers, so a map is never measured through a second reading of it."
+    },
+    {
+      "id": "C102",
+      "name": "Baseline comparison",
+      "purpose": "Judges a fresh map against the accepted one. Returns one word: as good, drifted, or worse.",
+      "source": "eval/tools/coyomap_eval/compare.py:518",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/compare.py"
+      ],
+      "depends_on": "The numbers a map profile produces, and the judged scores, when both sides carry them."
+    },
+    {
+      "id": "C103",
+      "name": "Judge report",
+      "purpose": "Folds many skeptics' verdicts and many judges' marks into one quality report. Never talks to a model itself, so the arithmetic can be tested alone.",
+      "source": "eval/tools/coyomap_eval/judge.py:257",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/judge.py"
+      ],
+      "depends_on": "The main tool's list of risky statements, which it samples rather than re-derives."
+    },
+    {
+      "id": "C104",
+      "name": "Eval run",
+      "purpose": "Runs one scoring pass end to end and files everything it produced. Can then promote that run to be the accepted baseline.",
+      "source": "eval/tools/coyomap_eval/run.py:69",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/run.py"
+      ],
+      "depends_on": "The map profile, the baseline comparison and the judge report, plus the main tool's renderer for the archived views."
+    },
+    {
+      "id": "C105",
+      "name": "Lost arrows",
+      "purpose": "Finds the relations a rebuild dropped. Re-reads each dropped relation's recorded line to say whether the code still does it.",
+      "source": "eval/tools/coyomap_eval/arrows.py:152",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/arrows.py"
+      ],
+      "depends_on": "The code history, to refuse the check when the two maps describe different code."
+    },
+    {
+      "id": "C106",
+      "name": "Rebuild archive",
+      "purpose": "Moves a project's current map aside so the next build starts from nothing. Moves, never deletes: the old map is what the new one is compared against.",
+      "source": "eval/tools/coyomap_eval/archive.py:110",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/archive.py"
+      ],
+      "depends_on": "Nothing but the file system under the mapped project."
+    },
+    {
+      "id": "C107",
+      "name": "Transcript reader",
+      "purpose": "Turns a build's raw chat log into one record per model answer. The log stores one answer as many rows, so counting rows gets every later number wrong.",
+      "source": "eval/tools/coyomap_eval/transcript.py:442",
+      "confidence": "inferred",
+      "files": [
+        "eval/tools/coyomap_eval/transcript.py"
+      ],
+      "depends_on": "The coding agent's own chat logs on disk."
+    },
+    {
+      "id": "C108",
+      "name": "Build cost",
+      "purpose": "Reports what one build spent in time and tokens. Divides both by how much map the build produced. Two builds of different sizes then read side by side.",
+      "source": "eval/tools/coyomap_eval/cost.py:620",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/cost.py"
+      ],
+      "depends_on": "The transcript reader, for the lead's log and every helper's log beside it."
+    },
+    {
+      "id": "C109",
+      "name": "Process scorecard",
+      "purpose": "Scores whether the build agent behaved as the method says, one checked rule at a time. Reports numbers, never a pass or a fail.",
+      "source": "eval/tools/coyomap_eval/process_scorecard.py:3318",
+      "confidence": "inferred",
+      "files": [
+        "eval/tools/coyomap_eval/process_scorecard.py"
+      ],
+      "depends_on": "The transcript reader for what the agent did, the build cost report for how long each helper really ran, and the finished map for the rules whose subject is the map."
+    },
+    {
+      "id": "C110",
+      "name": "Retro precheck",
+      "purpose": "Refuses a retrospective while the build it would read is still running. A build stamps who made it near the end, so mid-run the stamp still names the previous build.",
+      "source": "eval/tools/coyomap_eval/retro_precheck.py:198",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/retro_precheck.py"
+      ],
+      "depends_on": "The mapped project's map folder, and the coding agent's chat logs for other live sessions."
+    },
+    {
+      "id": "C111",
+      "name": "Ledger check",
+      "purpose": "Asks the code history whether a retrospective's finished items really shipped. An item still marked open, whose named change is already merged, gets proposed again for nothing.",
+      "source": "eval/tools/coyomap_eval/ledger.py:110",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/ledger.py"
+      ],
+      "depends_on": "The code history of the clone holding the changes a ledger row names."
+    },
+    {
+      "id": "C112",
+      "name": "Live number ledger",
+      "purpose": "Re-measures the counts the tools state about a map that keeps changing. Each sentence is written once in the code and once here. Nothing then has to guess which sum produced the number.",
+      "source": "eval/tools/coyomap_eval/live_numbers.py:540",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/live_numbers.py"
+      ],
+      "depends_on": "The main tool's own measuring functions, called rather than copied, plus the live maps they read."
+    },
+    {
+      "id": "C113",
+      "name": "Skeptic recall test",
+      "purpose": "Plants claims that are false by construction and keeps the answer key. Counts how many of them the skeptics caught, which is a number that means something on its own.",
+      "source": "eval/tools/coyomap_eval/mutate.py:236",
+      "confidence": "verified",
+      "files": [
+        "eval/tools/coyomap_eval/mutate.py"
+      ],
+      "depends_on": "The source tree, so a moved line lands somewhere real instead of past the end of the file."
+    }
+  ],
+  "entry_points": [
+    {
+      "kind": "cli",
+      "trigger": "A developer asks for one built map's quality numbers.",
+      "source": "eval/tools/coyomap_eval/cli.py:72",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer scores a fresh map, compares it with the accepted one, and files the result.",
+      "source": "eval/tools/coyomap_eval/cli.py:75",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer freezes a map file's fingerprint before scoring it.",
+      "source": "eval/tools/coyomap_eval/cli.py:78",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer lists the risky statements a doubter should check against the code.",
+      "source": "eval/tools/coyomap_eval/cli.py:81",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer folds the doubters' votes and the scorers' marks into one report.",
+      "source": "eval/tools/coyomap_eval/cli.py:84",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer checks whether stored scores were made under today's judging rules.",
+      "source": "eval/tools/coyomap_eval/cli.py:87",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer promotes one scored run to be the new accepted baseline.",
+      "source": "eval/tools/coyomap_eval/cli.py:90",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer asks which relations a rebuild dropped while the code still makes them.",
+      "source": "eval/tools/coyomap_eval/cli.py:93",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer applies the regression checks to two maps' number sheets.",
+      "source": "eval/tools/coyomap_eval/cli.py:96",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer scores how the build agent behaved during one build.",
+      "source": "eval/tools/coyomap_eval/cli.py:99",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer moves a project's map aside so the next build starts from nothing.",
+      "source": "eval/tools/coyomap_eval/cli.py:102",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer checks a retrospective's finished rows against the code history.",
+      "source": "eval/tools/coyomap_eval/cli.py:105",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer re-measures the counts the tools state about a live map.",
+      "source": "eval/tools/coyomap_eval/cli.py:108",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer asks whether the build a retrospective would read has finished.",
+      "source": "eval/tools/coyomap_eval/cli.py:111",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer reads a build's chat log in slices.",
+      "source": "eval/tools/coyomap_eval/cli.py:114",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer asks what one build spent in time and tokens.",
+      "source": "eval/tools/coyomap_eval/cli.py:117",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A developer plants false claims, then scores how many the doubters caught.",
+      "source": "eval/tools/coyomap_eval/cli.py:120",
+      "activation": "external"
+    }
+  ],
+  "deps": [
+    {
+      "id": "D105",
+      "name": "Coding agent chat logs",
+      "kind": "platform",
+      "type": "agent harness",
+      "used_for": "Reads what the coding agent actually did during a build. Three of the checks here have no other source for that.",
+      "confidence": "verified",
+      "evidence": [
+        {
+          "file": "eval/tools/coyomap_eval/retro_precheck.py:59",
+          "why": "Finds the folder holding every chat log for the mapped project, to spot a build still writing."
+        },
+        {
+          "file": "eval/tools/coyomap_eval/cost.py:264",
+          "why": "Finds each helper agent's own log beside the main one, which is most of a build's spend."
+        }
+      ]
+    }
+  ],
+  "observability": [],
+  "config": [
+    {
+      "key": "COYOMAP_HOME",
+      "purpose": "Names the code clone whose history a ledger check reads.",
+      "default": "The clone the command is itself running from."
+    },
+    {
+      "key": "CLAUDE_CODE_SESSION_ID",
+      "purpose": "Names the chat asking for a retrospective, so it refuses to read the build it is inside.",
+      "default": "Nothing is set, and that one guard then stays quiet."
+    },
+    {
+      "key": "COYOMAP_SELF_MAP",
+      "purpose": "Lets a tool open this project's own map, which is refused otherwise.",
+      "default": "Turned on for the length of one map load, then put back as it was."
+    }
+  ],
+  "deployment": [],
+  "run_commands": []
+}

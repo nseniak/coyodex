@@ -1,0 +1,172 @@
+{
+  "rules": [
+    {
+      "id": "BR120",
+      "name": "Five boxes a screen",
+      "statement": "Every screen of the map should hold between three and nine boxes. Five is the number it aims for.",
+      "access": false,
+      "risk": "A screen packed with boxes buries the product, so the reader stops drilling and never finds what it does.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "method.md:1609",
+          "why": "states the target of five boxes a screen and the readable range of three to nine"
+        },
+        {
+          "where": "tools/coyomap/balance_lib.py:613",
+          "why": "counts a screen as reading well only when its box count falls inside that range"
+        },
+        {
+          "where": "tools/coyomap/balance.py:67",
+          "why": "marks a screen holding ten boxes or more as past the readable range"
+        }
+      ]
+    },
+    {
+      "id": "BR121",
+      "name": "Same-kind lists read dense",
+      "statement": "A screen whose boxes are all the same kind reads as a list, so fifteen boxes are fine there.",
+      "access": false,
+      "risk": "Cutting a plain list into invented groups adds levels that name nothing a reader was looking for.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "method.md:1614",
+          "why": "grants the one exemption, for a screen of same-kind neighbours sharing a folder or a name ending"
+        },
+        {
+          "where": "tools/coyomap/balance_lib.py:309",
+          "why": "holds back the crowded-screen advice for such a screen until it passes fifteen boxes"
+        },
+        {
+          "where": "tools/coyomap/balance.py:66",
+          "why": "labels the same screen exempt in the report instead of crowded"
+        }
+      ]
+    },
+    {
+      "id": "BR122",
+      "name": "Thin screens count only at the top",
+      "statement": "Only the first screen is faulted for holding too few boxes. A screen deeper down may be small.",
+      "access": false,
+      "risk": "A first screen of two boxes tells the reader the technology used, never what the product does.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "method.md:1612",
+          "why": "says too few boxes is a fault at the first screen only, and normal deeper down"
+        },
+        {
+          "where": "tools/coyomap/balance_lib.py:290",
+          "why": "raises the too-few-boxes advice for the first screen and for no other"
+        },
+        {
+          "where": "tools/coyomap/balance.py:147",
+          "why": "names the thin deeper screens in the report while saying they are not a fault"
+        }
+      ]
+    },
+    {
+      "id": "BR123",
+      "name": "One-child levels earn nothing",
+      "statement": "A group holding exactly one thing is reported, because that level costs a click and adds no meaning.",
+      "access": false,
+      "risk": "Wrapper levels push what the reader came for one click further down for nothing in return.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "method.md:1613",
+          "why": "names a group with one member as a level pulling no weight, to be removed or grown"
+        },
+        {
+          "where": "tools/coyomap/balance_lib.py:303",
+          "why": "reports a group whose single member is one box rather than another group"
+        },
+        {
+          "where": "tools/coyomap/validate_model.py:6317",
+          "why": "reports a group whose single member is another group of the same kind"
+        }
+      ]
+    },
+    {
+      "id": "BR124",
+      "name": "Crowding advises, never blocks",
+      "statement": "A crowded or thin screen is only ever advice. It never refuses a map or stops a build.",
+      "access": false,
+      "risk": "Refusing a map over a box count pushes a builder to invent groups that fit the number.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "method.md:1673",
+          "why": "states that screen density never refuses a map, because grouping is a free choice about the picture"
+        },
+        {
+          "where": "tools/coyomap/validate_model.py:6328",
+          "why": "files every screen-density finding as advice rather than as a fault that refuses the map"
+        },
+        {
+          "where": "tools/coyomap/finalize.py:587",
+          "why": "records the density findings in the closing report without moving its verdict"
+        }
+      ]
+    },
+    {
+      "id": "BR125",
+      "name": "Regrouping never resizes boxes",
+      "statement": "Regrouping may only move boxes between groups. It may never merge or split the boxes themselves.",
+      "access": false,
+      "risk": "Merging boxes to fix a crowded screen makes the map say the code holds fewer parts than it does.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "method.md:1675",
+          "why": "forbids any density finding from merging or splitting boxes to reach a number"
+        },
+        {
+          "where": "tools/coyomap/balance.py:107",
+          "why": "writes a split suggestion as a change of which group a box sits in, and nothing else"
+        },
+        {
+          "where": "tools/coyomap/balance.py:109",
+          "why": "tells the reader applying a suggestion to add no member the suggestion did not list"
+        }
+      ]
+    },
+    {
+      "id": "BR126",
+      "name": "Groups carry no arrows",
+      "statement": "A group is never one end of an arrow, so moving a box into another group moves no arrow.",
+      "access": false,
+      "risk": "An arrow leaving a whole group cannot be drawn on any one screen, so the picture stops making sense.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "method.md:3134",
+          "why": "says dissolving a level moves no arrow, because a group is never an end of one"
+        },
+        {
+          "where": "tools/coyomap/validate_model.py:5283",
+          "why": "refuses a map holding any arrow that starts or ends at a group"
+        }
+      ]
+    },
+    {
+      "id": "BR127",
+      "name": "Grouping starts above fifteen boxes",
+      "statement": "Grouping is worth doing only once a map passes about fifteen boxes. A smaller map stays flat.",
+      "access": false,
+      "risk": "Groups on a small map add levels the reader must click through to reach a list they could already see.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "method.md:414",
+          "why": "makes groups optional, and recommends them only above about fifteen boxes"
+        },
+        {
+          "where": "tools/coyomap/balance_lib.py:280",
+          "why": "asks for groups only once an ungrouped map passes that count"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+ "schema": "coyomap/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "BR183 statement",
+   "text": "A file that version history deliberately ignores is never handed back to the browser."
+  },
+  {
+   "where": "BR183 risk",
+   "text": "A local settings file holding passwords is kept out of version history, and would otherwise be readable in the map."
+  },
+  {
+   "where": "BR184 statement",
+   "text": "Code shown beside the map is the version the map was built from, not whatever sits on disk now."
+  },
+  {
+   "where": "BR184 risk",
+   "text": "A reader comparing a box against edited code would blame the map for a mismatch the map never made."
+  },
+  {
+   "where": "BR185 statement",
+   "text": "A version name arriving in a web address is refused unless it reads as an ordinary commit name."
+  },
+  {
+   "where": "BR185 risk",
+   "text": "A crafted name could otherwise be taken as an instruction and make the history reader do something else."
+  },
+  {
+   "where": "BR186 statement",
+   "text": "Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one."
+  },
+  {
+   "where": "BR186 risk",
+   "text": "A tampered drawing or highlighting library would run inside a page that already shows every line of the project's source."
+  },
+  {
+   "where": "BR187 statement",
+   "text": "A source link may open only through an address belonging to a known code editor."
+  },
+  {
+   "where": "BR187 risk",
+   "text": "A hand-typed link pattern could otherwise run script in the page or send the reader somewhere unexpected."
+  },
+  {
+   "where": "BR40 statement",
+   "text": "Data the product writes only to read back crosses no interface, unless the map records an outside reader."
+  },
+  {
+   "where": "BR40 risk",
+   "text": "The map draws the product's own database as an outside edge, so where the product ends disappears."
+  },
+  {
+   "where": "BR41 statement",
+   "text": "A step names the service on the far side, never the proxy or the library that carries the call."
+  },
+  {
+   "where": "BR41 risk",
+   "text": "The map names the log shipper and never the log store, so the reader cannot tell who receives the data."
+  },
+  {
+   "where": "BR42 statement",
+   "text": "Each outside system names the interfaces it stands on, or records why it is none, never both."
+  },
+  {
+   "where": "BR42 risk",
+   "text": "A deliberate exclusion looks exactly like nobody having looked, so the whole edge of the product stops being trustworthy."
+  },
+  {
+   "where": "BR43 statement",
+   "text": "An interface is labelled by what it is, never by what it is for."
+  },
+  {
+   "where": "BR43 risk",
+   "text": "A payment service and a crash reporter get labels nobody can compare, so the picture stops grouping the edge."
+  },
+  {
+   "where": "BR44 statement",
+   "text": "Who stands on the far side of an interface is read from the flows, never written by hand."
+  },
+  {
+   "where": "BR44 risk",
+   "text": "A hand-written far side disagrees with the stories, and the reader gets two answers with no way to choose."
+  },
+  {
+   "where": "BR45 statement",
+   "text": "A person meets the product through an interface at every step, not only the first and the last."
+  },
+  {
+   "where": "BR45 risk",
+   "text": "The picture shows one person on both sides of one wall, so the edge of the product reads as optional."
+  },
+  {
+   "where": "BR46 statement",
+   "text": "Work the product schedules for itself is never an outsider, so it crosses no interface."
+  },
+  {
+   "where": "BR46 risk",
+   "text": "The map counts its own timer as a customer, so an interface handing data to nobody looks answered."
+  },
+  {
+   "where": "BR20 statement",
+   "text": "A command is a way in only when it acts on the running product or its stored data."
+  },
+  {
+   "where": "BR20 risk",
+   "text": "A build or test command counted as a way in makes the outside edge look wider than it is."
+  },
+  {
+   "where": "BR21 statement",
+   "text": "A command judged not to be a way in must still be recorded as a run or build command."
+  },
+  {
+   "where": "BR21 risk",
+   "text": "A command decided against and never rewritten disappears from the map. No check can see a row nobody wrote."
+  },
+  {
+   "where": "BR22 statement",
+   "text": "A way in is recorded once, at the thing that does the acting, and never again at whatever calls it."
+  },
+  {
+   "where": "BR22 risk",
+   "text": "Counting a wrapper and the command it wraps as two doors inflates the outside edge with duplicate rows."
+  },
+  {
+   "where": "BR23 statement",
+   "text": "A timer, a boot hook or a queue reader is work the product does to itself, not a way in."
+  },
+  {
+   "where": "BR23 risk",
+   "text": "Placing the product's own scheduled work on the outside edge makes it look reachable where nobody outside can reach it."
+  },
+  {
+   "where": "BR24 statement",
+   "text": "A way in of a kind nobody recognises is treated as one somebody outside asks for."
+  },
+  {
+   "where": "BR24 risk",
+   "text": "Guessing self-started instead would quietly drop a real door out of every count of the outside edge."
+  },
+  {
+   "where": "BR25 statement",
+   "text": "Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded."
+  },
+  {
+   "where": "BR25 risk",
+   "text": "A way in claimed twice, or by nothing, breaks any honest count of where the product meets the world."
+  },
+  {
+   "where": "BR26 statement",
+   "text": "Work every request passes through on its way in is not itself a way in, so it joins no interface."
+  },
+  {
+   "where": "BR26 risk",
+   "text": "Demanding an interface for shared request handling raises a complaint nobody can ever clear, so readers stop reading complaints."
+  },
+  {
+   "where": "BR27 statement",
+   "text": "A way in that no story reaches is reported, including the ones the product starts for itself."
+  },
+  {
+   "where": "BR27 risk",
+   "text": "Exempting scheduled work hides a whole background behaviour, with no signal anywhere that it is missing."
+  }
+ ]
+}

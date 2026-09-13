@@ -1,0 +1,167 @@
+{
+ "schema": "coyomap/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "BR60 statement",
+   "text": "An advisory never stops a build; only a gate does."
+  },
+  {
+   "where": "BR60 risk",
+   "text": "A build stopped by a matter of judgement teaches its author to ignore every finding the tools print."
+  },
+  {
+   "where": "BR61 statement",
+   "text": "A build is clean only when every gate ran and no advisory is left open."
+  },
+  {
+   "where": "BR61 risk",
+   "text": "A gate that was skipped would read as a gate that passed, hiding a broken map behind a green report."
+  },
+  {
+   "where": "BR62 statement",
+   "text": "An advisory the operator decides to live with is silenced only by a reason recorded in the map."
+  },
+  {
+   "where": "BR62 risk",
+   "text": "Without one place to record the reason, the same advisory fires on every build until people stop reading."
+  },
+  {
+   "where": "BR63 statement",
+   "text": "A recorded reason is refused unless it names a finding the checks really read."
+  },
+  {
+   "where": "BR63 risk",
+   "text": "An operator would believe an advisory was answered while it keeps firing, and nothing would say so."
+  },
+  {
+   "where": "BR64 statement",
+   "text": "Every advisory a recorded reason silenced is still counted out loud in the build's report."
+  },
+  {
+   "where": "BR64 risk",
+   "text": "A silence nobody can see reads the same as having no findings, so a map can look clean by suppression."
+  },
+  {
+   "where": "BR65 statement",
+   "text": "A finding whose only honest answer is a fix cannot be silenced by a recorded reason."
+  },
+  {
+   "where": "BR65 risk",
+   "text": "An escape here would let a map record its own gaps as acceptable, which the checks exist to stop."
+  },
+  {
+   "where": "BR66 statement",
+   "text": "An advisory must say where the operator records the reason for living with it."
+  },
+  {
+   "where": "BR66 risk",
+   "text": "An advisory with nowhere to answer it is waved through forever, so the check changes nothing."
+  },
+  {
+   "where": "BR160 statement",
+   "text": "A run refuses to read or overwrite coyomap's own map unless the operator declares coyomap is the project being mapped."
+  },
+  {
+   "where": "BR160 risk",
+   "text": "A shell standing in the wrong folder reads a healthy result about the wrong product, or overwrites the accepted map."
+  },
+  {
+   "where": "BR161 statement",
+   "text": "Only files git accounts for are analysed, so ignored and generated trees stay out of the map."
+  },
+  {
+   "where": "BR161 risk",
+   "text": "Reading everything on disk fills the map with built output and copied libraries, and hides the product's real size."
+  },
+  {
+   "where": "BR162 statement",
+   "text": "A project's own exclusion patterns are named on every run, each beside the number of files it removed."
+  },
+  {
+   "where": "BR162 risk",
+   "text": "An over broad pattern hides a real gap from the very checks whose job is finding gaps."
+  },
+  {
+   "where": "BR163 statement",
+   "text": "A build never opens the map it is replacing, so the new map cannot quietly copy the old one."
+  },
+  {
+   "where": "BR163 risk",
+   "text": "Two maps agree because one copied the other, and nobody can tell copying from real agreement."
+  },
+  {
+   "where": "BR164 statement",
+   "text": "A map is built again from scratch only when the person asks, because a rebuild discards the accepted map."
+  },
+  {
+   "where": "BR164 risk",
+   "text": "A silent rebuild throws away every hand correction and the record of which code version the map described."
+  },
+  {
+   "where": "BR165 statement",
+   "text": "A correction only lasts where the build reads from, because every file the build produces is written again from scratch."
+  },
+  {
+   "where": "BR165 risk",
+   "text": "A repair everybody believes landed quietly disappears, and the same work is done again months later."
+  },
+  {
+   "where": "BR166 statement",
+   "text": "A warning the person decides to accept is silenced only by a note written under a heading the checks read."
+  },
+  {
+   "where": "BR166 risk",
+   "text": "A note nobody reads leaves the same warning arriving every run, so the real warnings get waved through."
+  },
+  {
+   "where": "BR167 statement",
+   "text": "A map names the version of the code it describes. That name is marked when the code on disk was never committed."
+  },
+  {
+   "where": "BR167 risk",
+   "text": "Unmarked, the map claims a committed version it does not describe. Every later comparison then misses the edits already baked in."
+  },
+  {
+   "where": "D90 used for",
+   "text": "Lists a project's files, and reads any file exactly as it stood at the map's pinned commit."
+  },
+  {
+   "where": "D91 used for",
+   "text": "Holds every project's map folder, the tool's own environment, and the remembered list of projects."
+  },
+  {
+   "where": "D92 used for",
+   "text": "Opens and draws the map viewer page for a person on this machine."
+  },
+  {
+   "where": "D93 used for",
+   "text": "Receives a file and a line from the map, so a person opens that exact spot in their editor."
+  },
+  {
+   "where": "D94 used for",
+   "text": "Shows a mapped file on the web, pinned to the commit the map was built at."
+  },
+  {
+   "where": "D95 used for",
+   "text": "Runs the installed skill that drives a map build, and names the conversation a build is stamped with."
+  },
+  {
+   "where": "D96 used for",
+   "text": "Serves the two drawing libraries the viewer page loads in the browser."
+  },
+  {
+   "where": "D97 used for",
+   "text": "Draws every diagram on the viewer page from the text the tool generates."
+  },
+  {
+   "where": "D98 used for",
+   "text": "Lets a person pan and zoom a drawn diagram in the viewer."
+  },
+  {
+   "where": "D99 used for",
+   "text": "Reads symbols and imports out of source files in many languages during the first pass."
+  }
+ ]
+}

@@ -1,6 +1,6 @@
 # The gate block carries the finalize report's advisory disposition
 
-Change (2026-09-08): `finalize`'s gate block (`.coyodex/verify/gate-block.md`, the text a build
+Change (2026-09-08): `finalize`'s gate block (`.coyomap/verify/gate-block.md`, the text a build
 quotes in its commit message) gains one line, `Advisory disposition: UNANSWERED: n · UNRECORDED: n
 · UNSURE: n · carried (no escape): n · disclosure: n · recorded: n`, with the zero counts left
 out. The report had this three-way answer all along, in a file the build never quotes; the gate

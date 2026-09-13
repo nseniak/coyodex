@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex scope` — the briefing shown BEFORE any coyodex work starts.
+"""`coyomap scope` — the briefing shown BEFORE any coyomap work starts.
 
 Its whole value is that a user cannot miss two facts: what will be read, and what the map's commit
 pin will mean. So the tests here are about what the text SAYS, not about return codes — a silent
@@ -13,7 +13,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from coyodex.scope import read_pin, scope_report
+from coyomap.scope import read_pin, scope_report
 from test_source_walk_git import make_git_repo, run_git, write
 
 
@@ -58,7 +58,7 @@ def test_the_ignore_file_is_reported_per_pattern():
     nothing is named too — the author believes it is describing the tree and it is not."""
     with tempfile.TemporaryDirectory() as td:
         root = make_git_repo(Path(td))
-        write(root, ".coyodex/.ignore", "src/\nnowhere/\n")
+        write(root, ".coyomap/.ignore", "src/\nnowhere/\n")
         text = report(root)
         assert "src/ (removed 1 file(s))" in text
         assert "nowhere/ (removed 0 file(s))" in text
@@ -92,12 +92,12 @@ def test_uncommitted_code_is_named_with_the_dirty_pin_consequence():
         assert "-dirty" in text
 
 
-def test_coyodex_own_files_do_not_count_as_dirty_code():
-    """`.coyodex/` is always in flux — the workflow writes and commits it. Counting it would make
+def test_coyomap_own_files_do_not_count_as_dirty_code():
+    """`.coyomap/` is always in flux — the workflow writes and commits it. Counting it would make
     every single run warn, which is how a warning stops being read."""
     with tempfile.TemporaryDirectory() as td:
         root = make_git_repo(Path(td))
-        write(root, ".coyodex/project-map.json", "{}\n")
+        write(root, ".coyomap/project-map.json", "{}\n")
         assert read_pin(root).dirty == ()
         assert "Your code is committed" in report(root)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex grounding by-element` — what the pass DID, beside what the author TYPED.
+"""Tests for `coyomap grounding by-element` — what the pass DID, beside what the author TYPED.
 
 Nothing in the tooling ever writes `confidence`. So an element three skeptics confirmed reads
 exactly as its harvesting agent left it, and a reader cannot tell a proved claim from an unopened
@@ -16,11 +16,11 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.audit_model import (apply_anchor_corrections, resolve_claim, rule_site_claim,
+from coyomap.audit_model import (apply_anchor_corrections, resolve_claim, rule_site_claim,
                                  store_claim)
-from coyodex.grounding import (element_checks, format_element_checks, main,
+from coyomap.grounding import (element_checks, format_element_checks, main,
                                surviving_refutations)
-from coyodex.model import FORMAT, load_model
+from coyomap.model import FORMAT, load_model
 
 
 # --- builders -------------------------------------------------------------------
@@ -415,7 +415,7 @@ def test_the_gate_refuses_without_a_map():
 # carry no `confidence` field, printing as `says , pass says unchecked`.
 
 def _unseen_report(confidence: str = "verified"):
-    from coyodex.grounding import format_refutations
+    from coyomap.grounding import format_refutations
     m = make_model(confidence=confidence)
     claim = site_claim(m)
     store = store_claim("E1", "Thing", "D1", "things", "collection")
@@ -440,7 +440,7 @@ def test_a_row_with_no_confidence_field_does_not_print_an_empty_label():
 
 def test_the_access_rows_are_called_out_separately():
     """Who-may-do-what is why the caller needs these told apart from a description."""
-    from coyodex.grounding import format_refutations
+    from coyomap.grounding import format_refutations
     m = make_model(rules=[{"id": "BR1", "name": "Owner only", "access": True,
                            "statement": "Only an owner may delete an org.", "block": "BLK1",
                            "confidence": "inferred",

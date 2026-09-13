@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex eval compare` — the relative regression gates over two MapProfiles.
+"""Tests for `coyomap eval compare` — the relative regression gates over two MapProfiles.
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_compare.py        # built-in runner (prints pass/fail)
@@ -13,13 +13,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex_eval.compare import (DEFAULT_BANDS, DRIFT, PASS, REGRESSED, Thresholds, compare,
+from coyomap_eval.compare import (DEFAULT_BANDS, DRIFT, PASS, REGRESSED, Thresholds, compare,
                                   format_report, load_thresholds)
-from coyodex_eval import compare as C
-from coyodex_eval.judge import DimensionScore, JudgeReport
-from coyodex_eval.profile import MapProfile
+from coyomap_eval import compare as C
+from coyomap_eval.judge import DimensionScore, JudgeReport
+from coyomap_eval.profile import MapProfile
 
-COMPARE = [sys.executable, "-m", "coyodex_eval.cli", "compare"]
+COMPARE = [sys.executable, "-m", "coyomap_eval.cli", "compare"]
 
 
 # --- builders -------------------------------------------------------------------
@@ -704,7 +704,7 @@ def test_a_short_dropped_list_is_not_truncated() -> None:
 # the gate failed 3 -> 2, and the whole comparison was stamped REGRESSED.
 
 def test_a_distinct_hosts_drop_from_folding_units_into_variants_is_explained():
-    from coyodex_eval.compare import compare as compare_profiles
+    from coyomap_eval.compare import compare as compare_profiles
     base = make_profile(deployment_units=6, deployment_units_linked=3,
                         deployment_distinct_hosted_sets=3, deployment_units_multi_variant=1)
     cand = make_profile(deployment_units=5, deployment_units_linked=2,
@@ -717,7 +717,7 @@ def test_a_distinct_hosts_drop_from_folding_units_into_variants_is_explained():
 
 def test_a_distinct_hosts_drop_with_no_variant_fold_gets_no_excuse():
     """The note must not fire on a genuine loss of modelling, which is what the gate is for."""
-    from coyodex_eval.compare import compare as compare_profiles
+    from coyomap_eval.compare import compare as compare_profiles
     base = make_profile(deployment_units=6, deployment_units_linked=3,
                         deployment_distinct_hosted_sets=3, deployment_units_multi_variant=1)
     cand = make_profile(deployment_units=6, deployment_units_linked=2,
@@ -727,7 +727,7 @@ def test_a_distinct_hosts_drop_with_no_variant_fold_gets_no_excuse():
 
 
 def test_a_baseline_blessed_before_the_variant_field_gets_no_excuse_either():
-    from coyodex_eval.compare import compare as compare_profiles
+    from coyomap_eval.compare import compare as compare_profiles
     base = make_profile(deployment_units=6, deployment_units_linked=3,
                         deployment_distinct_hosted_sets=3, deployment_units_multi_variant=None)
     cand = make_profile(deployment_units=5, deployment_units_linked=2,

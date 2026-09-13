@@ -1,7 +1,7 @@
 # An attended AI agent is a pipe, a tool is not a goal, and a message to a person has its own kind
 
 Change (2026-09-03): three method changes that all fall out of one finding, plus the viewer label
-that makes the result legible · method.md, method/model.md, tools/coyodex/grammar.py, json_schema.py,
+that makes the result legible · method.md, method/model.md, tools/coyomap/grammar.py, json_schema.py,
 method/project-map.schema.json, viewer/gen_viewer.py, the viewer.
 
   1. **An attended AI agent is a PIPE, not an actor. The actor is the person.**

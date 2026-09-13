@@ -1,24 +1,24 @@
-# coyodex-eval — method-quality regression for a coyodex map
+# coyomap-eval — method-quality regression for a coyomap map
 
-**For the coyodex DEVELOPER, not for users of coyodex.** It answers "did my change to the
+**For the coyomap DEVELOPER, not for users of coyomap.** It answers "did my change to the
 method or the tooling make the maps worse?", which is a question only someone changing
-coyodex asks. A user's map evolves incrementally alongside their code; the repeated rebuilding
+coyomap asks. A user's map evolves incrementally alongside their code; the repeated rebuilding
 this depends on is a developer habit.
 
-It compares **two maps of the same code** — the project's current `.coyodex/project-map.json`
-against one of its archived predecessors in `.coyodex/dev-rebuilds/NNNN/` — and reports whether the
-method got better or worse. All results go in `.coyodex-eval/` (git-ignored, regenerable). Nothing
-here writes `.coyodex/`.
+It compares **two maps of the same code** — the project's current `.coyomap/project-map.json`
+against one of its archived predecessors in `.coyomap/dev-rebuilds/NNNN/` — and reports whether the
+method got better or worse. All results go in `.coyomap-eval/` (git-ignored, regenerable). Nothing
+here writes `.coyomap/`.
 
-**It never builds a map.** `/coyodex` is the builder; this scores what is already on disk. The loop:
+**It never builds a map.** `/coyomap` is the builder; this scores what is already on disk. The loop:
 
 ```
-COYODEX_HOME/.venv/bin/coyodex-eval archive .   # move the current map to .coyodex/dev-rebuilds/NNNN/
-/coyodex                                        # rebuild from scratch with the current method
-/coyodex-eval                                   # compare the new map against that archive
+COYOMAP_HOME/.venv/bin/coyomap-eval archive .   # move the current map to .coyomap/dev-rebuilds/NNNN/
+/coyomap                                        # rebuild from scratch with the current method
+/coyomap-eval                                   # compare the new map against that archive
 ```
 
-Why the build is not part of the eval: `/coyodex` **is** the thing being measured, so a second build
+Why the build is not part of the eval: `/coyomap` **is** the thing being measured, so a second build
 path here would be a copy that drifts from it; and driving a build from inside the eval required a
 blind isolated-worktree orchestration whose background fan-out silently stalled unattended runs.
 The archive already holds every previous map, so there is nothing left for the eval to build.
@@ -26,11 +26,11 @@ The archive already holds every previous map, so there is nothing left for the e
 ## What this takes on trust
 The eval scores maps. It cannot see how they were made, and two preconditions are yours to hold:
 
-- **The rebuild must not read `.coyodex/dev-rebuilds/`.** The archived map is the answer key. A
+- **The rebuild must not read `.coyomap/dev-rebuilds/`.** The archived map is the answer key. A
   rebuild in a fresh session is blind in practice — `archive` moves the map out of the working tree,
   `dev-rebuilds/` is git-ignored, and no build path reads it — but nothing stops an agent that goes
   looking. When a build must be **provably** blind (a phase-boundary validation), build it with
-  `COYODEX_HOME/eval/blind-build.md` and pass its map to Step 1 as an explicit path.
+  `COYOMAP_HOME/eval/blind-build.md` and pass its map to Step 1 as an explicit path.
 - **Both maps must describe the same code.** Step 1 is that check — but note it is **yours to run**,
   not the tooling's. It is a handful of git commands that YOU execute and YOU judge; no tool records
   that they ran or what they returned, and nothing downstream re-checks them. A run where Step 1 was
@@ -49,34 +49,34 @@ The eval scores maps. It cannot see how they were made, and two preconditions ar
    either differs is not a method comparison.
 
 ## Paths — keep them straight
-**Export `COYODEX_HOME` before anything else** — every command block below writes it as a bare
+**Export `COYOMAP_HOME` before anything else** — every command block below writes it as a bare
 prefix, which is a relative path if you paste it verbatim:
 ```
-export COYODEX_HOME=<the path the skill gave you>
+export COYOMAP_HOME=<the path the skill gave you>
 ```
-- **`COYODEX_HOME`** (from the skill) — the coyodex clone: method docs, config, and the CLIs
-  (`COYODEX_HOME/.venv/bin/coyodex`, `COYODEX_HOME/.venv/bin/coyodex-eval`). Config:
-  `COYODEX_HOME/eval/thresholds.json` and `COYODEX_HOME/eval/rubric.md`.
-- **Your cwd** — the project being evaluated. Current map: `.coyodex/project-map.json`. Archived
-  maps: `.coyodex/dev-rebuilds/NNNN/project-map.json`. Eval data: `.coyodex-eval/`.
+- **`COYOMAP_HOME`** (from the skill) — the coyomap clone: method docs, config, and the CLIs
+  (`COYOMAP_HOME/.venv/bin/coyomap`, `COYOMAP_HOME/.venv/bin/coyomap-eval`). Config:
+  `COYOMAP_HOME/eval/thresholds.json` and `COYOMAP_HOME/eval/rubric.md`.
+- **Your cwd** — the project being evaluated. Current map: `.coyomap/project-map.json`. Archived
+  maps: `.coyomap/dev-rebuilds/NNNN/project-map.json`. Eval data: `.coyomap-eval/`.
 
 ## Step 1 — Pick the two maps, then guard
 **Candidate** = the current map, **baseline** = the archived one. That direction matters: the gates
 are relative to the baseline, so "the new map lost something the old one had" is what trips
 REGRESSED.
 
-1. **Candidate.** `.coyodex/project-map.json`. Missing → tell the user to run `/coyodex` first, then
+1. **Candidate.** `.coyomap/project-map.json`. Missing → tell the user to run `/coyomap` first, then
    stop. Markdown maps are not supported.
 2. **Baseline.** By default the newest archive — the highest-numbered directory:
    ```
-   ls -d .coyodex/dev-rebuilds/*/ | sort | tail -1
+   ls -d .coyomap/dev-rebuilds/*/ | sort | tail -1
    ```
    The numbers are zero-padded and monotonic, so a lexical sort is a recency sort. The user may name
    another (`0002`, "the first one"). No `dev-rebuilds/` at all → there is nothing to compare
    against: show the user the loop at the top of this doc and stop.
    **Either side may be overridden with an explicit map path** — that is how a map built by
    `blind-build.md`, or any two archives, get compared.
-3. **Distinctness.** `COYODEX_HOME/.venv/bin/coyodex-eval hash` both. Identical hashes → the same map
+3. **Distinctness.** `COYOMAP_HOME/.venv/bin/coyomap-eval hash` both. Identical hashes → the same map
    twice; say so and stop.
 4. **Same-code guard.** Read each map's pin from its top-level **`commit`** field — call them `P_base`
    and `P_cand`:
@@ -105,34 +105,34 @@ REGRESSED.
    a shallow clone, or a 7-character sha that has grown ambiguous.
 
    Then all four must hold:
-   - **zero code delta between the two pins** — `git diff <P_base>..<P_cand> -- . ':(exclude).coyodex'`
-     empty. Note this is a delta test, NOT `P_base == P_cand`: once `.coyodex/` is tracked, committing
+   - **zero code delta between the two pins** — `git diff <P_base>..<P_cand> -- . ':(exclude).coyomap'`
+     empty. Note this is a delta test, NOT `P_base == P_cand`: once `.coyomap/` is tracked, committing
      a map moves HEAD past the commit that map describes, so consecutive maps normally carry
      *different* pins with identical code between them. Requiring equality would refuse the ordinary
      archive → rebuild → compare loop, and a guard that cries wolf on the happy path just teaches
      everyone to override it;
-   - the tree is **clean**, ignoring coyodex's own dirs:
-     `git status --porcelain -- . ':(exclude).coyodex' ':(exclude).coyodex-eval'`.
+   - the tree is **clean**, ignoring coyomap's own dirs:
+     `git status --porcelain -- . ':(exclude).coyomap' ':(exclude).coyomap-eval'`.
      **Housekeeping exception:** if the ONLY dirty path is `.gitignore`, inspect
-     `git diff -- .gitignore`; when every added/removed line does nothing but add coyodex paths
-     (`.coyodex-eval/`, `.coyodex/` entries — step 5 below), treat the tree as clean. Any other
+     `git diff -- .gitignore`; when every added/removed line does nothing but add coyomap paths
+     (`.coyomap-eval/`, `.coyomap/` entries — step 5 below), treat the tree as clean. Any other
      `.gitignore` change still counts as dirty;
    - **zero code delta between `P_cand` and `HEAD`**:
      ```
-     git diff <P_cand>..HEAD -- . ':(exclude).coyodex'
+     git diff <P_cand>..HEAD -- . ':(exclude).coyomap'
      ```
      empty. `.gitignore` is deliberately **not** excluded here. The analysed file set comes from
      `git ls-files --exclude-standard`, so a committed `.gitignore` change silently rescopes the tree
      the maps are measured against — verified: adding one directory to a `.gitignore` moved the walk
      from 24 files to 13 and E from 3 to 2, with every other clause green. If the only difference is
-     coyodex housekeeping, apply the same content test as the clause above rather than excluding the
+     coyomap housekeeping, apply the same content test as the clause above rather than excluding the
      file;
    - **the analysis scope is unchanged** — compare the **WORKING TREE** against each pin, not the
      committed history:
      ```
-     git ls-files --error-unmatch .coyodex/.ignore      # must be TRACKED, or this clause is a no-op
-     git diff <P_base> -- .coyodex/.ignore              # note: no `..HEAD`
-     git diff <P_cand> -- .coyodex/.ignore
+     git ls-files --error-unmatch .coyomap/.ignore      # must be TRACKED, or this clause is a no-op
+     git diff <P_base> -- .coyomap/.ignore              # note: no `..HEAD`
+     git diff <P_cand> -- .coyomap/.ignore
      ```
      both empty. **If the diff shows the file as a `new file`, the maps PREDATE the scope
      declaration** — it did not exist when they were built. That is a real mismatch, not a tree
@@ -140,9 +140,9 @@ REGRESSED.
      counts include code that E and coverage now exclude. But no edit to the working tree can clear
      it — deleting `.ignore` to make the diff empty is the very thing this clause exists to prevent.
      Say so plainly and give the only real fix:
-     > Both maps predate `.coyodex/.ignore` (added in `<commit>`), so they describe a wider tree than
+     > Both maps predate `.coyomap/.ignore` (added in `<commit>`), so they describe a wider tree than
      > the eval now scores. Nothing in the working tree can reconcile that. Rebuild both sides under
-     > the current scope — `coyodex-eval archive .`, `/coyodex`, and eval the next pair — or eval two
+     > the current scope — `coyomap-eval archive .`, `/coyomap`, and eval the next pair — or eval two
      > maps that were both built after `<commit>`.
 
      Do **not** reach for the override here: it switches off clauses 1–3 as well, and this is not the
@@ -150,16 +150,16 @@ REGRESSED.
 
      A `<P>..HEAD` form would compare two *commits* and miss the case that matters most:
      the scope file is read from the **working tree** (`load_ignore`), and clause 2 excludes
-     `.coyodex/` wholesale, so an uncommitted edit — or an outright deletion — of this file is
-     invisible to every other clause. Verified: with an uncommitted `.coyodex/.ignore` removed, all
+     `.coyomap/` wholesale, so an uncommitted edit — or an outright deletion — of this file is
+     invisible to every other clause. Verified: with an uncommitted `.coyomap/.ignore` removed, all
      four clauses go green and E moves from 14 to 37. The `--error-unmatch` check matters too: if the
      file is untracked, every diff against it is trivially empty and the clause silently protects
      nothing.
-     `.coyodex/.ignore` declares which committed code the map is not meant to describe;
+     `.coyomap/.ignore` declares which committed code the map is not meant to describe;
      `iter_source_files` honours it, so it sets the coverage denominator AND the code-derived
      component expectation E. On this repo, removing it took E from 14 to 37 (+164%) and flipped the
      current map's granularity band from DRIFT to PASS with no change to map or code. The other
-     clauses all exclude `.coyodex/` wholesale, so this file needs its own check.
+     clauses all exclude `.coyomap/` wholesale, so this file needs its own check.
 
    **The one rescope no clause can see.** The analysed file set comes from
    `git ls-files --exclude-standard`, which also honours `.git/info/exclude` and the user's global
@@ -176,8 +176,8 @@ REGRESSED.
    Any clause failing → **REFUSE** and stop:
    > eval compares two maps of the SAME code, so a quality change means the *method* changed, not the
    > code. `<what failed — code differs between the two maps' pins / the tree is dirty / HEAD carries
-   > code changes on top of the candidate's pin / .coyodex/.ignore changed>`. Get to a clean tree
-   > with zero code delta, then re-run `/coyodex-eval`.
+   > code changes on top of the candidate's pin / .coyomap/.ignore changed>`. Get to a clean tree
+   > with zero code delta, then re-run `/coyomap-eval`.
 
    **Override** (never available for a `-dirty` pin). If the user insists on running anyway ("run it
    anyway", "I know the code differs"), run it — under three conditions, all of them required:
@@ -186,18 +186,18 @@ REGRESSED.
      > differ). Counts, coverage and grounding mix code change with method change; this is not a
      > method verdict.
    - **nothing is written to the Step-3 cache.** Score and judge into the run directory instead
-     (`.coyodex-eval/runs/<ts>/informational/`). The cache is keyed by map hash alone, so an entry
+     (`.coyomap-eval/runs/<ts>/informational/`). The cache is keyed by map hash alone, so an entry
      written from a rejected tree is indistinguishable from a good one and would be reused, unnoticed,
      by the next honest run — which would then report a clean PASS built on numbers that were never
      valid. The cache must only ever hold scores computed under a guard that PASSED;
-   - **the run directory records it**: write `.coyodex-eval/runs/<ts>/INFORMATIONAL` containing both
+   - **the run directory records it**: write `.coyomap-eval/runs/<ts>/INFORMATIONAL` containing both
      pins and the reason. `delta.md` says `Verdict: PASS` in the same words either way, so without
      this file an overridden run is indistinguishable from an honest one to anyone reading it later
      — including you, next month.
 
    An overridden run is never reported as a clean PASS or REGRESSED, and is never blessed into a
    cache or quoted as a method result.
-5. Housekeeping, once the guard has passed: make sure `.coyodex-eval/` is git-ignored in this project
+5. Housekeeping, once the guard has passed: make sure `.coyomap-eval/` is git-ignored in this project
    (add it to `.gitignore` if absent). This sits after the refusal, so on a refused run it never
    happens — which is correct, since a refused run writes nothing that needs ignoring.
 
@@ -208,15 +208,15 @@ bytes that were picked in Step 1.
 1. Pick the run directory and CREATE it — nothing else does, and this is the first write of the run:
    ```
    TS=<YYYY-MM-DD_HHMM>
-   mkdir -p ".coyodex-eval/runs/$TS"
+   mkdir -p ".coyomap-eval/runs/$TS"
    ```
    Then hash each map and keep both digests for the rest of the run:
    ```
-   COYODEX_HOME/.venv/bin/coyodex-eval hash <baseline map>
-   COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex/project-map.json \
-     > ".coyodex-eval/runs/$TS/map-hash"                    # the candidate's, kept on disk
+   COYOMAP_HOME/.venv/bin/coyomap-eval hash <baseline map>
+   COYOMAP_HOME/.venv/bin/coyomap-eval hash .coyomap/project-map.json \
+     > ".coyomap-eval/runs/$TS/map-hash"                    # the candidate's, kept on disk
    ```
-   From here both maps are **read-only**. The Step-5 `coyodex-eval run` re-verifies the candidate via
+   From here both maps are **read-only**. The Step-5 `coyomap-eval run` re-verifies the candidate via
    `--expect-map-hash` and a mismatch voids the run — but that is the LAST step, and `claims` /
    `judge` have no hash guard of their own. So **re-check both hashes yourself immediately before
    judging** (Step 4) and abort if either moved: judging an edited map wastes the entire skeptic
@@ -226,13 +226,13 @@ bytes that were picked in Step 1.
    "fails" as noise (~300 spurious warnings on a real map) and a genuinely broken one is invisible.
    Pass `--repo .` on both sides so the two are measured identically:
    ```
-   COYODEX_HOME/.venv/bin/coyodex validate --check-sources --repo . <map>
-   COYODEX_HOME/.venv/bin/coyodex audit <map>
-   COYODEX_HOME/.venv/bin/coyodex render <map> <run-dir>/<name>.md
+   COYOMAP_HOME/.venv/bin/coyomap validate --check-sources --repo . <map>
+   COYOMAP_HOME/.venv/bin/coyomap audit <map>
+   COYOMAP_HOME/.venv/bin/coyomap render <map> <run-dir>/<name>.md
    ```
    A `validate` problem or an `audit` contradiction is a **reported finding** that flows into the
    final report — see rule 2. (The interactive diagram is served live from the model by
-   `coyodex serve`; there is no `.html` file to render. The run archives `project-map.view.json` —
+   `coyomap serve`; there is no `.html` file to render. The run archives `project-map.view.json` —
    the served viewer's data snapshot.)
 
 ## Step 3 — Score and judge each map, cached by map hash
@@ -242,7 +242,7 @@ candidate today is already scored when it becomes the baseline of the next round
 
 Cache layout, one directory per map:
 ```
-.coyodex-eval/cache/<first 12 chars of the map hash>/
+.coyomap-eval/cache/<first 12 chars of the map hash>/
     map-hash · profile.json · judge.json · judge-verdicts.json
 ```
 
@@ -258,9 +258,9 @@ For each of the two maps, in this order:
 1. If the cache directory exists, **guard the cached judge** — reusable only if produced under the
    CURRENT judge protocol:
    ```
-   COYODEX_HOME/.venv/bin/coyodex-eval protocol \
-     --thresholds COYODEX_HOME/eval/thresholds.json --rubric COYODEX_HOME/eval/rubric.md \
-     --against .coyodex-eval/cache/<sha12>/judge.json
+   COYOMAP_HOME/.venv/bin/coyomap-eval protocol \
+     --thresholds COYOMAP_HOME/eval/thresholds.json --rubric COYOMAP_HOME/eval/rubric.md \
+     --against .coyomap-eval/cache/<sha12>/judge.json
    ```
    Exit 1 (the protocol changed, or the cached report records no fingerprint) → delete that
    `judge.json`; the map must be re-judged. A protocol change must invalidate the cache, never
@@ -268,7 +268,7 @@ For each of the two maps, in this order:
 2. **Write the digest to `map-hash` FIRST**, before any score lands beside it — it is what step 0
    uses to decide the entry is trustworthy, so it must never be the file that an interruption leaves
    out.
-3. Missing `profile.json` → `COYODEX_HOME/.venv/bin/coyodex-eval score <map> --repo . --json` and
+3. Missing `profile.json` → `COYOMAP_HOME/.venv/bin/coyomap-eval score <map> --repo . --json` and
    save it there.
 4. Missing `judge.json` → judge the map with **Step 4** and save it there. Note the two are written
    in this order, so an interrupted run can leave a profile with no judge — Step 5 treats a
@@ -281,12 +281,12 @@ re-run an eval without rebuilding.
 This is the real, LLM-backed judge; it runs in sub-agents (the tool never calls a model).
 
 **The pinned judge model.** All grounding skeptics and rubric judges run on the model named in
-`COYODEX_HOME/eval/thresholds.json` → `judge.grounding_model`. A comparison is only meaningful when
+`COYOMAP_HOME/eval/thresholds.json` → `judge.grounding_model`. A comparison is only meaningful when
 both maps were judged by the SAME model; if that pin ever changes, the Step-3 protocol guard
 invalidates the cached scores and both maps are re-judged on the new model.
 
 For a map M:
-1. **The claims sample.** `COYODEX_HOME/.venv/bin/coyodex-eval claims M --json --top 40` → the top-K
+1. **The claims sample.** `COYOMAP_HOME/.venv/bin/coyomap-eval claims M --json --top 40` → the top-K
    (K = 40, `judge.grounding_cap`) of the risk-ranked L2 worklist as `[{claim, anchor, detail?}]`. The
    worklist is ranked most-dangerous-first, so the cap grounds the riskiest claims and keeps cost
    bounded on a large map. Anchors are **repo-root-relative** file refs (e.g. `backend/x.py#L70` →
@@ -318,7 +318,7 @@ For a map M:
      happens** (the true call site), so it is directly comparable to the map's stored anchor. Reporting
      the true line does NOT change the grounded verdict — it feeds the deterministic drift check below.
    Collect one row per VOTE: `{claim, grounded, evidence}`, with `grounded` true, false, or the
-   string `"unverifiable"`. **After grounding, run `coyodex anchor-drift --map <map> --verdicts <the
+   string `"unverifiable"`. **After grounding, run `coyomap anchor-drift --map <map> --verdicts <the
    {claim,grounded,evidence} rows>`** — a deterministic Layer-2 check that flags any CONFIRMED claim
    whose stored `where` drifts from the line the skeptics found; the eval records `anchor_drift_rate` in
    `judge.json` (informational). The LLM only observed the line; the drift judgment is deterministic. If a skeptic returns "unverifiable" or no usable verdict (malformed
@@ -327,12 +327,12 @@ For a map M:
    aggregation counts it as a **judge failure**, surfaced separately and excluded from the
    pass-rate denominator, never scored as refuted.
 3. **Rubric** — 3 judge sub-agents on the pinned model, each scoring all 5 dimensions of
-   `COYODEX_HOME/eval/rubric.md` 0–4 against the code, with a `file:line` per score. Hand each
+   `COYOMAP_HOME/eval/rubric.md` 0–4 against the code, with a `file:line` per score. Hand each
    judge the map's generated MARKDOWN VIEW (render it from the frozen model:
-   `coyodex render <M.json> <tmp.md>`), not the raw JSON — the view is the readable,
+   `coyomap render <M.json> <tmp.md>`), not the raw JSON — the view is the readable,
    content-identical rendering.
 4. Write the raw verdicts `{ "grounding": [...], "judges": [...] }` to a JSON file, then aggregate:
-   `COYODEX_HOME/.venv/bin/coyodex-eval judge --map M --repo . --verdicts <raw.json> --rubric COYODEX_HOME/eval/rubric.md --judge-model <the pinned model> --out <judge.json>`.
+   `COYOMAP_HOME/.venv/bin/coyomap-eval judge --map M --repo . --verdicts <raw.json> --rubric COYOMAP_HOME/eval/rubric.md --judge-model <the pinned model> --out <judge.json>`.
    `--judge-model` (the `judge.grounding_model` pin) is recorded in the report's judge-protocol
    fingerprint together with n_skeptics, the cap, the rubric hash, and the grounding-prompt regime
    version — the Step-3 cache guard compares it (so a prompt-rule change, like the unverifiable
@@ -347,16 +347,16 @@ For a map M:
    Derive both cache paths with command substitution rather than transcribing them — they are named
    by 12 hex characters, and a hand-copied one is a transposition away from pointing nowhere:
    ```
-   BASE=$(COYODEX_HOME/.venv/bin/coyodex-eval hash <baseline map> | cut -c1-12)
-   CAND=$(COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex/project-map.json | cut -c1-12)
-   COYODEX_HOME/.venv/bin/coyodex-eval run \
+   BASE=$(COYOMAP_HOME/.venv/bin/coyomap-eval hash <baseline map> | cut -c1-12)
+   CAND=$(COYOMAP_HOME/.venv/bin/coyomap-eval hash .coyomap/project-map.json | cut -c1-12)
+   COYOMAP_HOME/.venv/bin/coyomap-eval run \
      --project "<repo-name> — current vs dev-rebuilds/<NNNN>" --project-key <repo-name> \
-     --map .coyodex/project-map.json --repo . \
-     --expect-map-hash "$(cat .coyodex-eval/runs/<ts>/map-hash)" \
-     --thresholds COYODEX_HOME/eval/thresholds.json \
-     --baseline-dir ".coyodex-eval/cache/$BASE" \
-     --judge ".coyodex-eval/cache/$CAND/judge.json" \
-     --out .coyodex-eval/runs/<ts>
+     --map .coyomap/project-map.json --repo . \
+     --expect-map-hash "$(cat .coyomap-eval/runs/<ts>/map-hash)" \
+     --thresholds COYOMAP_HOME/eval/thresholds.json \
+     --baseline-dir ".coyomap-eval/cache/$BASE" \
+     --judge ".coyomap-eval/cache/$CAND/judge.json" \
+     --out .coyomap-eval/runs/<ts>
    ```
    `--project` is the human label in the report (it names both sides); `--project-key` is what the
    thresholds file is looked up by, so per-project gates keep working. A hash-mismatch refusal means
@@ -366,8 +366,8 @@ For a map M:
    **On an overridden (INFORMATIONAL) run**, Step 1 forbade writing to the cache, so point both flags
    at the run's own scratch scores instead — the command is otherwise identical:
    ```
-     --baseline-dir ".coyodex-eval/runs/<ts>/informational/$BASE" \
-     --judge ".coyodex-eval/runs/<ts>/informational/$CAND/judge.json" \
+     --baseline-dir ".coyomap-eval/runs/<ts>/informational/$BASE" \
+     --judge ".coyomap-eval/runs/<ts>/informational/$CAND/judge.json" \
    ```
    Without this form the hardcoded cache paths above have nothing to point at, `run` refuses (it
    fails closed on a missing `--baseline-dir`), and the shortest way out looks like writing the cache
@@ -391,11 +391,11 @@ For a map M:
    something to have fixed.
 
 ## After the run
-The eval never writes `.coyodex/`, so there is nothing to accept: the map it judged as the candidate
+The eval never writes `.coyomap/`, so there is nothing to accept: the map it judged as the candidate
 IS the project's current map already.
 
 - **Better** — keep going. Nothing to do.
-- **Worse** — the previous map is intact in `.coyodex/dev-rebuilds/<NNNN>/`; restore it by hand if
+- **Worse** — the previous map is intact in `.coyomap/dev-rebuilds/<NNNN>/`; restore it by hand if
   you want it back, and fix the method before the next rebuild.
-- **Next round** — `coyodex-eval archive .`, `/coyodex`, `/coyodex-eval` again. The map you just
+- **Next round** — `coyomap-eval archive .`, `/coyomap`, `/coyomap-eval` again. The map you just
   judged becomes the next baseline, with its scores already in the cache.

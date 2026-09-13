@@ -1,5 +1,5 @@
 {
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "MCP Hero (mcpolis)",
   "goal": "MCP Hero (codename `mcpolis`) is a self-hostable **gateway for Model Context Protocol (MCP)\nservers**. Normally every person wires each MCP server into each AI client separately, with no\nshared way to control access or audit calls. MCP Hero mounts many upstream MCP servers behind a\nsingle URL and adds the missing team layer: role-based access control down to individual tools,\nper-user OAuth to upstreams (encrypted tokens), hosted execution of `command:`-style stdio MCPs in\nisolated sandboxes, an audit log of every tool call, and revocable service tokens for headless\nagents. It runs either as a zero-config single-tenant **standalone** instance (file-backed) or as a\nmulti-tenant **cloud** SaaS (MongoDB + Redis + E2B; what powers mcphero.io). The audience is teams\nwho want a curated, governed set of MCP tools shared across their AI assistants.",
   "commit": "d787e06",

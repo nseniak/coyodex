@@ -1,6 +1,6 @@
 # Retro backlog — what past retrospectives proposed, and where it stands
 
-A retrospective's report lives in the reviewed project's `.coyodex-eval/`, which is scratch: it is
+A retrospective's report lives in the reviewed project's `.coyomap-eval/`, which is scratch: it is
 git-ignored, regenerated per run, and one `git clean` from gone. The proposals in it are the durable
 part. They live here.
 
@@ -23,22 +23,22 @@ Verified against the working tree on **2026-08-16**. Pushed to `origin/main` on 
 | what | evidence |
 |---|---|
 | `audit` routes an `access: true` rule site to the `security` theme | `audit_model.py` — `theme="security" if br.access else "rule"`. This was the top-ranked finding of the 2026-08-13 coworker retro: the theme the audit orders first was permanently empty after auth surfaces moved into rules, so 200 access claims triaged as ordinary ones. |
-| `process_scorecard` sees a subcommand called through a shell alias, and its quote scanner no longer eats invocations | `_COYODEX_SUBCOMMANDS` now carries `grounding`/`finalize`/`record`; one quote scanner. Between them these two bugs mis-measured nine of the twenty-two scored lines on two consecutive builds. |
+| `process_scorecard` sees a subcommand called through a shell alias, and its quote scanner no longer eats invocations | `_COYOMAP_SUBCOMMANDS` now carries `grounding`/`finalize`/`record`; one quote scanner. Between them these two bugs mis-measured nine of the twenty-two scored lines on two consecutive builds. |
 | `reconcile` can express the assignment the method prescribes | `reconcile_build.py` `_FIELD_OWNER` now carries `capability` and `entry_points`, matching the consumer it claims to mirror. |
 | `cost --map` divides refutations by what was challenged, not by the worklist total | `cost.py` — falls back to `claims_total` only when `claims_challenged` is absent, and prints the partial denominator. The old form understated the rate by about half on both measured builds. |
 | The retro method reads the per-agent transcripts, refutes its own findings, and checks the map | `method.md` in this directory (commit `6c2fb24`). |
-| The map records WHICH coyodex built it; `compare` leads with the difference | `0a57a81`. Closes the cross-schema guard properly: it records the fact instead of inferring it, so it also catches tool changes that are not schema changes. |
+| The map records WHICH coyomap built it; `compare` leads with the difference | `0a57a81`. Closes the cross-schema guard properly: it records the fact instead of inferring it, so it also catches tool changes that are not schema changes. |
 | `balance` is reproducible | `0a57a81`. It was not: five identical runs printed three different seam lists, because equal-weight seams fell back to set iteration order. Found by a before/after harness on its first use. |
 | `dump --map <path>` | `0a57a81`. |
 | `lint-fragment` leads with its verdict, and runs the reciprocal domain-card check | `4d0ecd9`, `ac59f4f`. The verdict used to print last, so an agent's `head -40` hid a pass twice; the missing check let 33 blocking errors reach assembly. |
 | `scope` warns when a previous map is being read as source | `4d0ecd9`. |
 | `preindex --report --dirs a,b,c` | `4d0ecd9`. A ranking cannot answer "E for the slices I chose". |
 | `reconcile` checks the assignment TARGET exists, and summarises | `f086f0b`. Plus `--only-unmatched`. |
-| `scope` keys the stray-map warning on CONTENT, not a name prefix | `b21ef32`. It matched `.coyodex*` and so missed `map-backups/` — where this tool's own backup command writes. |
+| `scope` keys the stray-map warning on CONTENT, not a name prefix | `b21ef32`. It matched `.coyomap*` and so missed `map-backups/` — where this tool's own backup command writes. |
 | `lint-fragment` survives a truncating pipe, and its verdict does not collide with the OK rows | `b21ef32`. |
 | `preindex --dirs` normalises the path and distinguishes "exists but scores nothing" from "not a directory" | `b21ef32`. |
 | The disposition table only accepts ids the MAP defines | `b21ef32`. It read `S3` out of "artifacts in S3" and `C4` out of "the C4 container view"; a false id can flip a real gap to "recorded". |
-| `balance` renders the DOMAIN forest | `e75e89d`. `validate` advised on subdomain fan-out and ended "(`coyodex balance` proposes splits)" — a promise it could not keep. Surfaces four dense diagrams (13/23/22/27) on the coworker map. |
+| `balance` renders the DOMAIN forest | `e75e89d`. `validate` advised on subdomain fan-out and ended "(`coyomap balance` proposes splits)" — a promise it could not keep. Surfaces four dense diagrams (13/23/22/27) on the coworker map. |
 | `grounding lint` — malformed verdicts and fabricated evidence, at the skeptic | `988f51a`. `--agent-transcripts` flags a note claiming a read the agent's own transcript never made. |
 | `fix row --set-json-<field>` | `8ad9758`. The four "missing verbs" were one gap: `fix row` could not carry a value that was not a string, which is why all four edits were hand-scripted. |
 | Build method: SERVES slot in the harvest contract, fan-out ordering + concurrency cap, the commit step, the archive pointer, no fragment generators | `80e77e3`. |
@@ -50,20 +50,20 @@ Verified against the working tree on **2026-08-16**. Pushed to `origin/main` on 
 ### Landed 2026-08-17 — from the mcpolis build of that morning (session `0b3af67e`)
 
 Pushed to `origin/main` on 2026-08-19. Gates at the time: `pytest tests eval/tests` **2,125 passed**;
-`pyright tools/coyodex eval/tools` **0 errors**. Every one was verified against the real build's
+`pyright tools/coyomap eval/tools` **0 errors**. Every one was verified against the real build's
 artifacts, not only against a fixture.
 
-**Measurement (`coyodex-eval`)**
+**Measurement (`coyomap-eval`)**
 
 | what | evidence |
 |---|---|
 | Assertion 31 follows a brief that lives in a file | The 15 harvest prompts were one-line pointers (`Read …/prompt-h-domain.md completely`), so the detector scored the pointer and reported 0.00 about a build whose 15 briefs ALL cite use cases. It reads 1.00 now, while the previous build — briefs inline, citing nothing — still reads 0.00. A pointer whose file is gone reads `n/a`, never 0. |
-| `_COYODEX_SUBVERBS` holds every dispatched verb, and `--commands` expands a shell function | `row`, `security-row`, `dedup-security`, `lint`, `stamp`, `show` were all missing, and the scan counted a function DEFINITION instead of its calls. On the build's own transcript the table goes `fix 1` → `fix row 6`, `provenance` → `provenance stamp`, `record 8` → `record 40`; 73 invocations → 111. `test_subverbs_cover_every_dispatched_verb` reads the three dispatch tables so the next verb cannot ship missing. |
+| `_COYOMAP_SUBVERBS` holds every dispatched verb, and `--commands` expands a shell function | `row`, `security-row`, `dedup-security`, `lint`, `stamp`, `show` were all missing, and the scan counted a function DEFINITION instead of its calls. On the build's own transcript the table goes `fix 1` → `fix row 6`, `provenance` → `provenance stamp`, `record 8` → `record 40`; 73 invocations → 111. `test_subverbs_cover_every_dispatched_verb` reads the three dispatch tables so the next verb cannot ship missing. |
 | Assertion 38 resolves a shell variable in a redirect target | The worklist was written absolutely and read four times as `$CO/verify/worklist.json`. 0/1 → 1/1. |
 | Assertion 3 stops counting a lone dispatch as a failed fan-out | `of` is now batched turns plus SERIALISED one-agent turns; an isolated single-agent job is neither. 5/6 → 5/5. The serialised shape the assertion exists for still scores 0. |
 | `cost` excludes coordinator round-trip idle from an agent's duration | The two "slowest" agents held 4.7 and 6.9 minutes waiting for a follow-up; the rework after each took about a minute. Slowest in the trace batch 18.9m → 16.9m, in the rules batch 15.6m → 10.6m. `Actor.span` keeps the raw figure. |
 
-**Tools (`coyodex`)**
+**Tools (`coyomap`)**
 
 | what | evidence |
 |---|---|
@@ -107,12 +107,12 @@ artifacts, not only against a fixture.
 ### Landed 2026-08-19 — from the mcpolis build of 2026-08-18 (session `c72a44ce`)
 
 Pushed to `origin/main`, `b267f1e..3068508`. Gates at the last commit: `pytest tests eval/tests`
-**2,244 passed**; `pyright tools/coyodex eval/tools` **0 errors**. Every fix has a test that was
+**2,244 passed**; `pyright tools/coyomap eval/tools` **0 errors**. Every fix has a test that was
 checked to FAIL before the change and pass after — one first draft passed with its fix removed,
 because its fixture produced nothing for the failure to be re-ordered ahead of, and a test that
 passes before the fix holds nothing.
 
-**Tools (`coyodex`)**
+**Tools (`coyomap`)**
 
 | what | evidence |
 |---|---|
@@ -126,11 +126,11 @@ passes before the fix holds nothing.
 | `record` refuses a line that keys to nothing | It checked the heading and the presence of a why, then wrote whatever it was given. `read-before-create HP2, read-before-create HP3: …` — the check name repeated inside a comma list — keyed zero ids; unrecorded advisories went 1 → 9 and three extra finalize+render rounds were spent finding the shape by trial. Only the lines THIS call adds are checked. `68f4b06` |
 | `grounding lint --expect <batch-ids>` | A missing verdicts file is the one failure nobody spots by eye. One run printed `VERDICTS OK — 18 file(s) well-formed` while a nineteenth was landing, then ran four verdict-consuming commands against the incomplete set. `68f4b06` |
 | `grounding report` lists `ADDED SINCE THE PIN` | `write` printed how many and nothing said which, so a build hand-diffed `audit --json` against the worklist in python and then hand-edited the pinned file. `68f4b06` |
-| `validate` and `finalize` name `coyodex record` in a footer | Sixty advisory strings end by naming an extras heading and none said what writes one. `record` is named six times in `method.md` and the build used it ZERO times, against forty on the build before. A footer, not sixty rewritten strings, and quiet when every escape is already recorded. `8a36641` |
+| `validate` and `finalize` name `coyomap record` in a footer | Sixty advisory strings end by naming an extras heading and none said what writes one. `record` is named six times in `method.md` and the build used it ZERO times, against forty on the build before. A footer, not sixty rewritten strings, and quiet when every escape is already recorded. `8a36641` |
 | `lint-fragment` runs the operative-line check, ADVISORY, with the count in the verdict | The self-check every contract names was blind to the largest defect class it produces: six hand-authored fragments printed `LINT OK — 0 problems` and the next `validate` raised 86 drifted anchors over 366 call-site anchors. Advisory for at least one build — blocking would have failed six fragments on a build that shipped clean. The count rides in the verdict because the agents read this through `head -60`, `head -20`, `head -5` and `tail -20`. `2d325cb` |
 | A component's own `purpose` is an L2 claim, themed `description` | Nothing read the map's prose against the code. A map shipped `C36` saying a sign-in guard "refuses to be built at all…" beside its own `BR21` saying that guard "cannot fire" — the true reading. The rule had been challenged and corrected; the sentence next to it was in no worklist. 80 claims on that map, 500 → 580, ~$8 a build. Sorts ABOVE `backbone`: a backbone edge is at least anchor-checked, a description is read by nothing. `3068508` |
 
-**Measurement (`coyodex-eval`)**
+**Measurement (`coyomap-eval`)**
 
 | what | evidence |
 |---|---|
@@ -152,21 +152,21 @@ passes before the fix holds nothing.
 ### Landed 2026-08-20 — from the argus build of that morning (session `446bbaeb`)
 
 Gates at the last change: `pytest tests eval/tests` **2,340 passed** (2,283 before, so 57 new
-tests); `pyright tools/coyodex eval/tools` **0 errors**. Every fix was checked to FAIL before the
+tests); `pyright tools/coyomap eval/tools` **0 errors**. Every fix was checked to FAIL before the
 change. The operator chose "everything ranked HIGH or MEDIUM"; the LOW rows below are deferred, not
 rejected.
 
 **This is also the first argus retro to appear here at all** — see `Sources`. The 2026-08-14 one
 never got an entry, and two of its proposals are recorded above under someone else's numbering.
 
-**Tools (`coyodex`)**
+**Tools (`coyomap`)**
 
 | what | evidence |
 |---|---|
-| `lint-fragment --repo` FAILS a header whose `commit` lacks `-dirty` on a dirty tree, and `provenance stamp --update-header` writes the pin itself | The operator was OFFERED and ACCEPTED a `-dirty` pin; the header was hand-written as the bare sha, this lint returned `0 problems` on it, and the final report told the operator the suffix HAD been recorded. Another session then edited a file mid-build and **9 of the map's 10 anchors into it resolve against the wrong lines at the recorded commit**. `scope`, `stamp` and `lint-fragment` now share ONE definition of dirty — which also stops `.coyodex-eval/`, this toolchain's own scratch, reading as the user's uncommitted code (it was the sole reason that build asked the pin question at all). |
+| `lint-fragment --repo` FAILS a header whose `commit` lacks `-dirty` on a dirty tree, and `provenance stamp --update-header` writes the pin itself | The operator was OFFERED and ACCEPTED a `-dirty` pin; the header was hand-written as the bare sha, this lint returned `0 problems` on it, and the final report told the operator the suffix HAD been recorded. Another session then edited a file mid-build and **9 of the map's 10 anchors into it resolve against the wrong lines at the recorded commit**. `scope`, `stamp` and `lint-fragment` now share ONE definition of dirty — which also stops `.coyomap-eval/`, this toolchain's own scratch, reading as the user's uncommitted code (it was the sole reason that build asked the pin question at all). |
 | `why-less-step` is ADVISORY, and its message names the line that records it | It was the one substantive check emitted at WARNING, and `_apply_audit_exceptions` suppresses ADVISORY only — so no recorded exception could ever silence it. A build recorded its reading three times, watched the finding survive, then cleared the gate by CHANGING THE MAP: it deleted a happy-path step and wrote two preconditions, one of which is false against the code. |
 | `validate` re-reads a `Happy Path coverage` rationale against the walk it describes | Every other check asks whether a gap is RECORDED; nothing asked whether the record is still TRUE. The shipped map says `CAP8: … only the version switch sits on the walk` while **0 of CAP8's 2 use cases** are on it — the step was deleted three turns after the line was written. Catches the dangling-`HPn` shape deterministically too. |
-| `finalize --access-baseline <map>` names files that lost their ACCESS claim | The access-rule COUNT held at 21 → 21, so `auth-surfaces-no-drop` passed, while `adapters/auth_google.py` lost its claim outright — the file that verifies the Google ID token's signature, issuer and audience, carried as BR21 by the previous map and by **0 of the new map's 61 rules**. The signal existed only in `coyodex-eval compare`'s notes: a developer-only command, run at retro time, whose output was parked as "a reading job" for three retrospectives. The leg runs after the map is written (so it cannot contaminate the rebuild) and before the commit. New module `access_surface.py`. |
+| `finalize --access-baseline <map>` names files that lost their ACCESS claim | The access-rule COUNT held at 21 → 21, so `auth-surfaces-no-drop` passed, while `adapters/auth_google.py` lost its claim outright — the file that verifies the Google ID token's signature, issuer and audience, carried as BR21 by the previous map and by **0 of the new map's 61 rules**. The signal existed only in `coyomap-eval compare`'s notes: a developer-only command, run at retro time, whose output was parked as "a reading job" for three retrospectives. The leg runs after the map is written (so it cannot contaminate the rebuild) and before the commit. New module `access_surface.py`. |
 | `finalize` resolves an escape named as a MAP FIELD, not only an extras heading | The disposition table matched `records.KNOWN_HEADINGS` only, so the post-pin advisory — whose own text offers "or say in `grounding.note` …", and whose escape the build had already taken — was filed `carried (no escape)`, and the commit message repeated it. |
 | `record --headings`, and `--help` stops recommending the merged form unconditionally | "Write them as one comma-separated list" is right for the 6 headings with a key grammar and destroys the record on the 5 keyed on free text. A build followed it under `Sweep debt`, silenced **0 of 5** anchors, and spent two rounds finding out. |
 | `dump --legend` emits `entry_point` rows | **0 of 277** on a map with 108 entry points — the one id kind minted at assemble, so the map is its only mid-build source, while 34 of that build's 65 reconcile `set` entries assign `entry_points`. The lead hand-parsed the map for the ids and then hand-wrote the whole fan-out legend. |
@@ -176,7 +176,7 @@ never got an entry, and two of its proposals are recorded above under someone el
 | `audit --batches` splits a theme evenly | `--cap 40` cut a 42-claim theme into 40 + 2, twice, so **2 of 19 skeptics covered 4 of 388 claims** while a sibling carried 40 and was the slowest agent in its barrier. 21 + 21 costs the same two agents. |
 | `preindex`'s granularity NOTE covers both directions | Its escape was written for "if you build under the band". A build landed **27% ABOVE E**, against the note's own stated expectation, inside the ±40% band — so nothing fired and no record was asked for. |
 
-**Measurement (`coyodex-eval`)**
+**Measurement (`coyomap-eval`)**
 
 | what | evidence |
 |---|---|
@@ -191,13 +191,13 @@ never got an entry, and two of its proposals are recorded above under someone el
 | what | evidence |
 |---|---|
 | The trace contract states that a flow OPENS with the actor its use case declares, and `«USE_CASES»` must carry the actors | Nothing said it, the legend prints roles and use cases as two unlinked lists, and `lint-fragment`'s flat id set structurally cannot check it. Eight agents each wrote the caller the code showed them and the lead repointed **34 of 38** role endpoints in one script at the barrier. |
-| A `gapfill-contract.md` template ships, and `coyodex contract gapfill` serves it | `method/templates/` had four contracts and no fifth, so the gap-fill slice was hand-composed every build. Its brief was the ONE trace-phase contract of eleven missing "do NOT spawn sub-agents", and lost four more shared blocks with it; the same build hand-wrote its test-completeness brief and lost the no-delegation block and `--expect` too. |
+| A `gapfill-contract.md` template ships, and `coyomap contract gapfill` serves it | `method/templates/` had four contracts and no fifth, so the gap-fill slice was hand-composed every build. Its brief was the ONE trace-phase contract of eleven missing "do NOT spawn sub-agents", and lost four more shared blocks with it; the same build hand-wrote its test-completeness brief and lost the no-delegation block and `--expect` too. |
 | The "reach for the verb" table names `record --remove/--replace/--lines-from` and `fix row --set-why` | All four shipped, tested, in the tool commit that build pinned, and ran **zero times between them** while six of its heredocs did exactly those jobs — one splicing `extras.json` by string match twelve turns after using `fix row` correctly on the same component. |
 | The N-vote rule asks for the disagreement count in `grounding.note` | Three builds have now three-voted an access theme: 160 redundant rows / 0 verdict disagreements / 1 anchor disagreement, then 40 / 0 / 0, then 100 / 0 / 0 — and on the last, all 150 rows returned an `evidence` string identical to the claim's own anchor. Independently written (0 of 50 triples had two identical notes), so it is replication, not copying — but the next decision about the rule should rest on the number, not on one build. |
 | `dispatch.md`'s Build step reads the backlog's `owner: the next build` rows, and names `finalize --access-baseline` at archive time | Question 3 was raised 2026-08-19 with its whole experiment written out and costed at ONE agent. The next build ran nine rule agents, none of them that one, and a retrospective then parked the same question a third time. Nothing put the table in front of a build. |
 
-**Deferred, not rejected** (the operator took HIGH + MEDIUM): `coyodex contract prose`; `scope`
-excluding `.coyodex-eval` as its own line (it landed inside the pin fix); `finalize` printing the
+**Deferred, not rejected** (the operator took HIGH + MEDIUM): `coyomap contract prose`; `scope`
+excluding `.coyomap-eval` as its own line (it landed inside the pin fix); `finalize` printing the
 sub-agent count; `cost` pricing haiku; the trace contract's "do not pipe the lint output" line; the
 skeptic contract returning a false-row count; the retro ledger carrying proposals (already open as
 item 16 above).
@@ -257,7 +257,7 @@ different conclusion:
 | count distinct source files named in a log | said the newer workers read MORE (38 vs 36) — the opposite of the truth | a file NAMED in the brief a worker was handed is not a file it read |
 
 Every map-based finding held; every shaky number came from hand-parsing transcripts while
-`coyodex-eval transcript` was available and unused — the method's own "reach for the verb before the
+`coyomap-eval transcript` was available and unused — the method's own "reach for the verb before the
 heredoc" rule, broken by the retro tooling's own author. A retro reading worker logs should use the
 command, and should cross-check any per-worker number against a second signal before reporting it.
 
@@ -275,7 +275,7 @@ These are `method.md` at the repo root and `method/templates/`, not the retro me
 | 6 | ~~State the gate-reading rule for `balance` and `audit` explicitly~~ **ANSWERED THE OTHER WAY, 2026-08-19** | Its own note asked whether the tools should resist narrowing instead. The 2026-08-18 build answered yes: restating did not work (`balance` ran ZERO times against three on the run before), so the tools changed instead — `grounding report` states its critical count at BOTH ends, `lint-fragment` puts the drift count in the verdict, `finalize` runs `balance` itself and records it, and assertion 21 no longer reports a filtered view as `n/a`. What is still open is narrower and belongs to whoever writes a gate next: **a gate's headline number must survive both a `head` and a `tail`.** |
 | 7 | Resolve the grounding-write ordering tension (**the `--note-file` half LANDED `5f5e072`**) | Recording an advisory is a fragment change, but advisories only surface at the gate step after `grounding write` — so the prescribed order forces a redo loop. The 2026-08-18 build reproduced it exactly: assertion 13 scored 0/1 with four map/fragment writes after `grounding write`, and the note was retyped inline three times (~1,900 characters). `--note-file` is now in the worked example, which fixes the retyping and not the ordering. The ordering half needs a decision: move a validate+audit read BEFORE `grounding write`, or state the loop-back explicitly. |
 | 8 | ~~Say where the 3-vote majority goes — the access batches~~ **LANDED** `method.md:1478` | Verified on the 2026-08-18 build: the 40 highest-risk access claims were three-voted and the three skeptics agreed on all 40 rows, including the single refutation. |
-| 9 | ~~Name `coyodex-eval archive` at the front door of the skill, not parenthetically~~ **LANDED** `80e77e3` |
+| 9 | ~~Name `coyomap-eval archive` at the front door of the skill, not parenthetically~~ **LANDED** `80e77e3` |
 | 10 | ~~Distinguish *launching* the pre-index from *reading* it~~ **LANDED** `898233a` |
 | 11 | ~~Say plainly whether a harvest agent may author a fragment-generating program~~ **LANDED** `80e77e3` |
 | 12 | ~~Name `ListAgents` in the anti-polling rule, or bless it as a cheap one-shot~~ **LANDED** `898233a` |
@@ -352,7 +352,7 @@ The ledger rows carry the commit. Fifteen keeps are genuinely still open.
 | 13 | Fan-out scheduling wastes a third of active build time | method prose |
 | 14 | `grounding.note` publishes "136 redundant rows" where the true count is 272 | tiny |  **[LANDED 2026-08-27]**
 | 15 | `read-never-created HP3-files` parses to `HP3`, so one key silences two findings | small |
-| 16 | `coyodex record` accepts a key no reader of that heading honours | small |
+| 16 | `coyomap record` accepts a key no reader of that heading honours | small |
 | 17 | `lint-fragment` runs no prose check, so 16 long sentences shipped | tiny |
 | 18 | `fix row --set-<field>` refuses to create a field the row omits | small |
 | 19 | The build hand-scripted 3 mutations a fix verb owns; the detector flagged only the one that never ran | method prose |
@@ -379,7 +379,7 @@ enforcement lines only, and `profile` already collects `entity_names` that nothi
 ### Investigated 2026-08-27 — why two builds of one commit produce different maps
 
 The question: 70 components then 118, on commit `5dccb1c`, 21 hours apart, no product file
-changed. Answered from the 22 archived rebuilds under `.coyodex/dev-rebuilds/`; no build was run.
+changed. Answered from the 22 archived rebuilds under `.coyomap/dev-rebuilds/`; no build was run.
 
 **What is established.**
 
@@ -442,10 +442,10 @@ folder. These are the parked ones, with who can answer them.
 
 | # | question | owner | raised |
 |---|---|---|---|
-| 1 | Do the 44 access rules of the 2026-08-17 mcpolis map SAY what the previous map's 50 said? The deterministic half is answered — the two maps share 25 % of their enforcement lines, 17 files lost their coverage and 16 gained it, so it is neither a clean merge nor a clean loss. What no deterministic check can settle is whether the surviving statements cover the same decisions. | `/coyodex-eval` (judges) | 2026-08-17 |
+| 1 | Do the 44 access rules of the 2026-08-17 mcpolis map SAY what the previous map's 50 said? The deterministic half is answered — the two maps share 25 % of their enforcement lines, 17 files lost their coverage and 16 gained it, so it is neither a clean merge nor a clean loss. What no deterministic check can settle is whether the surviving statements cover the same decisions. | `/coyomap-eval` (judges) | 2026-08-17 |
 | 2 | Which of the 17 files that lost access coverage hold enforcement the map should still be claiming? Two were verified by hand as real — a sign-in signature check and a credential encryption call — and one old anchor was a config constant rather than enforcement. The remaining fourteen are unread. | a human, or a targeted skeptic pass | 2026-08-17 |
 | 3 | ~~What actually causes the access enforcement-line churn?~~ **ANSWERED 2026-08-29 — see below** | the next build | 2026-08-19 |
-| 4 | Do the 47 access rules of the 2026-08-18 map say what the previous map's 44 said? Same shape as question 1, for the newer pair: 50 shared enforcement lines of a 181-line union, 17 files lost, 11 gained. | `/coyodex-eval` (judges) | 2026-08-19 |
+| 4 | Do the 47 access rules of the 2026-08-18 map say what the previous map's 44 said? Same shape as question 1, for the newer pair: 50 shared enforcement lines of a 181-line union, 17 files lost, 11 gained. | `/coyomap-eval` (judges) | 2026-08-19 |
 | 6 | ~~Is the four-build "0 verdict disagreements" record evidence, or an artefact of a contract that named one repo's answer to every skeptic of that repo?~~ **ANSWERED 2026-09-09 — see below** | one skeptic wave | 2026-09-08 |
 | 7 | ~~Which of the 19 files that lost access coverage on the 2026-09-08 mcpolis map hold enforcement the map should still be claiming?~~ **ANSWERED 2026-09-09 — see below.** Nine are OAuth or token handling (`pending_auth.py`, `oauth_refresh.py`, `tool_router.py`, `upstream_oauth_callback.py` among them); the list is in that retro's run directory. Fourth build parked on this shape; `ship` now runs the leg that names them before the commit. | a targeted skeptic pass, or a human | 2026-09-08 |
 | 5 | Is one refuted-claim-in-the-map a pattern? `grounding report`'s `REFUTED BUT NOT SUPERSEDED` section found two on the 2026-08-18 map, both from a reconcile that corrected one copy of a row and left another. Nobody has looked at an older map with the same command. | anyone, one command per archived map | 2026-08-19 |
@@ -454,7 +454,7 @@ folder. These are the parked ones, with who can answer them.
 ### Answered 2026-08-29 — question 3, the enforcement-line churn
 
 The mcpolis build of 2026-08-29 ran the experiment as specified: one block's rule worker re-run with
-a `coyodex dump --members`-derived candidate list beside the hand-curated control.
+a `coyomap dump --members`-derived candidate list beside the hand-curated control.
 
 | arm | rules | sites | files earning sites |
 |---|---|---|---|
@@ -483,7 +483,7 @@ only **12 of 68** baseline-only anchors on shared files have a candidate within 
 one-line wobble. **The r1/r1x arms are the evidence; the compare figures add less than they look
 like they do.**
 
-**What follows, for the coyodex developer to decide.** Store the enforcing line rather than the call
+**What follows, for the coyomap developer to decide.** Store the enforcing line rather than the call
 site when a flow step's `where` is the caller's line, or compare two maps' access rules by FILE plus
 enclosing function rather than by exact line. One block on one repo: a data point, not a settled
 result.
@@ -493,7 +493,7 @@ now carries step 12b — write an experiment's answer somewhere durable before t
 
 ### Answered 2026-09-09 — question 6, whether the voters ever disagree
 
-The coyodex self-map build of 2026-09-09 ran the wave the question asked for: the whole `security`
+The coyomap self-map build of 2026-09-09 ran the wave the question asked for: the whole `security`
 theme, three independent skeptics, on the revised contract (the one whose example stopped naming a
 repo's own answer, commit `76ca734`).
 
@@ -577,7 +577,7 @@ what it described, while the code stayed right. A gate cannot see one, because e
 code doing exactly what the code says. Four of the six were a NUMBER in a comment or docstring that
 no longer held.
 
-**Measured the same day, over `tools/coyodex/` and `eval/tools/coyodex_eval/`:**
+**Measured the same day, over `tools/coyomap/` and `eval/tools/coyomap_eval/`:**
 
 | | claims |
 |---|---|
@@ -588,12 +588,12 @@ no longer held.
 | **describes a LIVE map NOW** — the class that rots | **45** |
 
 That split is the finding. "Numbers in comments" is not the problem: two thirds are historical
-evidence that stays true forever. What rots is a claim phrased about a live map today — "coyodex 2
+evidence that stays true forever. What rots is a claim phrased about a live map today — "coyomap 2
 of 40", "fires three times on the same map" — and those are exactly the four that were wrong.
 
 **The list of 45** was written to `scratchpad/rotting-claims.txt` in the session that measured it,
 which is git-ignored and gone. Regenerate it: prose blocks in those two trees carrying `\d+\s+\w+`,
-naming argus / mcpolis / coyodex's own map / "live maps", with no past-tense framing (`was`, `were`,
+naming argus / mcpolis / coyomap's own map / "live maps", with no past-tense framing (`was`, `were`,
 `ran`, `on the 20xx-`, `one build`).
 
 **Why no check was written.** Each of the 45 needs its own probe — re-measure THIS function against
@@ -624,7 +624,7 @@ these are not — an assertion nobody can implement is a proposal that quietly d
 | ~~No sub-agent narrowed its own `lint-fragment` output~~ **LANDED as assertion 40** `68f4b06` — 8 of 22 invocations were piped on the 2026-08-18 build. It is the first assertion that reads the per-agent files, so the "change to what it consumes" is now made and the remaining two below are cheaper than they were | per-agent transcripts |
 | A verdict's `evidence`/`note` does not assert a read the agent's transcript contradicts | per-agent transcripts + verdict files |
 
-The last one is partly built already: `coyodex grounding lint --agent-transcripts <dir>` performs
+The last one is partly built already: `coyomap grounding lint --agent-transcripts <dir>` performs
 exactly that check (`988f51a`). What is missing is the scorecard reading it as a NUMBER, which needs
 the same per-agent input as the one above it — so both arrive together or not at all.
 
@@ -633,7 +633,7 @@ the same per-agent input as the one above it — so both arrive together or not 
 ## Cost log
 
 What each build SPENT, one row per build, appended by the retro's "What it cost" step (decision of
-2026-08-27). `coyodex-eval cost <transcript> --map <map>` prints every number. Compare per row,
+2026-08-27). `coyomap-eval cost <transcript> --map <map>` prints every number. Compare per row,
 never per build — absolute dollars track how big the map got.
 
 | date | project | rows | active min | $ total | $ / 100 rows | per-role split ($ lead / harvest / trace / verify / other) |
@@ -658,15 +658,15 @@ fixed.
 ## Sources
 
 - 2026-08-20, argus (`446bbaeb`) — 25 findings, 22 landed. Report and a `findings.json` ledger were
-  at `.coyodex-eval/retro/2026-08-20_1130/` in that project; git-ignored, so this file is the
+  at `.coyomap-eval/retro/2026-08-20_1130/` in that project; git-ignored, so this file is the
   surviving record. **The 2026-08-14 argus retro has no entry of its own** — 20 findings, 23
   proposals, of which two are recorded above as "the 2026-08-14 proposal N" under numbering that
   does not match that report. That is the gap open item 16 names.
 
 - 2026-08-18, mcpolis (`c72a44ce`) — 24 findings, 19 landed across `b267f1e..3068508`. Report was
-  at `.coyodex-eval/retro/2026-08-18_2257/` in that project, with a `findings.json` ledger beside
+  at `.coyomap-eval/retro/2026-08-18_2257/` in that project, with a `findings.json` ledger beside
   it; both are git-ignored, so this file is the surviving record.
 
 - 2026-08-13, coworker (`3ee6dd61`) — the retro these came from. Report was at
-  `.coyodex-eval/retro/2026-08-13_0754/` in that project; git-ignored, so treat this file as the
+  `.coyomap-eval/retro/2026-08-13_0754/` in that project; git-ignored, so treat this file as the
   surviving record.

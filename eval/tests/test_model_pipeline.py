@@ -16,13 +16,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.model import ModelError, load_model
-from coyodex_eval.compare import compare
-from coyodex_eval.judge import JudgeProtocol, JudgeReport, report_from_verdicts, rubric_fingerprint
-from coyodex_eval.profile import build_profile, build_profile_from_model
+from coyomap.model import ModelError, load_model
+from coyomap_eval.compare import compare
+from coyomap_eval.judge import JudgeProtocol, JudgeReport, report_from_verdicts, rubric_fingerprint
+from coyomap_eval.profile import build_profile, build_profile_from_model
 
 FIXTURE = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "mcpolis-project-map.json"
-EVAL = [sys.executable, "-m", "coyodex_eval.cli"]
+EVAL = [sys.executable, "-m", "coyomap_eval.cli"]
 
 
 # --- builders -------------------------------------------------------------------
@@ -34,7 +34,7 @@ def make_fixture_model_json() -> str:
 def make_tiny_model_json() -> str:
     """A minimal model document for tests that need a map but no claims."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,

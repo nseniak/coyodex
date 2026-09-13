@@ -8,7 +8,7 @@
 #   L3  (designed, not implemented)     process assertions over a build transcript
 #
 # FORMAT: a deliberately small YAML subset, parsed by `tests/trapdoor.py` with the stdlib
-# only — coyodex core carries no runtime dependencies and PyYAML is not installed. Supported:
+# only — coyomap core carries no runtime dependencies and PyYAML is not installed. Supported:
 # comments, `key: value` scalars (bare / 'single' / "double" quoted, true/false/ints), nested
 # mappings, and lists of mappings (`- key: value` + indented continuation). Nothing else.
 # Values must fit on ONE line; no block scalars, no anchors, no flow mappings.
@@ -25,9 +25,9 @@
 
 meta:
   name: trapdoor
-  purpose: 'A synthetic codebase that plants every defect class four real coyodex builds produced.'
-  ignored_by: '.coyodex/.ignore at the coyodex repo root — this tree is never part of the self-map.'
-  golden_map: 'golden/project-map.json — a map of THIS fixture, written by `coyodex assemble`.'
+  purpose: 'A synthetic codebase that plants every defect class four real coyomap builds produced.'
+  ignored_by: '.coyomap/.ignore at the coyomap repo root — this tree is never part of the self-map.'
+  golden_map: 'golden/project-map.json — a map of THIS fixture, written by `coyomap assemble`.'
   size_note: 'Hand-written trap code is ~1.5 kLOC. src/flatpack, src/generated and web/ add mechanical filler because traps G1-G3 are about SIZE; the filler is repetitive so an agent skims it.'
 
 traps:

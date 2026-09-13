@@ -2,7 +2,7 @@
 
 Change (2026-09-07): `method.md` gains a clause under the front-door rule saying a screen and the
 address that screen calls are ONE door, and that a split needs two places a person can ARRIVE from.
-`tools/coyodex/validate_model.py` gains a per-kind naming advisory, with an "Entry-point coverage"
+`tools/coyomap/validate_model.py` gains a per-kind naming advisory, with an "Entry-point coverage"
 line as its escape.
 
 Escalation: if check 1 fails on a rebuild, the wording is not the lever and the advisory is the

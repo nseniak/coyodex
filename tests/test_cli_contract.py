@@ -36,8 +36,8 @@ COMMAND_MODULE: dict[str, str] = {
 
 
 def make_cli_commands() -> tuple[str, ...]:
-    """The command names `coyodex --help` advertises, read from USAGE itself."""
-    from coyodex.cli import USAGE
+    """The command names `coyomap --help` advertises, read from USAGE itself."""
+    from coyomap.cli import USAGE
     body = USAGE.split("Commands:", 1)[1].split("\nGlobal:", 1)[0]
     return tuple(ln.split()[0] for ln in body.splitlines()
                  if ln.startswith("  ") and ln.strip() and not ln.startswith("    "))
@@ -69,7 +69,7 @@ def test_the_unprobeable_list_stays_minimal_and_justified():
 def make_command_mains() -> list[tuple[str, object]]:
     out: list[tuple[str, object]] = []
     for cmd in sorted(set(COMMAND_MODULE) - set(UNPROBEABLE)):
-        mod = importlib.import_module(f"coyodex.{COMMAND_MODULE[cmd]}")
+        mod = importlib.import_module(f"coyomap.{COMMAND_MODULE[cmd]}")
         if hasattr(mod, "main"):
             out.append((cmd, mod.main))
     return out
@@ -79,7 +79,7 @@ def make_command_mains() -> list[tuple[str, object]]:
 #: relative default, `audit`/`balance` only reached the offending code path when pytest happened to run
 #: from the repo root — both production bugs went green from any other directory.
 #:
-#: The FROZEN copy, not `.coyodex/project-map.json`: a probe of flag handling has no business
+#: The FROZEN copy, not `.coyomap/project-map.json`: a probe of flag handling has no business
 #: reading a map another session may be rebuilding mid-run.
 MAP = REPO_ROOT / "tests" / "fixtures" / "own-map" / "project-map.json"
 
@@ -99,10 +99,10 @@ def run_main(main, argv: list[str]) -> tuple[int, str]:
 def test_every_command_refuses_an_unknown_option():
     """A silently-ignored flag is a request the caller believes was honoured.
 
-    `coyodex audit --jsonn` used to print the HUMAN report and exit 0, so a build asking for JSON got
+    `coyomap audit --jsonn` used to print the HUMAN report and exit 0, so a build asking for JSON got
     prose and had no way to notice the typo. `balance` did the same. Every other command already
     refused, which is exactly why a per-command test never caught these two."""
-    assert MAP.is_file(), "coyodex's own map is the fixture for every probe here"
+    assert MAP.is_file(), "coyomap's own map is the fixture for every probe here"
     offenders: list[str] = []
     for name, main in make_command_mains():
         code, _text = run_main(main, [str(MAP), "--definitely-not-a-real-flag"])
@@ -153,7 +153,7 @@ def test_every_machine_readable_command_emits_only_json_on_stdout():
     assert MAP.is_file()
     broken: list[str] = []
     for cmd, extra in sorted(JSON_COMMANDS.items()):
-        mod = importlib.import_module(f"coyodex.{COMMAND_MODULE[cmd]}")
+        mod = importlib.import_module(f"coyomap.{COMMAND_MODULE[cmd]}")
         argv = [a.replace("@MAP", str(MAP)).replace("@REPO", str(REPO_ROOT)) for a in extra]
         if "@MAP" not in " ".join(extra):
             argv = [str(MAP), *argv]
@@ -186,8 +186,8 @@ if __name__ == "__main__":
 
 
 def _l2(map_path: Path):
-    from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import load_model
+    from coyomap.audit_model import l2_worklist_model
+    from coyomap.model import load_model
     return l2_worklist_model(load_model(map_path.read_text(encoding='utf-8')))
 
 
@@ -207,8 +207,8 @@ def test_a_flag_advertised_as_repeatable_reads_every_occurrence():
     import json as _json
     import tempfile
 
-    from coyodex import anchor_drift as ad
-    from coyodex import fix as fx
+    from coyomap import anchor_drift as ad
+    from coyomap import fix as fx
 
     claims = [w.claim for w in _l2(MAP)]
     assert len(claims) >= 2, "need two claims to split across two files"
@@ -258,26 +258,26 @@ def test_a_flag_advertised_as_repeatable_reads_every_occurrence():
 
 SAME_TYPED_COLLECTION_RETURNS: frozenset[str] = frozenset({
     # The `(problems, warnings)` convention — one uniform family, proven covered by the swap test.
-    "tools/coyodex/validate_model.py::validate_model",
-    "tools/coyodex/validate_model.py::_check_flows",
-    "tools/coyodex/validate_model.py::check_rules_model",
-    "tools/coyodex/validate_model.py::_check_dep_buckets",
-    "tools/coyodex/validate_model.py::_check_messaging",
-    "tools/coyodex/validate_model.py::_check_states",
-    "tools/coyodex/validate_model.py::_check_group_tech",
-    "tools/coyodex/validate_model.py::_check_edges",
-    "tools/coyodex/validate_model.py::check_domain_relations",
-    "tools/coyodex/validate_model.py::_check_domain_cards",
-    "tools/coyodex/validate_model.py::_check_extra_conventions",
-    "tools/coyodex/validate_model.py::_check_interfaces",
-    "tools/coyodex/validate_analysis.py::check_hierarchy",
+    "tools/coyomap/validate_model.py::validate_model",
+    "tools/coyomap/validate_model.py::_check_flows",
+    "tools/coyomap/validate_model.py::check_rules_model",
+    "tools/coyomap/validate_model.py::_check_dep_buckets",
+    "tools/coyomap/validate_model.py::_check_messaging",
+    "tools/coyomap/validate_model.py::_check_states",
+    "tools/coyomap/validate_model.py::_check_group_tech",
+    "tools/coyomap/validate_model.py::_check_edges",
+    "tools/coyomap/validate_model.py::check_domain_relations",
+    "tools/coyomap/validate_model.py::_check_domain_cards",
+    "tools/coyomap/validate_model.py::_check_extra_conventions",
+    "tools/coyomap/validate_model.py::_check_interfaces",
+    "tools/coyomap/validate_analysis.py::check_hierarchy",
     # Pure builders with one call site each, consumed immediately at that site.
-    "tools/coyodex/audit_model.py::_touch_sets",
-    "tools/coyodex/preindex.py::build_symbols",
-    "tools/coyodex/preindex.py::build_imports",
-    "tools/coyodex/viewer/gen_viewer.py::_deployment_edges",
-    "tools/coyodex/views.py::_component_headers",
-    "tools/coyodex/views.py::_dep_headers",
+    "tools/coyomap/audit_model.py::_touch_sets",
+    "tools/coyomap/preindex.py::build_symbols",
+    "tools/coyomap/preindex.py::build_imports",
+    "tools/coyomap/viewer/gen_viewer.py::_deployment_edges",
+    "tools/coyomap/views.py::_component_headers",
+    "tools/coyomap/views.py::_dep_headers",
 })
 
 
@@ -304,7 +304,7 @@ def _same_typed_collection_returns() -> set[str]:
     import ast
 
     found: set[str] = set()
-    roots = [REPO_ROOT / "tools" / "coyodex", REPO_ROOT / "eval" / "tools"]
+    roots = [REPO_ROOT / "tools" / "coyomap", REPO_ROOT / "eval" / "tools"]
     for root in roots:
         for f in sorted(root.rglob("*.py")):
             tree = ast.parse(f.read_text(encoding="utf-8"))
@@ -380,12 +380,12 @@ def test_a_subprocess_test_reads_the_same_tools_this_run_reads() -> None:
     if not elsewhere.is_dir():                      # the fixture moved; any other dir proves it too
         elsewhere = root.parent
     child = subprocess.run(
-        [sys.executable, "-c", "import coyodex, sys; sys.stdout.write(coyodex.__file__)"],
+        [sys.executable, "-c", "import coyomap, sys; sys.stdout.write(coyomap.__file__)"],
         cwd=elsewhere, capture_output=True, text=True)
-    assert child.returncode == 0, f"the child could not import coyodex at all:\n{child.stderr}"
-    import coyodex
-    assert child.stdout.strip() == str(Path(coyodex.__file__).resolve()), (
-        "a child process started outside the repo root reads a DIFFERENT coyodex than this test "
-        f"run does.\n  this run: {coyodex.__file__}\n  the child: {child.stdout.strip()}\n"
+    assert child.returncode == 0, f"the child could not import coyomap at all:\n{child.stderr}"
+    import coyomap
+    assert child.stdout.strip() == str(Path(coyomap.__file__).resolve()), (
+        "a child process started outside the repo root reads a DIFFERENT coyomap than this test "
+        f"run does.\n  this run: {coyomap.__file__}\n  the child: {child.stdout.strip()}\n"
         "Every subprocess test in the suite is then asserting against the wrong checkout. "
         "`conftest.py` makes PYTHONPATH absolute to prevent exactly this; check it is still there.")

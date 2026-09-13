@@ -1,5 +1,5 @@
 <!--
-Thanks for the PR! coyodex is alpha — small, scoped diffs are easiest to review.
+Thanks for the PR! coyomap is alpha — small, scoped diffs are easiest to review.
 For anything non-trivial, please open an issue first so we can agree on the shape.
 -->
 
@@ -13,7 +13,7 @@ Closes #
 
 - [ ] Bug fix
 - [ ] Method / docs change (`method.md`, `method/`, `README.md`)
-- [ ] Tooling change (`tools/coyodex/`, viewer)
+- [ ] Tooling change (`tools/coyomap/`, viewer)
 - [ ] Skill change (`skill/`)
 - [ ] Other:
 

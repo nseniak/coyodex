@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coyodex_eval.judge import (DIMENSIONS, GROUNDING_PROMPT_VERSION, GroundingVerdict,
+from coyomap_eval.judge import (DIMENSIONS, GROUNDING_PROMPT_VERSION, GroundingVerdict,
                                 JudgeProtocol, JudgeReport, RubricVerdict,
                                 build_grounding_prompt, build_judge_report, build_rubric_prompt,
                                 majority_verdict, report_from_verdicts, run_dimension)
@@ -48,7 +48,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
     claims. `refute_surface` puts the marker in the surface name so the ScriptedJudge refutes that
     one claim."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -112,7 +112,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
   "tests": [],
   "extras": []
 }""" if refute_surface else """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -180,7 +180,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
 
 def make_no_claims_map() -> str:
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -226,7 +226,7 @@ def make_many_claims_map(n_uses: int = 4) -> str:
     ranking) plus 4 low-risk C↔C `uses` edges appended to the same edges table."""
     assert n_uses == 4, "fixture is pre-generated for n_uses=4 only"
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -464,9 +464,9 @@ def test_grounding_cap_keeps_the_highest_risk_claims() -> None:
 def test_anchor_drift_counted_only_for_confirmed_claims() -> None:
     # Phase G: for a CONFIRMED claim whose grounded skeptic reports a line far from the stored anchor,
     # the drift is counted; a confirmed claim whose reported line matches the anchor is not.
-    from coyodex.anchors import parse_anchor
-    from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import load_model
+    from coyomap.anchors import parse_anchor
+    from coyomap.audit_model import l2_worklist_model
+    from coyomap.model import load_model
     map_text = make_l2_map()
     items = [w for w in l2_worklist_model(load_model(map_text)) if w.anchor]
     assert len(items) >= 2

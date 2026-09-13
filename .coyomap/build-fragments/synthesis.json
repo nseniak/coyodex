@@ -1,0 +1,302 @@
+{
+  "interfaces": [
+    {
+      "id": "I1",
+      "name": "Command line",
+      "side": "ours",
+      "kind": "command-line",
+      "facing": "user",
+      "what": "Every command a person or their coding agent types to build, check, edit or ship a map.",
+      "source": "tools/coyomap/cli.py:139"
+    },
+    {
+      "id": "I2",
+      "name": "Method quality command line",
+      "side": "ours",
+      "kind": "command-line",
+      "facing": "operator",
+      "what": "A second command line for whoever changes the instructions. It scores maps and reads finished builds.",
+      "source": "eval/tools/coyomap_eval/cli.py:69"
+    },
+    {
+      "id": "I3",
+      "name": "Map viewer",
+      "side": "ours",
+      "kind": "screen",
+      "facing": "user",
+      "what": "The browser page that shows a map, and every address that page fetches its data and its source from.",
+      "source": "tools/coyomap/viewer/serve.py:869"
+    },
+    {
+      "id": "I4",
+      "name": "Build skill",
+      "side": "ours",
+      "kind": "agent-tools",
+      "facing": "user",
+      "what": "The file a coding agent reads when a person types the slash command. It points the agent at the instructions.",
+      "source": "skill/coyomap/SKILL.md:27"
+    },
+    {
+      "id": "I5",
+      "name": "Developer skills",
+      "side": "ours",
+      "kind": "agent-tools",
+      "facing": "operator",
+      "what": "Two more files a coding agent reads. One scores a map's quality, the other reviews a finished build.",
+      "source": "eval/SKILL.md:1"
+    },
+    {
+      "id": "I6",
+      "name": "Map folder",
+      "side": "ours",
+      "kind": "file",
+      "facing": "user",
+      "what": "What a project commits beside its code: the stored map, its readable view, the code survey and the build stamp.",
+      "source": "tools/coyomap/assemble.py:978"
+    },
+    {
+      "id": "I7",
+      "name": "Settings",
+      "side": "ours",
+      "kind": "settings",
+      "facing": "operator",
+      "what": "Values set outside a browser: the ignore list beside a map, and the environment variables the tools read."
+    },
+    {
+      "id": "I8",
+      "name": "Project source",
+      "side": "theirs",
+      "kind": "content",
+      "facing": "user",
+      "what": "The mapped project's own files and history, read as they stood at the commit the map is pinned to.",
+      "source": "tools/coyomap/impact_git.py:50"
+    },
+    {
+      "id": "I9",
+      "name": "Code editor",
+      "side": "theirs",
+      "kind": "handoff",
+      "facing": "user",
+      "what": "A reader's own editor, opened at the exact file and line a map box points at.",
+      "source": "tools/coyomap/viewer/viewer.js:14925"
+    },
+    {
+      "id": "I10",
+      "name": "Code host",
+      "side": "theirs",
+      "kind": "handoff",
+      "facing": "user",
+      "what": "A web page showing a mapped file at the pinned commit, for a reader without the project on their machine.",
+      "source": "tools/coyomap/viewer/viewer.js:14928"
+    },
+    {
+      "id": "I11",
+      "name": "Coding agent chat logs",
+      "side": "theirs",
+      "kind": "content",
+      "facing": "operator",
+      "what": "The conversation files a coding agent leaves behind, read to say what a finished build did and what it cost.",
+      "source": "tools/map_backup.py:130"
+    },
+    {
+      "id": "I12",
+      "name": "Score and review reports",
+      "side": "ours",
+      "kind": "file",
+      "facing": "operator",
+      "what": "The folder each scoring run and each build review writes into, for the person who changed the instructions to read.",
+      "source": "eval/tools/coyomap_eval/run.py:1"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "BLK1",
+      "name": "What gets mapped",
+      "purpose": "Decides which of a project's files a map describes, and how coarsely.",
+      "source": "method.md:1553",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK2",
+      "name": "What counts as a way in",
+      "purpose": "Decides whether a command or an address is a door into the product, or something the product owns.",
+      "source": "method.md:468",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK3",
+      "name": "What counts as an outside surface",
+      "purpose": "Decides where the product ends, what kind of thing each edge is, and who stands on the far side.",
+      "source": "method.md:506",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK4",
+      "name": "When a map is well formed",
+      "purpose": "Decides which findings stop a build, which only advise, and what a written reason may silence.",
+      "source": "tools/coyomap/validate_model.py:195",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK5",
+      "name": "How a claim is grounded",
+      "purpose": "Decides what counts as a claim being challenged, and what a partial pass is allowed to record.",
+      "source": "tools/coyomap/grounding.py:1704",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK6",
+      "name": "Which line an anchor may point at",
+      "purpose": "Decides which line stands as evidence for a claim, and when a stored one has drifted.",
+      "source": "tools/coyomap/anchor_drift.py:1",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK7",
+      "name": "How elements are grouped",
+      "purpose": "Decides how many boxes a screen may hold, and what regrouping is allowed to change.",
+      "source": "tools/coyomap/balance_lib.py:1",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK8",
+      "name": "What a screen may show",
+      "purpose": "Decides which view a thing belongs to, and which facts a picture may leave off a box.",
+      "source": "tools/coyomap/viewer/info-pane.md:1",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK9",
+      "name": "What a build may read and write",
+      "purpose": "Decides which files a build may open, and where a change has to be written to survive.",
+      "source": "tools/coyomap/model.py:1395",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK10",
+      "name": "Who may reach a served map",
+      "purpose": "Decides which requests the local map server answers, and which files it will hand back.",
+      "source": "tools/coyomap/viewer/serve.py:594",
+      "confidence": "inferred"
+    },
+    {
+      "id": "BLK11",
+      "name": "When two maps may be compared",
+      "purpose": "Decides whether two scores are comparable at all, and how far a measurement may move.",
+      "source": "eval/tools/coyomap_eval/compare.py:1",
+      "confidence": "inferred"
+    }
+  ],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Map content",
+      "purpose": "Everything a map says about the project it describes.",
+      "source": "tools/coyomap/model.py:761",
+      "confidence": "inferred",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD10",
+      "name": "Product story",
+      "parent": "SD1",
+      "purpose": "Who the product is for, what they want from it, and the ordered steps each goal takes.",
+      "source": "tools/coyomap/model.py:68",
+      "confidence": "inferred",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD11",
+      "name": "Code inventory",
+      "parent": "SD1",
+      "purpose": "The pieces the product is built from, what it pulls in from outside, and how they are wired.",
+      "source": "tools/coyomap/model.py:262",
+      "confidence": "inferred",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD12",
+      "name": "Stored data",
+      "parent": "SD1",
+      "purpose": "The types the product keeps, where each one lives, and the states it moves through.",
+      "source": "tools/coyomap/model.py:431",
+      "confidence": "inferred",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD13",
+      "name": "Outside edge and decisions",
+      "parent": "SD1",
+      "purpose": "Where the product meets the world, and the decisions it enforces at those places.",
+      "source": "tools/coyomap/model.py:221",
+      "confidence": "inferred",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD14",
+      "name": "Operations",
+      "parent": "SD1",
+      "purpose": "How the product is run, watched, configured and tested.",
+      "source": "tools/coyomap/model.py:552",
+      "confidence": "inferred",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD2",
+      "name": "Map file",
+      "purpose": "The stored map itself, the workers' rows it is merged from, and the record of how its claims held up.",
+      "source": "tools/coyomap/model.py:761",
+      "confidence": "verified",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD3",
+      "name": "Build directives",
+      "purpose": "The declared edits a build applies every time the map is rebuilt from its rows.",
+      "source": "tools/coyomap/reconcile.py:215",
+      "confidence": "verified",
+      "owners": [
+        "CAP1"
+      ]
+    },
+    {
+      "id": "SD4",
+      "name": "Code survey shapes",
+      "purpose": "What the measuring pass finds in a code tree before any map is drawn.",
+      "source": "tools/coyomap/preindex_lib.py:156",
+      "confidence": "verified",
+      "owners": [
+        "CAP5"
+      ]
+    },
+    {
+      "id": "SD5",
+      "name": "Viewer shapes",
+      "purpose": "The drawn form of a map: boxes, arrows and pages, built fresh for each screen.",
+      "source": "tools/coyomap/viewer/build_graph.py:116",
+      "confidence": "verified"
+    }
+  ],
+  "deployment": [
+    {
+      "unit": "coyomap-eval command line",
+      "runs_on": "the person's own machine, in the same folder-local Python environment the main command line uses",
+      "exposed_as": "a second command typed in a terminal, for whoever changes the instructions",
+      "config_source": "Declared as its own console command in pyproject.toml:46, from a package that lives beside the main one and depends on it."
+    }
+  ]
+}

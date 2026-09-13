@@ -9,7 +9,7 @@ mistake in its own words: shared state belongs in the contract every agent reads
 per-slice option, because a per-slice option gets omitted from one slice — and it records a build
 that passed a shared block to 12 of 14 slices, missed two, and shipped one of the omissions.
 
-Fill the «angle-bracket» slots. There are exactly SEVEN — «COYODEX_HOME», «REPO», «AGENT_ID»,
+Fill the «angle-bracket» slots. There are exactly SEVEN — «COYOMAP_HOME», «REPO», «AGENT_ID»,
 «USE_CASES», «SF_RANGE», «LEGEND», «WHERE_TO_LOOK» — each spelled the same way everywhere.
 
 - **«USE_CASES»** — the `UCn` ids this agent owns, with each one's name, `Trigger → Outcome` **and
@@ -35,10 +35,10 @@ would name a use case — one goal, no "and".
 **The template starts at the quoted block below.** Everything above it is instructions to you, the
 lead; nothing above this line goes into an agent prompt.
 
-> You are tracing use cases for a coyodex codebase map — the ordered interactions inside each one.
+> You are tracing use cases for a coyomap codebase map — the ordered interactions inside each one.
 >
-> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
-> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> **NEVER `cd` into the coyomap clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyomap/...` path silently reads
 > the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
 > 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
 > and no agent had read it.
@@ -59,7 +59,7 @@ lead; nothing above this line goes into an agent prompt.
 >
 > ## What you return
 >
-> **ONE JSON fragment** at `«REPO»/.coyodex/build-fragments/«AGENT_ID».json`, holding only:
+> **ONE JSON fragment** at `«REPO»/.coyomap/build-fragments/«AGENT_ID».json`, holding only:
 >
 > ```json
 > { "flows":    [ {"uc": "UC7", "title": "<the use case's name>",
@@ -161,7 +161,7 @@ lead; nothing above this line goes into an agent prompt.
 >
 > A reference step carries NO `where` of its own and counts as ONE step against the band. One level
 > only — a sub-flow's step may not reference another sub-flow. **A step may reference a SIBLING
-> agent's sub-flow**: pass `--ids «REPO»/.coyodex/build-fragments/` to your self-check (a directory
+> agent's sub-flow**: pass `--ids «REPO»/.coyomap/build-fragments/` to your self-check (a directory
 > scans every fragment) so the reference resolves at lint time instead of forcing you to duplicate
 > the shared trace inline. The refcount nudge ("referenced once — consider inlining") is advisory on
 > the fragment channel, because the other reference may live in a sibling's fragment.
@@ -208,7 +208,7 @@ lead; nothing above this line goes into an agent prompt.
 > ## Before you return
 >
 > ```
-> «COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «REPO» --ids «LEGEND» «your-fragment».json
+> «COYOMAP_HOME»/.venv/bin/coyomap lint-fragment --repo «REPO» --ids «LEGEND» «your-fragment».json
 > ```
 >
 >
@@ -248,8 +248,8 @@ lead; nothing above this line goes into an agent prompt.
 > problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
 > invocations were narrowed on one, 71 of 101 on the next.
 >
-> **Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+> **Do not open a previous map.** Not one under `.coyomap/dev-rebuilds/`, not a
 > `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
 > its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
 > more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
-> copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.
+> copying. If you need an element's record, it is in THIS map — `coyomap dump` reads it.

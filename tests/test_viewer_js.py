@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-VIEWER_DIR = Path(__file__).resolve().parent.parent / "tools" / "coyodex" / "viewer"
+VIEWER_DIR = Path(__file__).resolve().parent.parent / "tools" / "coyomap" / "viewer"
 
 
 def _node_check(js_path: Path) -> None:
@@ -369,7 +369,7 @@ def test_all_action_icons_render_in_the_foreground_overlay() -> None:
     # ONE ICON BUILDER IS LEFT, and it homes every icon in the overlay. The label-anchored pill and its
     # hover bridge went with the arrow icons they were built for — they were the only kind that had to
     # hang off a label instead of a box corner, and the only reason a second overlay layer existed.
-    assert "coyodex-icon-bridge-overlay" not in js
+    assert "coyomap-icon-bridge-overlay" not in js
     assert "function addLabelActionIcon" not in js and "function bindEdgeActionIcon" not in js
 
 
@@ -445,7 +445,7 @@ def test_the_ui_does_not_name_internal_model_fields():
 
     Checks the rendered STRINGS only: reading `ep.runs_in` in code is how the data is used, and
     backtick-to-<code> markdown of AUTHORED map text is the map's own words, not ours."""
-    js = (Path(__file__).resolve().parents[1] / "tools/coyodex/viewer/viewer.js").read_text()
+    js = (Path(__file__).resolve().parents[1] / "tools/coyomap/viewer/viewer.js").read_text()
     fields = ("runs_in", "no_call_site", "non_entity_types", "tests_note", "where_configured",
               "cadence_source", "tech_source", "subflow", "why_refs")
     offenders = []
@@ -763,7 +763,7 @@ def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None
     The lanes were never NAMED where the reader looks — the words "happy path" appeared only in the
     legend under the board — and the one label that did exist, "also here:", was drawn per box and
     only in a box that also had steps. So a feature the actor's happy path never enters (the Map
-    reader has two on coyodex's own map) drew an unlabelled list of circles. The names now sit once
+    reader has two on coyomap's own map) drew an unlabelled list of circles. The names now sit once
     each in a sticky gutter, and the per-box label is gone.
 
     And the lanes did not line up: a nested box ended where its own steps ended, so the dashed line
@@ -896,7 +896,7 @@ def test_a_feature_the_happy_path_enters_twice_gets_two_boxes() -> None:
     maps the current viewer reads, 4 of the 15 actor pages that have steps at all.
 
     Filing every station of a feature under that feature's FIRST appearance made the rail run
-    backwards. On this project's own map the coyodex developer's rail read 21, 25, 22, 23, 24 —
+    backwards. On this project's own map the coyomap developer's rail read 21, 25, 22, 23, 24 —
     steps 21 and 25 are "Reviewing a finished build" and 22-24 are "Judging map quality". The rail
     is the one thing on the page that claims an order, so a zone is a RUN of consecutive stations in
     one feature, not that feature's whole set, and a twice-entered feature draws two boxes.
@@ -2164,7 +2164,7 @@ def test_the_card_is_dragged_by_its_bar_and_sized_by_nothing() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "closest('#panelbar')" in js, "the bar is the handle"
     assert "panelBox" not in js and "appliedBox" not in js, "the remembered box is back"
-    assert "coyodex.panelBox" not in js, "…and so is the key it was written under"
+    assert "coyomap.panelBox" not in js, "…and so is the key it was written under"
     pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
     assert "resize:" not in pane, "the corner grip is back"
     assert "overflow: auto" in pane, "a card past its ceiling scrolls inside itself"
@@ -2870,19 +2870,19 @@ def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
     assert "FEATURES.ruleJoinUsesExtents === false" in notes and "floor" in notes
     secs = js[js.index("function featurePanels(capId) {"):
               js.index("\nfunction ", js.index("function featurePanels(capId) {") + 10)]
-    assert "featRuleNotes()" not in secs, "a product page carries no coyodex statistic"
+    assert "featRuleNotes()" not in secs, "a product page carries no coyomap statistic"
     # A feature deciding nothing still says so. The section draws DECISION AREAS now, so the silence
     # it must name is the area-level one: an area carries the authored list of features it is
-    # specified under, and on coyodex's own map 0 of 11 areas carry one at all.
+    # specified under, and on coyomap's own map 0 of 11 areas carry one at all.
     assert "featEmpty('Not recorded: no decision area says it is specified under this feature.')" in secs
-    # The notes still exist — on the System tab, with every other fact about coyodex's own analysis.
+    # The notes still exist — on the System tab, with every other fact about coyomap's own analysis.
     cov = js[js.index("function unreachedHtml() {"):
              js.index("\nfunction ", js.index("function unreachedHtml() {") + 10)]
     assert "featRuleNotes()" in cov and "coverageLineHtml()" in cov
 
 
 def test_the_feature_page_reads_the_python_join_and_never_redoes_it() -> None:
-    """`coyodex.features` joins a feature to its rules through `validate_model.rule_steps` — the SAME
+    """`coyomap.features` joins a feature to its rules through `validate_model.rule_steps` — the SAME
     reader the Rules view uses, so the two screens cannot disagree about what one rule governs. A
     second join written in JS would drift from both. The page therefore reads the shipped lists and
     counts nothing itself."""
@@ -3401,7 +3401,7 @@ def test_the_coverage_line_reports_reach_and_never_certainty() -> None:
     for word in ("confidence", "verified", "evidence", "sure", "certain"):
         assert word not in body.lower(), word
     assert "componentsUnreached" in line
-    # It is a fact about coyodex's own analysis, so it lives on the System tab under "About this map",
+    # It is a fact about coyomap's own analysis, so it lives on the System tab under "About this map",
     # never on a product view. The reader looking at what the product does did not ask for it.
     assert "sec('map', 'Functional coverage', unreachedHtml()," in js
     assert "coverageLineHtml()" not in js[js.index("function renderOverview() {"):
@@ -3437,7 +3437,7 @@ const cases = {
   ports: ['backend/src/x/domain/ports/__init__.py', 'backend/src/x/domain/ports/account.py'],
   shell: ['start.sh', 'stop.sh'],
   compose: ['docker-compose.yml', 'docker/nginx.conf'],
-  product: ['tools/coyodex/grammar.py', 'tools/coyodex/anchors.py'],
+  product: ['tools/coyomap/grammar.py', 'tools/coyomap/anchors.py'],
   split: ['scripts/a.py', 'backend/src/x/service.py', 'backend/src/y/other.py'],
 };
 const GRAPH = { nodes: {} };
@@ -4287,7 +4287,7 @@ def test_a_feature_s_colour_is_for_reading_not_for_naming() -> None:
     THAT IS WHAT MAKES FIVE ENOUGH, and sixteen were needed only while the colour was trying to be a
     name — which it could not be: every wash pale enough to read a sentence on sits within 20 of a
     kind colour, because the pale band is a narrow slice of the colour space. Colouring the NEIGHBOUR
-    GRAPH needs 4 on MCP Hero (10 features, 14 bands) and 3 on argus and on coyodex.
+    GRAPH needs 4 on MCP Hero (10 features, 14 bands) and 3 on argus and on coyomap.
 
     SO FEATURES STAY PALE, and the rule the rest of the map keeps is untouched: a deeper wash means a
     CONTAINER (a subsystem at 0.888 lightness, a data area at 0.906) and a very pale one a leaf.
@@ -4917,7 +4917,7 @@ def test_a_refused_push_keeps_the_url_and_the_screen_agreeing() -> None:
     assert "try { window.history.replaceState(stamp, '', h); } catch (_e) { return; }" in push
     assert push.index("catch (_)") < push.index("urlStarted = true;")
     """The screen rides in the part of the URL after `#`, which a browser never sends to the server. So
-    serve.py keeps its `/coyodex/<slug>/` routes and needs no change to make a link shareable."""
+    serve.py keeps its `/coyomap/<slug>/` routes and needs no change to make a link shareable."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "'#' + urlFromState(history[hi], false)" in js
     assert "'#' + urlFromState(history[hi], true)" in js
@@ -5294,7 +5294,7 @@ def test_a_container_box_border_holds_its_own_on_a_frame_of_its_colour() -> None
     assert "const mix = t.strokeWidth ? CONTAINER_BORDER_MIX : MEMBER_BORDER_MIX;" in fn
     assert "color-mix(in srgb, ${t.stroke} ${mix}%, #fff)" in fn
     # the discriminator is real: only the container styles carry a stroke width in the tint table
-    from coyodex.viewer import gen_viewer
+    from coyomap.viewer import gen_viewer
     with_width = {k for k, v in gen_viewer.ELEMENT_TINT.items() if v.get("strokeWidth")}
     assert {"subsystem", "subdomain"} <= with_width
     assert not ({"component", "entity", "dep", "interface"} & with_width)

@@ -1,8 +1,8 @@
 # Test-completeness contract — the copyable template
 
-**Lead half.** Fill every `«SLOT»` before dispatch: `«COYODEX_HOME»`, `«REPO»`, `«MAP»`,
-`«PROJECT»`, `«TESTS_ARE»`, `«AGENT_ID»`. Get it with the verb — `coyodex contract tests --slots`
-prints the skeleton, `coyodex contract tests --fill <slots.json> --out <file> --brief <id>` writes
+**Lead half.** Fill every `«SLOT»` before dispatch: `«COYOMAP_HOME»`, `«REPO»`, `«MAP»`,
+`«PROJECT»`, `«TESTS_ARE»`, `«AGENT_ID»`. Get it with the verb — `coyomap contract tests --slots`
+prints the skeleton, `coyomap contract tests --fill <slots.json> --out <file> --brief <id>` writes
 the brief and prints the pointer to send — never by copying this file.
 
 WHY THIS TEMPLATE EXISTS. The test-completeness slice is the one every build has and no template
@@ -22,15 +22,15 @@ assembled — before the T7 rules and the Phase 4 skeptics — so the brief has 
 
 ---
 
-You are measuring TEST COMPLETENESS for a coyodex codebase map of «PROJECT».
+You are measuring TEST COMPLETENESS for a coyomap codebase map of «PROJECT».
 
-**NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
-for the rest of your session, so a later relative `.coyodex/...` path silently reads the TOOL's own
+**NEVER `cd` into the coyomap clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
+for the rest of your session, so a later relative `.coyomap/...` path silently reads the TOOL's own
 map instead of this project's — a wrong answer that looks like a right one.
 
 - The repo you are measuring: `«REPO»`
 - The finished map: `«MAP»`
-- The coyodex clone (tools only): `«COYODEX_HOME»`
+- The coyomap clone (tools only): `«COYOMAP_HOME»`
 
 **Do this work yourself — do NOT spawn sub-agents, and do NOT write a program that GENERATES your
 fragment.** Author the rows. A small edit to a draft you already wrote by hand is fine.
@@ -40,8 +40,8 @@ fragment.** Author the rows. A small edit to a draft you already wrote by hand i
 Coverage percentages say which LINES ran. They do not say which BEHAVIOURS are tested. So measure
 against the MAP's own inventory, not against the code:
 
-1. Read the map with `coyodex dump` rather than hand-parsing the JSON:
-   `«COYODEX_HOME»/.venv/bin/coyodex dump --legend «MAP»` gives the inventory with its counts, and
+1. Read the map with `coyomap dump` rather than hand-parsing the JSON:
+   `«COYOMAP_HOME»/.venv/bin/coyomap dump --legend «MAP»` gives the inventory with its counts, and
    `--id <ID>` / `--record <ID>` / `--members <ID>` one element. `dump --help` is real.
 2. Walk the inventory and ask of each target: **is there a test that exercises it?**
    - the use cases (`UCn`)
@@ -67,7 +67,7 @@ it was not granted here.
 
 ## The fragment
 
-Write ONE JSON fragment to `«REPO»/.coyodex/build-fragments/x-tests.json` and return only that
+Write ONE JSON fragment to `«REPO»/.coyomap/build-fragments/x-tests.json` and return only that
 path plus a one-line inventory. Never inline the fragment in your reply.
 
 ```json
@@ -95,8 +95,8 @@ writing rules at the end of this brief govern all three.
 ## Self-check before returning (required)
 
 ```
-«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «REPO» --ids «MAP» \
-  «REPO»/.coyodex/build-fragments/x-tests.json
+«COYOMAP_HOME»/.venv/bin/coyomap lint-fragment --repo «REPO» --ids «MAP» \
+  «REPO»/.coyomap/build-fragments/x-tests.json
 ```
 
 Read the output WHOLE — do not pipe it through `head` or `tail`. Fix every problem until it exits
@@ -112,7 +112,7 @@ Write progress to `x-tests.draft.json` as you go and RENAME to `x-tests.json` wh
 rename is what makes your work land. Quote your shell separators (`echo "===="`), because a bare
 `=word` aborts the command line in this shell. Name any other scratch file `«AGENT_ID»-<what>`.
 
-**Do not open a previous map** — not one under `.coyodex/dev-rebuilds/`, not one `git show` can
+**Do not open a previous map** — not one under `.coyomap/dev-rebuilds/`, not one `git show` can
 produce. This build is deliberately independent of its predecessor.
 
 In your reply, state: the row count, the split of `yes` / `partial` / `no`, and the three gaps you

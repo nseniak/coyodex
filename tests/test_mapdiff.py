@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""`coyodex diff` — what changed between two maps, row by row.
+"""`coyomap diff` — what changed between two maps, row by row.
 
-Nothing could answer that: `coyodex-eval compare` compares aggregate COUNTS, so a retrospective read
+Nothing could answer that: `coyomap-eval compare` compares aggregate COUNTS, so a retrospective read
 `auth surfaces 39 -> 21`, got REGRESSED, and needed an hour of hand-reading to find that the rows had
 been re-expressed rather than lost.
 
@@ -17,10 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from coyodex import mapdiff
-from coyodex.mapdiff import diff_arrays, format_diff
+from coyomap import mapdiff
+from coyomap.mapdiff import diff_arrays, format_diff
 
-FORMAT = "coyodex-map"
+FORMAT = "coyomap-map"
 
 
 def make_map(**overrides) -> dict:
@@ -171,7 +171,7 @@ def test_cli_emits_parseable_json(capsys):
         b = write_map(Path(td) / "b.json", make_map(rules=[make_rule("BR1", "x", risk="r2")]))
         assert mapdiff.main([a, b, "--json"]) == 0
         payload = json.loads(capsys.readouterr().out)
-    assert payload["kind"] == "coyodex-map-diff"
+    assert payload["kind"] == "coyomap-map-diff"
     assert payload["arrays"][0]["changed"] == [{"key": "BR1", "fields": ["risk"]}]
 
 
@@ -179,7 +179,7 @@ def test_cli_refuses_a_malformed_map_rather_than_diffing_nonsense(capsys):
     with tempfile.TemporaryDirectory() as td:
         a = write_map(Path(td) / "a.json", make_map())
         bad = Path(td) / "b.json"
-        bad.write_text('{"format": "coyodex-map", "components": [{"id": "NOPE1"}]}', encoding="utf-8")
+        bad.write_text('{"format": "coyomap-map", "components": [{"id": "NOPE1"}]}', encoding="utf-8")
         assert mapdiff.main([a, str(bad)]) == 2
         assert "ERROR" in capsys.readouterr().err
 
@@ -203,7 +203,7 @@ def test_cli_needs_exactly_two_maps(capsys):
 
 def test_cli_refuses_an_unknown_option_with_the_usage(capsys):
     assert mapdiff.main(["--nope"]) == 2
-    assert "usage: coyodex diff" in capsys.readouterr().err
+    assert "usage: coyomap diff" in capsys.readouterr().err
 
 
 def test_cli_writes_nothing():

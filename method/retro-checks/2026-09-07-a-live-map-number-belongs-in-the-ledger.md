@@ -1,6 +1,6 @@
 # A present-tense number about a live map goes in the ledger, not only in a comment
 
-Change (2026-09-07): new `coyodex-eval live-numbers` — a ledger of 9 sentences in `tools/` and
+Change (2026-09-07): new `coyomap-eval live-numbers` — a ledger of 9 sentences in `tools/` and
 `eval/tools/` that state a number about a LIVE map, each paired with a `measure` that regenerates it
 by CALLING THE PRODUCT'S OWN FUNCTION. 31 more sentences of the same class are recorded with the
 reason no measure can be written for them. Tool + tests only; no method text, no build behaviour
@@ -11,7 +11,7 @@ is a lint, not more words. Say so in the report.
 
 ## What this change is answering
 
-**Measured on 2026-09-07** over `tools/coyodex/` and `eval/tools/coyodex_eval/`: 739 prose blocks
+**Measured on 2026-09-07** over `tools/coyomap/` and `eval/tools/coyomap_eval/`: 739 prose blocks
 carry a number-claim. 665 of them record a PAST build and cannot rot. **35 describe a live map
 today, and 23 of the 27 that could be decided were wrong** — 85%. Four of the six defects fixed
 that day were exactly this.
@@ -54,11 +54,11 @@ edited without the ledger reports `DRIFTED` and a ledger edited without the comm
 ## The habit
 
 **A present-tense number about a live map does not go into a comment on its own.** Either give it a
-ledger row in `eval/tools/coyodex_eval/live_numbers.py`, or write it in the past tense naming the
+ledger row in `eval/tools/coyomap_eval/live_numbers.py`, or write it in the past tense naming the
 build it came from — "the 2026-09-07 mcpolis map read 4 of 43" — which is a record, and records do
 not rot. Two thirds of the number-claims in the tools already do the second thing correctly.
 
-Run it: `coyodex-eval live-numbers --map argus=<path> --map mcpolis=<path>` (coyodex's own map is
+Run it: `coyomap-eval live-numbers --map argus=<path> --map mcpolis=<path>` (coyomap's own map is
 found in the repo). NOT in `make gates` — two of the three maps live outside this repo, and a
 rebuild legitimately moves these numbers. Three gate-safe tests do run: every ledger sentence is
 still in the tree, still pinned to its exact line, and every recorded reason names a file that
@@ -106,7 +106,7 @@ number, 250 lines away in `views.py`. Those five are rows waiting to be written,
 
 ## Checks
 
-1. expect: `coyodex-eval live-numbers` against all three maps reports **9 hold and 0 stale**, or a
+1. expect: `coyomap-eval live-numbers` against all three maps reports **9 hold and 0 stale**, or a
    stale row for every map rebuilt since — a red row here should be traceable to a rebuild.
    regression sign: a row reading `STALE` with no rebuild in between. That means a measure is
    reading something the sentence does not describe, which is the defect class that took out 19 of
@@ -122,7 +122,7 @@ number, 250 lines away in `views.py`. Those five are rows waiting to be written,
 3. expect: no commit since the previous build added a NEW present-tense live-map number to a
    comment in `tools/` or `eval/tools/` without a ledger row. Re-derive the candidate list the way
    the 2026-09-07 measurement did: prose blocks carrying `\d+\s+\w+`, naming argus / mcpolis /
-   coyodex's own map / "live maps", with no past-tense framing (`was`, `were`, `ran`, `on the
+   coyomap's own map / "live maps", with no past-tense framing (`was`, `were`, `ran`, `on the
    20xx-`, `one build`). Baseline: **40 such rows, 9 of them in the ledger, 31 recorded as not
    mechanised.** The baseline was published as 35 and was itself one of the unmeasured numbers this
    tool exists to stop; the second review found five more.

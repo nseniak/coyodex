@@ -1,0 +1,168 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "security",
+ "claims": [
+  {
+   "claim": "Role 'Map owner' may do everything 'Map reader' may do",
+   "anchor": null,
+   "detail": "R1 includes R2 — the map anchors this to NO line, so nothing shows where it is granted",
+   "why_risky": "a privilege claim — it says one role may do everything another may do, which a reader takes as a fact about who can reach what."
+  },
+  {
+   "claim": "Rule 'A served map is reachable only from the machine that runs the server.' is enforced at tools/coyomap/viewer/serve.py:885 — Opens the listening address on this machine alone, so a connection from another machine never arrives.",
+   "anchor": "tools/coyomap/viewer/serve.py:885",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A served map is reachable only from the machine that runs the server.' is enforced at tools/coyomap/viewer/serve.py:634 — Refuses a page request whose address names any host other than this machine.",
+   "anchor": "tools/coyomap/viewer/serve.py:634",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A served map is reachable only from the machine that runs the server.' is enforced at tools/coyomap/viewer/serve.py:655 — Refuses the same way for a request that changes the remembered project list.",
+   "anchor": "tools/coyomap/viewer/serve.py:655",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyomap/viewer/serve.py:883 — Builds the served set from the remembered folder list alone, with no search of the disk.",
+   "anchor": "tools/coyomap/viewer/serve.py:883",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyomap/viewer/serve.py:697 — Refuses to add a folder that holds no coyomap data folder inside it.",
+   "anchor": "tools/coyomap/viewer/serve.py:697",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyomap/viewer/serve.py:878 — Applies the same check to a folder named when the server is started.",
+   "anchor": "tools/coyomap/viewer/serve.py:878",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyomap/viewer/serve.py:658 — Refuses a change to the remembered list unless the request came from this server's own start page.",
+   "anchor": "tools/coyomap/viewer/serve.py:658",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyomap/viewer/serve.py:778 — Rejects a file request whose path is absolute or climbs above the project folder.",
+   "anchor": "tools/coyomap/viewer/serve.py:778",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyomap/viewer/serve.py:380 — Rejects a working copy read that escapes the project or names the version history folder.",
+   "anchor": "tools/coyomap/viewer/serve.py:380",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyomap/viewer/serve.py:387 — Refuses a file whose real location, after following a shortcut, sits outside the project folder.",
+   "anchor": "tools/coyomap/viewer/serve.py:387",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyomap/viewer/serve.py:849 — Hands back a shared page asset only when the requested name is one of the two allowed names.",
+   "anchor": "tools/coyomap/viewer/serve.py:849",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A file that version history deliberately ignores is never handed back to the browser.' is enforced at tools/coyomap/viewer/serve.py:391 — Allows a working copy read when version history already tracks the file.",
+   "anchor": "tools/coyomap/viewer/serve.py:391",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A file that version history deliberately ignores is never handed back to the browser.' is enforced at tools/coyomap/viewer/serve.py:393 — Allows an untracked file only when no ignore rule covers it.",
+   "anchor": "tools/coyomap/viewer/serve.py:393",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyomap/viewer/serve.py:790 — Refuses a requested version that is not a plain commit identifier.",
+   "anchor": "tools/coyomap/viewer/serve.py:790",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyomap/viewer/serve.py:366 — Refuses a branch or tag name that opens with a dash or carries unusual characters.",
+   "anchor": "tools/coyomap/viewer/serve.py:366",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyomap/viewer/serve.py:368 — Marks where the options end, so the name after it can never be read as one.",
+   "anchor": "tools/coyomap/viewer/serve.py:368",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyomap/viewer/serve.py:301 — Skips the history read entirely when the map's own recorded commit is not plain.",
+   "anchor": "tools/coyomap/viewer/serve.py:301",
+   "detail": "In: Map server (C83)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyomap/viewer/viewer.html:17 — Pins the expected fingerprint of the picture panning library.",
+   "anchor": "tools/coyomap/viewer/viewer.html:17",
+   "detail": "In: Viewer shell (C70)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyomap/viewer/viewer.html:20 — Pins the expected fingerprint of the diagram drawing library.",
+   "anchor": "tools/coyomap/viewer/viewer.html:20",
+   "detail": "In: Viewer shell (C70)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyomap/viewer/viewer.js:14094 — Pins the expected fingerprint of the styling that colours source code.",
+   "anchor": "tools/coyomap/viewer/viewer.js:14094",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyomap/viewer/viewer.js:14097 — Pins the expected fingerprint of the code colouring library itself.",
+   "anchor": "tools/coyomap/viewer/viewer.js:14097",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A source link may open only through an address belonging to a known code editor.' is enforced at tools/coyomap/viewer/viewer.js:14880 — Offers no link when the built address is not one a known editor answers.",
+   "anchor": "tools/coyomap/viewer/viewer.js:14880",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A source link may open only through an address belonging to a known code editor.' is enforced at tools/coyomap/viewer/viewer.js:15011 — Refuses to save a hand-typed link pattern whose address is not a known editor one.",
+   "anchor": "tools/coyomap/viewer/viewer.js:15011",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A run refuses to read or overwrite coyomap's own map unless the operator declares coyomap is the project being mapped.' is enforced at tools/coyomap/model.py:1443 — Refuses to read a map stored inside coyomap's own copy unless the run declared that coyomap is the project.",
+   "anchor": "tools/coyomap/model.py:1443",
+   "detail": "In: Map model (C1)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A run refuses to read or overwrite coyomap's own map unless the operator declares coyomap is the project being mapped.' is enforced at tools/coyomap/model.py:1408 — Refuses the same target for a write, so a stray build cannot overwrite the accepted map of coyomap.",
+   "anchor": "tools/coyomap/model.py:1408",
+   "detail": "In: Map model (C1)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A run refuses to read or overwrite coyomap's own map unless the operator declares coyomap is the project being mapped.' is enforced at method.md:1369 — Tells the build the refusal exists, and warns that a hand written script is not covered by the refusal.",
+   "anchor": "method.md:1369",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  }
+ ]
+}

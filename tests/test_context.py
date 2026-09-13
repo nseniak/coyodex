@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex context` — the evidence bundle handed to a skeptic.
+"""Tests for `coyomap context` — the evidence bundle handed to a skeptic.
 
 A skeptic spends its run fetching what this verb fetches once, and every file it opens joins a
 context that every later turn re-reads. Measured across eight skeptic agents on one build:
@@ -22,14 +22,14 @@ from pathlib import Path
 
 import pytest
 
-from coyodex import context
-from coyodex.model import load_model
+from coyomap import context
+from coyomap.model import load_model
 
 
 def make_map(tmp: Path) -> Path:
     """A map with one component, so a claim naming C1 has a record to quote."""
     body = {
-        "format": "coyodex-map", "title": "t", "goal": "g", "commit": "abc1234",
+        "format": "coyomap-map", "title": "t", "goal": "g", "commit": "abc1234",
         "components": [{"id": "C1", "name": "Gate", "purpose": "refuses a caller with no role",
                         "source": "src/gate.py:3"}],
     }
@@ -48,7 +48,7 @@ def make_repo(tmp: Path) -> Path:
 
 def make_claims(tmp: Path, claims: list[dict]) -> Path:
     p = tmp / "claims.json"
-    p.write_text(json.dumps({"schema": "coyodex-claims/v1", "theme": "backbone",
+    p.write_text(json.dumps({"schema": "coyomap-claims/v1", "theme": "backbone",
                              "claims": claims}), encoding="utf-8")
     return p
 

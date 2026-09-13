@@ -1,0 +1,284 @@
+{
+ "grounding": [
+  {
+   "claim": "Component C1 (Map model) is described as: Defines every kind of thing a map can hold. Reads a map file back and refuses one whose shape is wrong.",
+   "grounded": true,
+   "evidence": "tools/coyomap/model.py:1355",
+   "skeptic": "description-1",
+   "note": "Read model.py: lines 43-761 declare a dataclass for every element family the map holds (Role, UseCase, Component, Dep, Interface, Entity, Flow, Edge, BusinessRule...), and `load_model` at 1355 with `_check`/`_build` (1158-1281) raises ModelError naming the JSON path of the first shape violation. Both clauses hold; the stored anchor 1153 sits on the serializer `to_canonical_json` rather than on the loader."
+  },
+  {
+   "claim": "Component C2 (Shared map grammar) is described as: Holds the shared words and formats every other part of the map reads.",
+   "grounded": true,
+   "evidence": "tools/coyomap/grammar.py:21",
+   "skeptic": "description-1",
+   "note": "Read grammar.py: it holds the shared closed/seeded vocabularies (DEP_KINDS 35, INTERFACE_KINDS 391, STORE_MODES 517, ENTRY_POINT_KINDS 547, STEP_DIRECTIONS 318) and the id token at 21, plus the markdown table grammar (630-673). The 'formats' half is the sibling files in the same component: anchors.py defines the one path:line anchor format, records.py the one recorded-exception line reader, pathmatch.py the one path-glob matcher. Each docstring states it is the single shared implementation."
+  },
+  {
+   "claim": "Component C3 (Map schema document) is described as: Writes a machine-readable description of the map file, for editors and other tools to read.",
+   "grounded": true,
+   "evidence": "tools/coyomap/json_schema.py:501",
+   "skeptic": "description-1",
+   "note": "Read json_schema.py: `generate_schema` (501) walks the model dataclasses and emits a JSON Schema document, and `main` (519) prints it. The module docstring (3-13) says it is for documentation and IDE autocomplete only and is deliberately NOT wired into `coyomap validate` — which matches 'for editors and other tools to read'."
+  },
+  {
+   "claim": "Component C4 (Map assembly) is described as: Merges the pieces each build agent returned into one map. Refuses two pieces that name the same thing twice.",
+   "grounded": true,
+   "evidence": "tools/coyomap/assemble.py:405",
+   "skeptic": "description-1",
+   "note": "Read assemble.py: the merge loop concatenates each fragment's arrays (388-394) and appends a 'duplicate id' problem when two fragments define one id (405) or one fragment defines it twice (401); `main` prints problems and returns 1 at 898-902, so the assemble really is refused. Nuance for the lead: some duplicates are deliberately MERGED instead of refused (deps 598, components 762, messaging 512, rules 466) when the two rows are the same thing."
+  },
+  {
+   "claim": "Component C5 (Fragment self-check) is described as: Checks one agent's piece of the map before it is handed in. The agent that made a mistake is the one that fixes it.",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:126",
+   "skeptic": "description-1",
+   "note": "Read lint_fragment.py: the docstring (1-8) says it is the per-fragment self-check a harvest/trace sub-agent runs BEFORE returning its fragment, and that it exists to move the fix into the agent's own context instead of the lead guessing at assembly. `lint_fragment_problems` (126) runs the row-local rules the fragment's own author can fix."
+  },
+  {
+   "claim": "Component C6 (Shape checks) is described as: Checks that every name in the map points at something real. Also checks that each code link is well formed and really exists.",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:6265",
+   "skeptic": "description-1",
+   "note": "Read validate_model.py: `_check_ids` (188) plus the reference scan (390) report duplicate and undefined ids, and the pointer loop (203-222) rejects a malformed id. For the second clause, `_check_anchor_format` (5531) checks each code link is a well-formed `path:line`, and `check_anchor_existence_model` (6265, under --check-sources) blocks when the file does not exist."
+  },
+  {
+   "claim": "Component C7 (Story checks) is described as: Checks the use cases, their flows and the happy path against each other. Reports the parts of the code no story covers.",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:400",
+   "skeptic": "description-1",
+   "note": "Read validate_model.py: `_check_flows` (400) checks one flow per use case, unique step numbers, resolvable sub-flow references and endpoints; `_check_happy_path` (395) checks HP steps name a use case; `walk_jumps` (545) checks a flow's steps against each other. The second clause is the unstoried advisories: saved records reached by no use case (2205), interfaces reached by no use case (2890), self-activated entry points no flow reaches (1924)."
+  },
+  {
+   "claim": "Component C8 (Rule checks) is described as: Checks that each business rule names real code lines. Also writes down which files the map says guard access.",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:1686",
+   "skeptic": "description-1",
+   "note": "Read validate_model.py `rule_row_problems` (1662): a rule with no site, a site with no `where`, and a `where` that names a whole file with no `:line` are all blocking problems (1686-1693); `check_rules_model` (1712) adds the whole-map rules. Second clause read in access_surface.py: `access_files` (31) collects `{file: [rule ids]}` from every access rule's site anchors and `write_surface` (61) writes it out."
+  },
+  {
+   "claim": "Component C9 (Wiring checks) is described as: Checks how the product connects: its interfaces, its ways in, the services it calls and the processes it runs in.",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:3593",
+   "skeptic": "description-1",
+   "note": "Read validate_model.py across the four subjects: interfaces (the no-use-case, no-evidence and person-at-a-machine advisories at 2699-2728), ways in (`_check_entry_kinds` 3389, `_check_activations` 3377), the services it calls (`_check_dep_kinds` 3278, `_check_dep_buckets` 3284), and the processes it runs in (`_check_runs_in` 3593, which blocks a `runs_in` naming no real deployment unit). All four clauses hold."
+  },
+  {
+   "claim": "Component C10 (Data checks) is described as: Checks the saved records, their stores, who owns each data area, and how much of the map was verified.",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:4188",
+   "skeptic": "description-1",
+   "note": "Read validate_model.py: `_check_stores` (4188) checks each saved record's store (D-id shape, closed mode vocabulary, never a folded library); `unexplained_persistence_pairs` (4215) checks writes no store explains; ownership rides `build_areas` from areas.py (imported at 72) whose docstring says validate cross-examines the AUTHORED owners against derived touches; `_check_grounding_arithmetic` (4028) checks the counts whose 'entire job is telling a reader how much of the map was actually verified' (4033)."
+  },
+  {
+   "claim": "Component C100 (Eval command line) is described as: Routes each typed eval sub-command to the checker that answers it. Loads that checker only when it is asked for.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/cli.py:71",
+   "skeptic": "description-1",
+   "note": "Read cli.py whole (127 lines): `main` reads argv[0] and dispatches through a chain of `if cmd == ...` branches (70-118), and each branch does its `from coyomap_eval import <module>` INSIDE the branch (71 for score, and the same shape for run/arrows/compare/process/archive/ledger/live-numbers/retro-precheck/transcript/cost/mutate). Both clauses hold."
+  },
+  {
+   "claim": "Component C101 (Map profile) is described as: Reduces one built map to the numbers two builds can be compared on. Two maps of one project never share wording, so counts are what survives.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/profile.py:430",
+   "skeptic": "description-1",
+   "note": "Read profile.py: `build_profile` returns a MapProfile of counts (430-460: use cases, subsystems, components, deps, entities, edges, HP steps, flows, interfaces, doors...), and the docstring (4-6) says two runs on one repo differ in ids, wording and ordering so the map cannot be regressed by diffing its text. One qualifier for the lead: the profile also keeps NAME SETS (auth surfaces, use cases, entities) for the comparator's set diffs, so counts are not literally all that survives."
+  },
+  {
+   "claim": "Component C102 (Baseline comparison) is described as: Judges a fresh map against the accepted one. Returns one word: as good, drifted, or worse.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/compare.py:511",
+   "skeptic": "description-1",
+   "note": "Read compare.py: `compare` ends by choosing exactly one of three words — REGRESSED when any hard gate trips, DRIFT when any band or the granularity check breaches, else PASS (511-518) — and every gate is relative to the blessed baseline (docstring 4-11). PASS / DRIFT / REGRESSED map onto 'as good, drifted, or worse'."
+  },
+  {
+   "claim": "Component C103 (Judge report) is described as: Folds many doubters' votes and many scorers' marks into one quality report. Never talks to a model itself, so the arithmetic can be tested alone.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/judge.py:259",
+   "skeptic": "description-1",
+   "note": "Read judge.py: `build_judge_report` folds N skeptic votes per claim into a majority verdict and a pass-rate, and N judges' 0-4 rubric marks into a per-dimension median, returning one JudgeReport (255-261). The docstring (17-20) states the module never calls a model itself — the LLM sits behind the injectable `Judge` seam — and `PrecomputedJudge` (265) replays externally produced verdicts through the same pure aggregation."
+  },
+  {
+   "claim": "Component C104 (Eval run) is described as: Runs one scoring pass end to end and files everything it produced. Can then promote that run to be the accepted baseline.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/run.py:175",
+   "skeptic": "description-1",
+   "note": "Read run.py: `eval_run` (55-69) profiles the map, attaches or builds the judge report and compares against the baseline in one pass; the run directory write order at 143-165 files the map, views, profile, judge and delta; `bless` (175) copies that run's artifacts into the baseline dir. Both clauses hold."
+  },
+  {
+   "claim": "Component C105 (Lost arrows) is described as: Finds the relations a rebuild dropped. Re-reads each dropped relation's recorded line to say whether the code still does it.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/arrows.py:135",
+   "skeptic": "description-1",
+   "note": "Read arrows.py: `compare` (146) takes every baseline arrow pair absent from the candidate, and `judge_one` (124) re-opens the recorded call site — `path.read_text().splitlines()` at 135 — and reads the line itself, returning LOST_TRUTH when it still reads as operative or CORRECT_DROP when the file, the line or the operativeness is gone."
+  },
+  {
+   "claim": "Component C106 (Rebuild archive) is described as: Moves a project's current map aside so the next build starts from nothing. Moves, never deletes: the old map is what the new one is compared against.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/archive.py:110",
+   "skeptic": "description-1",
+   "note": "Read archive.py: `archive` moves every movable entry with `shutil.move` (110) into `.coyomap/dev-rebuilds/NNNN/`; nothing in the module deletes a map (the only rmdir calls, 119-121, undo an empty directory this run created when a move failed part-way). The docstring (11-16) gives the reason the claim states: dispatch decides build-vs-analyze by the working tree, and the old map is the baseline the new one is compared against."
+  },
+  {
+   "claim": "Component C107 (Transcript reader) is described as: Turns a build's raw chat log into one record per model answer. The log stores one answer as many rows, so counting rows gets every later number wrong.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/transcript.py:440",
+   "skeptic": "description-1",
+   "note": "Read transcript.py: the docstring (9-13) says a JSONL record is not a turn — one API response's ten tool_use blocks are written as ten records — and that counting records reports 'one tool call per turn' for a message that made ten. `iter_turns`/`read_turns` (440) group by `message.id` and MERGE rather than sum the repeated usage block (425-427); `grouping_is_consistent` (445) re-reads the file to check the grouping assumption held."
+  },
+  {
+   "claim": "Component C108 (Build cost) is described as: Reports what one build spent in time and tokens. Divides both by how much map the build produced. Two builds of different sizes then read side by side.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/cost.py:655",
+   "skeptic": "description-1",
+   "note": "Read cost.py: the report carries wall/idle/busy seconds and per-role token and cost buckets (620-648), and with `--map` it divides both by the map's row count — `per_row = {cost/rows, active_seconds/rows}` at 653-658. The docstring (12-17) gives the third clause: four builds moved 1,195 to 1,564 rows, so anything comparing two builds has to divide by what they produced."
+  },
+  {
+   "claim": "Component C109 (Process scorecard) is described as: Scores whether the build agent behaved as the method says, one checked rule at a time. Reports numbers, never a pass or a fail.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/process_scorecard.py:3318",
+   "skeptic": "description-1",
+   "note": "Read process_scorecard.py: `score_turns` (3301) runs the ASSERTIONS tuple one function at a time (3318) and returns a Scorecard of per-assertion `observed / of` numbers; the docstring (9-15) says it never blocks a commit and returns no pass/fail, and `main` (3521) returns 0 at 3598 — the only non-zero returns are the argument/file errors."
+  },
+  {
+   "claim": "Component C110 (Retro precheck) is described as: Refuses a retrospective while the build it would read is still running. A build stamps who made it near the end, so mid-run the stamp still names the previous build.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/retro_precheck.py:200",
+   "skeptic": "description-1",
+   "note": "Read retro_precheck.py: the docstring (10-13) states provenance is stamped near the END of a build so mid-run it still names the PREVIOUS build, which is the claim's second sentence verbatim in effect; the check refuses when anything under `.coyomap/` was written inside the idle window (198-209) or when a non-provenance transcript is still live (211-230)."
+  },
+  {
+   "claim": "Component C111 (Ledger check) is described as: Asks the code history whether a retrospective's finished rows really shipped. A row saying it is still open while its named change is merged gets proposed again for nothing.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/ledger.py:112",
+   "skeptic": "description-1",
+   "note": "Read ledger.py: `check` (99) reads each row's hand-set `landed` flag and the sha in `landed_in`, asks git whether that commit is in this branch (110), and files STALE-OPEN when the commit is merged but the row says open (112-113) or UNVERIFIABLE when the row claims it landed and the commit is absent (114-115). `format_report` (127-140) prints the 'the next retro re-proposes work already done' consequence the claim names."
+  },
+  {
+   "claim": "Component C112 (Live number ledger) is described as: Re-measures every count the tools state about a map that keeps changing. A person writes the sentence twice, so nothing has to guess which sum produced the number.",
+   "grounded": false,
+   "evidence": "eval/tools/coyomap_eval/live_numbers.py:305",
+   "skeptic": "description-1",
+   "note": "The SECOND sentence is exactly right — the docstring (11-13) says a person writes the sentence twice, once in the code and once here as `quote`, and a `measure` regenerates it from the map, so nothing has to infer which computation produced the number; the comparison runs at 534-543. The FIRST clause fails: it does not re-measure EVERY count. The LEDGER holds 9 hand-registered rows (Claim(...) at 305, 310, 314, 321, 326, 331, 336, 341, 345) while NOT_MECHANISED (360) lists 14 more live-map sentences with the reason each cannot be measured, and the docstring says 35 sentences describe a live map. The run even prints 'Not mechanised: N' at 615-616. Suggest dropping 'every'."
+  },
+  {
+   "claim": "Component C113 (Skeptic recall test) is described as: Plants claims that are false by construction and keeps the answer key. Counts how many of them the doubters caught, which is a number that means something on its own.",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/mutate.py:234",
+   "skeptic": "description-1",
+   "note": "Read mutate.py: `plant` corrupts claims in four known-false shapes (drifted_anchor, negated_clause, swapped_actor, ghost_file — docstring 18-29) and `main` writes the mutated batch and the answer key to separate files (255-258). `score` counts caught vs planted per shape and returns the rate (234-238). The docstring (9-12) states the third clause: 'caught 3 of 10 planted falsehoods' is an absolute number that means something on its own, unlike comparing two prompts' refutation rates."
+  },
+  {
+   "claim": "Component C45 (Code survey) is described as: Measures how big a project's code is before the map is drawn.",
+   "grounded": true,
+   "evidence": "tools/coyomap/preindex.py:615",
+   "skeptic": "description-1",
+   "note": "Read preindex.py: it writes `.coyomap/preindex.json` with a weight tree of LOC, file count and churn per directory, plus the code-derived component expectation E (594-604), and prints '<N> files, <N> LOC' with the heaviest top-level directories at 615-618. The docstring (2) and the printed note (631-632) both say it runs BEFORE the structural harvest. The description omits the symbol/import half, but states nothing false."
+  },
+  {
+   "claim": "Component C46 (Ignore list) is described as: Lets a project declare which of its own code the map must leave out.",
+   "grounded": true,
+   "evidence": "tools/coyomap/ignorefile.py:181",
+   "skeptic": "description-1",
+   "note": "Read ignorefile.py: `load_ignore` (181) reads `<root>/.coyomap/.ignore` and `parse_ignore` (the loop ending at 179) turns each gitignore-like line into a rule. The docstring (4-10) says exactly what the claim says: a repo may hold code deliberately not part of what the map describes, `.gitignore` cannot express it because the files are meant to be committed, and this file says 'not part of the analysed tree at all'."
+  },
+  {
+   "claim": "Component C47 (Assignment rules) is described as: Records where every mapped thing belongs, so a rebuild keeps the decision.",
+   "grounded": true,
+   "evidence": "tools/coyomap/reconcile.py:692",
+   "skeptic": "description-1",
+   "note": "Read reconcile.py: the `set` directives assign subsystem, subdomain, capability, entry_points, ways_in, interfaces, runs_in, owners, bucket and interface kind onto the named elements (692-720), which is 'where every mapped thing belongs'. Scope note for the lead: the docstring (7-10) says the directives are re-applied on every RE-ASSEMBLE of the fragments — that is what keeps the decision. A from-scratch rebuild in this project's own sense archives `.coyomap/` (reconcile.json included) away first, so 'rebuild' is the word a reader could take too far."
+  },
+  {
+   "claim": "Component C48 (Diagram balance) is described as: Reports how crowded each screen of the map is.",
+   "grounded": true,
+   "evidence": "tools/coyomap/balance.py:153",
+   "skeptic": "description-1",
+   "note": "Read balance.py: the report prints per-diagram fan-out against the 3-9 band and the 5+/-2 target, for the subsystem forest (141-156) and again for the subdomain forest (158-165), flagging the over-dense and the empty ones. The description leaves out the module's other half (the advisory split proposals, docstring 7-13), but says nothing false."
+  },
+  {
+   "claim": "Component C49 (Change impact) is described as: Works out which parts of the map a code change touches.",
+   "grounded": true,
+   "evidence": "tools/coyomap/impact_git.py:285",
+   "skeptic": "description-1",
+   "note": "Read impact_git.py and impact_lib.py: for each changed file the engine re-expresses it in the map's pinned frame, builds the two-diff FileFrame, and calls `resolve_hits` (285) to turn the changed lines into hits on the map's own anchors, falling back to directory anchors claiming the file at 301-306. impact_lib's docstring (1, 17-19) states the same: project an arbitrary git diff onto the map's anchors, at line / symbol / file precision."
+  },
+  {
+   "claim": "Component C50 (Map and transcript backup) is described as: Bundles a finished map with the conversation that produced it.",
+   "grounded": true,
+   "evidence": "tools/map_backup.py:391",
+   "skeptic": "description-1",
+   "note": "Read map_backup.py: `backup` copies the whole `.coyomap/` tree to `<dest>/map/` (391) and then copies the conversation transcript(s) of the sessions provenance names into `<dest>/conversation/` (394-396), writing a manifest that names both (402-416). The docstring (11-16) says it bundles the map files plus the exact conversation transcript(s)."
+  },
+  {
+   "claim": "Component C51 (Live reload supervisor) is described as: Restarts the map server when someone editing the viewer changes its code.",
+   "grounded": true,
+   "evidence": "tools/devserve.py:100",
+   "skeptic": "description-1",
+   "note": "Read devserve.py whole (112 lines): the supervisor polls `sources_stamp` over `repo/tools/coyomap` and on any change stops and respawns `coyomap serve --dev` (97-103), and the docstring (2) says it is for someone working on the viewer. One clause a reader could take wrongly, worth the lead's eye: `sources_stamp` globs `*.py` ONLY (40), and the docstring (7-11) says the browser-side viewer.js / viewer.css / viewer.html are deliberately NOT watched — they are read per request and the page live-reloads, so those edits reach the screen with no restart at all."
+  },
+  {
+   "claim": "Component C120 (Product description instructions) is described as: Tells the mapping agent to describe the product before reading code. It orders the goal, the shared words, the people and their goals. The one successful run through those goals comes last.",
+   "grounded": true,
+   "evidence": "method.md:26",
+   "skeptic": "description-1",
+   "note": "Read method.md 26-410: the section heading is 'Behavioral layer — lead with this (what & why, before any code)', and it orders T0 Goal (28), Glossary (30), Roles with 'What they want' (53), use cases and capabilities (220), then Happy Path (314), described there as 'the one concrete run' through the use-case DAG. Minor: one more subsection (bidirectional traceability, 383) follows the Happy Path inside the same section."
+  },
+  {
+   "claim": "Component C121 (Code inventory instructions) is described as: Says how to list what the product is made of, area by area. Every box gets a plain sentence, a code link and a confidence label. Outside services and the ways in are listed the same way.",
+   "grounded": true,
+   "evidence": "method.md:413",
+   "skeptic": "description-1",
+   "note": "Read method.md 411-505: Level 0 lists Subsystems `ID | Subsystem | Purpose | Parent | Source | Conf.` (413-415) — the area-by-area grouping with a sentence, a code link and a confidence label — then T1 components (426), T2 external dependencies with Kind and purpose Bucket (428), T3 (453) and, at Level 1, T4 entry points (457). For the lead: the confidence label is spelled out on the Subsystems (415) and Subdomains (886) tables; the general verified-vs-inferred rule sits in the cross-cutting section at 1440."
+  },
+  {
+   "claim": "Component C122 (Outside edge instructions) is described as: Says how to name every place the product meets the outside world. Each place gets one word for what it is, and a side saying whose design it is. It also says how a story crosses one, in both directions.",
+   "grounded": true,
+   "evidence": "method.md:506",
+   "skeptic": "description-1",
+   "note": "Read method.md 506-545 and 700-760: T2b Interfaces is the product's outside edge, with `Kind` authored as one word from eleven seeds (536+) and `Side` = whose DESIGN it is, ours or theirs, tested by 'if the far side vanished tomorrow, would this thing's design change?' (533). The third clause is the doors rule, written in both directions: INBOUND `Rn -> In -> Cn` at 705 and OUTBOUND `Cn -> In -> Rn` at 713."
+  },
+  {
+   "claim": "Component C123 (Data and step instructions) is described as: Says how to write the records the product keeps and the steps of each goal. A step names who acts, on what, and which way the data moves. Machinery shared by several goals is written once and referenced.",
+   "grounded": true,
+   "evidence": "method.md:937",
+   "skeptic": "description-1",
+   "note": "Read method.md 879-1050: T5 domain cards (879) are the records the product keeps; T6 (937) is one numbered step block per use case, each step `from -> to` with its own authored phrase and its own `where` (960-968), and `direction` says which way the data moves (1043). Named sub-flows SFn are defined ONCE and referenced from each flow (1039). Small qualifier: `direction` is owed only where the product's code touches a surface or a record, and is empty on a door and on actor steps."
+  },
+  {
+   "claim": "Component C124 (Operations and decision instructions) is described as: Says how to record what runs, what is watched, what is configured and what the product decides. A decision is only worth recording when a product person could have chosen otherwise. Test coverage is measured against the map, never against line counts.",
+   "grounded": true,
+   "evidence": "method.md:1226",
+   "skeptic": "description-1",
+   "note": "Read method.md 1067-1250: the core four are Deployment & topology (1068 — what runs), Observability (1165 — what is watched), Security & auth (1166) and Config & environments (1186 — what is configured), then T7 Business logic 'what the product DECIDES' (1191). The test clause is the heading itself: 'Test completeness — measure against the MAP, not line %' (1226), with 'Coverage % tells which lines ran, not which behaviors are tested' at 1233. Note: the sharp form of the decision test — 'could a product person have decided otherwise?' — is written at 2215, in the after-the-trace section, not in this one; here it reads as 'an area a product person would argue about' (1202)."
+  },
+  {
+   "claim": "Component C125 (Cross-cutting build instructions) is described as: Holds the rules that apply to every part of a build. It says how to write text a reader meets alone, with no page around it. It also sets the order of work, the tools to reach for, and how big one box may be.",
+   "grounded": true,
+   "evidence": "method.md:1332",
+   "skeptic": "description-1",
+   "note": "Read method.md 1330-1710: the section is 'Cross-cutting rules', and it opens with 'Write every reader-facing field to be read ALONE' (1332), pointing at the one shared writing-rules file every authoring contract appends. It sets the order of work ('Build order (internal) != present order', 1447), the tools to reach for ('Reach for the verb before the heredoc', 1399, plus the pre-index guidance at 1522), and how big one box may be (component granularity leaf rule 1590, diagram balance fan-out rule 1606)."
+  },
+  {
+   "claim": "Component C126 (Fan-out phase instructions) is described as: Plans the parallel work of a build in three phases. Many agents gather the pieces, one agent merges them, then many agents trace the goals. It says how to size each slice, brief it and wait for the batch.",
+   "grounded": true,
+   "evidence": "method.md:1720",
+   "skeptic": "description-1",
+   "note": "Read method.md 1718-2145: 'The build order maps to a fan-out workflow: parallel harvest -> barrier synthesis -> parallel trace' (1720), then Phase 1 Harvest 'fan out, one agent each' (1728), Phase 2 Synthesize 'barrier, one agent' (1937), Phase 3 Trace 'fan out, one agent per use case' (2083). Sizing, briefing and waiting are all there: slice sizing and 'dispatch the known-longest slice FIRST' (1842-1855), briefs built by `coyomap contract --fill` and dispatched by pointer (1747-1760), and the barrier with ONE `Monitor` (1822)."
+  },
+  {
+   "claim": "Component C127 (Verification phase instructions) is described as: Plans what happens once every goal has been traced. Fresh agents try to disprove each claim the map makes, against the code. Two more passes write what the product decides and measure what the tests cover.",
+   "grounded": true,
+   "evidence": "method.md:2290",
+   "skeptic": "description-1",
+   "note": "Read method.md 2146-2650: the section is 'After the trace — EVERY build (serial included)'. Phase 4 Adversarial verify is 'fan out, fresh context' and takes the audit's L2 grounding worklist 'and disprove it against the code' (2290-2296). The two other passes are there too: T7 business rules, one agent per block, after the trace (2164), and test completeness, one agent, walking the assembled map (2282). Qualifier: the skeptics are handed the risk-ranked L2 worklist, not literally every claim the map makes."
+  },
+  {
+   "claim": "Component C128 (Closing sequence instructions) is described as: Runs the closing steps that turn a finished map into a committed one. Corrections land, the record of what was checked is written, then the gates run. It ends by telling the reader where to open the map.",
+   "grounded": true,
+   "evidence": "method.md:2651",
+   "skeptic": "description-1",
+   "note": "Read method.md 2651-3115: 'Ordering — ONE sequence, and `coyomap ship` RUNS it' (2651) with the thirteen-step list at 2678-2702 — corrections first (steps 1-4: the refutation reconcile, anchor-drift, apply-drift --to-reconcile, the last structural assemble), then the record of what was checked (steps 5-7: grounding report, grounding write, re-assemble), then the gates (steps 11-12: validate --check-sources, audit, render, finalize --emit-gate-block) and the commit at step 13. It ends by telling the reader where to open the map: report the artifacts as links, then give the browser URL `http://127.0.0.1:8765/p/<repo-folder-name>/` (3104-3111)."
+  }
+ ]
+}

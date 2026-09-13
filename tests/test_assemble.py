@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex assemble` — structured-row fragments → the canonical model.
+"""Tests for `coyomap assemble` — structured-row fragments → the canonical model.
 
 Run either way (needs an editable install: `make deps`):
     python3 tests/test_assemble.py
@@ -13,13 +13,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import assemble
-from coyodex.assemble import (_infer_ce_verb, ensure_fragments_ignored, load_fragment,
+from coyomap import assemble
+from coyomap.assemble import (_infer_ce_verb, ensure_fragments_ignored, load_fragment,
                               load_fragment_paths, merge_fragments)
-from coyodex.model import (ExtraSection, ModelError, ProjectModel, load_model,
+from coyomap.model import (ExtraSection, ModelError, ProjectModel, load_model,
                            to_canonical_json)
 
-ASSEMBLE = [sys.executable, "-m", "coyodex.assemble"]
+ASSEMBLE = [sys.executable, "-m", "coyomap.assemble"]
 
 
 # --- C→E verb inference (regression after the verb families moved to grammar — DRY refactor) -------
@@ -239,7 +239,7 @@ def test_extra_accepts_natural_json_values():
 
 
 def test_extra_non_string_values_render_as_compact_json_in_the_md_view():
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     frag = json.dumps({"title": "T", "components": [
         {"id": "C1", "name": "X", "extra": {"Ports": [8080, 8443]}}]})
     model, problems = merge_fragments([("h.json", load_fragment(frag, "h.json"))])
@@ -251,7 +251,7 @@ def test_extra_non_string_values_render_as_compact_json_in_the_md_view():
 # --- files / evidence / package / alternative: real fields, rendered as their own T1/T2 columns ---
 
 def test_component_files_and_evidence_render_as_their_own_t1_columns():
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     frag = json.dumps({"title": "T", "components": [
         {"id": "C1", "name": "X", "files": ["src/v.py", "src/helpers.py"],
          "evidence": [{"file": "src/v.py:12", "why": "the entry point"}]}]})
@@ -264,7 +264,7 @@ def test_component_files_and_evidence_render_as_their_own_t1_columns():
 
 
 def test_dep_package_and_alternative_render_as_their_own_t2_columns():
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     frag = json.dumps({"title": "T", "deps": [
         {"id": "D1", "name": "MongoDB", "package": "motor ^3.7.0 (pyproject.toml)",
          "alternative": "file-backed storage in standalone mode"}]})
@@ -277,7 +277,7 @@ def test_dep_package_and_alternative_render_as_their_own_t2_columns():
 
 
 def test_files_and_evidence_columns_absent_when_unused():
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     frag = json.dumps({"title": "T", "components": [{"id": "C1", "name": "X"}]})
     model, problems = merge_fragments([("h.json", load_fragment(frag, "h.json"))])
     assert problems == []
@@ -288,7 +288,7 @@ def test_files_and_evidence_columns_absent_when_unused():
 # --- anchors are not fixed up ------------------------------------------------------
 # `assemble` no longer normalizes anchor drift (a markdown-linked anchor, a missing directory
 # slash, a retired `#Lnnn` suffix) — a fragment's fields pass through unchanged, and
-# `coyodex validate`'s `_check_anchor_format` (tests/test_validate_model.py) is what rejects a
+# `coyomap validate`'s `_check_anchor_format` (tests/test_validate_model.py) is what rejects a
 # wrong shape. These guard that no silent fix-up regrows here.
 
 def test_component_anchor_passes_through_unchanged():
@@ -365,7 +365,7 @@ def test_assemble_cli_writes_canonical_map_and_views():
         assert proc.returncode == 0, proc.stderr
         model = load_model((out / "project-map.json").read_text(encoding="utf-8"))
         assert model.title == "Demo" and [c.id for c in model.components] == ["C1"]
-        # The interactive viewer is served by `coyodex serve`, not baked, so assembly writes json + md
+        # The interactive viewer is served by `coyomap serve`, not baked, so assembly writes json + md
         # (the committed views) and no HTML file.
         assert (out / "project-map.md").exists() and not (out / "project-map.html").exists()
 
@@ -496,7 +496,7 @@ def test_assemble_notes_present_but_unpassed_reconcile_file():
 
 
 def test_load_reconcile_rejects_malformed_directives():
-    from coyodex.reconcile import ReconcileError, load_reconcile
+    from coyomap.reconcile import ReconcileError, load_reconcile
     for bad, needle in (('{"bogus": []}', "unknown top-level key"),
                         ('{"set": [{"subsystem": "S1"}]}', "missing 'ids'"),
                         ('{"set": [{"ids": ["C1"]}]}', "assigns no field"),
@@ -528,7 +528,7 @@ def test_grounding_survives_assemble():
     `grounding` is written as its own fragment by the Phase-4 reconcile. Left out of the singleton
     merge it was silently DROPPED by the only code path that writes a map, so `validate` then
     reported a fully-grounded map as never challenged — and a re-assemble wiped any hand-edit."""
-    from coyodex.model import Grounding, ProjectModel
+    from coyomap.model import Grounding, ProjectModel
     frag = ProjectModel(grounding=Grounding(claims_total=150, claims_challenged=40,
                                             claims_refuted=7, note="security first"))
     merged, problems = merge_fragments([("verify.json", frag)])
@@ -540,7 +540,7 @@ def test_grounding_survives_assemble():
 
 
 def test_conflicting_grounding_records_are_reported():
-    from coyodex.model import Grounding, ProjectModel
+    from coyomap.model import Grounding, ProjectModel
     a = ProjectModel(grounding=Grounding(claims_total=10))
     b = ProjectModel(grounding=Grounding(claims_total=99))
     _, problems = merge_fragments([("a.json", a), ("b.json", b)])
@@ -623,7 +623,7 @@ def make_fragment_file(dir_path: Path, name: str, body: dict) -> Path:
 
 
 def test_every_path_is_attempted_so_one_bad_fragment_does_not_hide_the_next():
-    from coyodex.assemble import load_fragment_paths
+    from coyomap.assemble import load_fragment_paths
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         good = make_fragment_file(d, "good.json", {"components": [
@@ -646,7 +646,7 @@ def test_every_path_is_attempted_so_one_bad_fragment_does_not_hide_the_next():
 def test_a_verdicts_file_swept_into_the_glob_is_skipped_with_a_note():
     # was: `_is_verdicts_file` keyed on "shares no ProjectModel field", but `grounding` IS one, so
     # it was unconditionally False — the skip never fired and the build died on a schema error.
-    from coyodex.assemble import load_fragment_paths
+    from coyomap.assemble import load_fragment_paths
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         good = make_fragment_file(d, "good.json", {"components": [
@@ -663,7 +663,7 @@ def test_a_verdicts_file_swept_into_the_glob_is_skipped_with_a_note():
 def test_the_grounding_fragment_is_NOT_mistaken_for_a_verdicts_file():
     # `grounding write` emits {"grounding": {record}} into build-fragments/ — an object, not a list.
     # Skipping it would silently drop the map's grounding record.
-    from coyodex.assemble import load_fragment_paths
+    from coyomap.assemble import load_fragment_paths
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         frag = make_fragment_file(d, "grounding.json", {"grounding": {
@@ -694,7 +694,7 @@ def test_assemble_fails_the_build_and_writes_nothing_when_a_fragment_is_bad():
 def test_a_draft_fragment_is_skipped_by_name():
     """The harvest contract promised the `.draft.json` suffix "keeps a half-written file out of the
     assemble glob". It did not: `*.draft.json` matches `*.json` and nothing looked at the name."""
-    from coyodex.assemble import load_fragment_paths
+    from coyomap.assemble import load_fragment_paths
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         good = make_fragment_file(d, "h-a.json", {"components": [
@@ -719,7 +719,7 @@ def make_extras_fragment(name: str, heading: str, body: str) -> tuple[str, Proje
 def test_same_named_extras_sections_are_merged_into_one():
     """A live map shipped five `Entry-point coverage` sections, three `Balance exceptions` and two
     `Coverage exceptions` — one per contributing fragment, simply concatenated."""
-    from coyodex.assemble import merge_fragments
+    from coyomap.assemble import merge_fragments
     out, problems = merge_fragments([
         make_extras_fragment("a.json", "Entry-point coverage", "- first"),
         make_extras_fragment("b.json", "Entry-point coverage", "- second"),
@@ -736,8 +736,8 @@ def test_merging_headings_makes_record_replace_reach_every_line():
     """The write path this actually fixes: `record.append_line` resolves a heading with the FIRST
     matching section, so with the sections split a `--replace` aimed at a line in a later one
     matched nothing and reported "nothing replaced"."""
-    from coyodex.assemble import merge_fragments
-    from coyodex.record import append_line
+    from coyomap.assemble import merge_fragments
+    from coyomap.record import append_line
     out, _ = merge_fragments([
         make_extras_fragment("a.json", "Balance exceptions", "- alpha: original why"),
         make_extras_fragment("b.json", "Balance exceptions", "- beta: original why"),
@@ -754,7 +754,7 @@ def test_a_heading_written_in_another_case_is_the_same_section():
     """Matching reuses `record._resolve_heading` rather than a third implementation, so it is
     case- and outer-space-tolerant (it does NOT normalise interior spacing — that would silently
     accept a heading no check reads)."""
-    from coyodex.assemble import merge_fragments
+    from coyomap.assemble import merge_fragments
     out, _ = merge_fragments([
         make_extras_fragment("a.json", "Coverage exceptions", "- one"),
         make_extras_fragment("b.json", "  coverage exceptions  ", "- two"),
@@ -768,8 +768,8 @@ def test_a_heading_written_in_another_case_is_the_same_section():
 def test_the_keep_edges_count_reaches_the_assemble_digest():
     """H1 shipped with no test: `keep_edges` removed 51 edges on a real map and the digest said
     nothing, reproducing the exact silence the directive was added to stop."""
-    from coyodex.assemble import _assemble_digest
-    from coyodex.model import ProjectModel
+    from coyomap.assemble import _assemble_digest
+    from coyomap.model import ProjectModel
     line = _assemble_digest(ProjectModel(title="T", goal="g"), {},
                             {"duplicate_edges_resolved": 51})
     assert "keep_edges 51" in line, line
@@ -1025,14 +1025,14 @@ def _stats_keys_written(module_name: str, dict_name: str) -> set[str]:
 
 
 def test_every_assemble_stats_counter_has_a_digest_label():
-    written = _stats_keys_written("coyodex.assemble", "stats")
+    written = _stats_keys_written("coyomap.assemble", "stats")
     labelled = {k for k, _ in assemble._STATS_LABELS}
     assert written <= labelled, f"counter(s) computed but never printed: {sorted(written - labelled)}"
     assert labelled <= written, f"label(s) for a counter nothing writes: {sorted(labelled - written)}"
 
 
 def test_every_reconcile_stats_counter_has_a_digest_label_or_a_custom_renderer():
-    written = _stats_keys_written("coyodex.reconcile", "stats")
+    written = _stats_keys_written("coyomap.reconcile", "stats")
     accounted = {k for k, _ in assemble._REC_STATS_LABELS} | set(assemble._REC_STATS_CUSTOM)
     assert written <= accounted, f"reconcile counter(s) never printed: {sorted(written - accounted)}"
     assert accounted <= written, f"label(s) for a counter nothing writes: {sorted(accounted - written)}"
@@ -1165,7 +1165,7 @@ def test_failure_survives_a_tail_because_stdout_is_line_buffered():
 
         # `2>&1 | tail -2`, the exact shell the build used.
         merged = subprocess.run(
-            f"{sys.executable} -m coyodex.cli assemble {d}/h.json {d}/a.json {d}/t.json "
+            f"{sys.executable} -m coyomap.cli assemble {d}/h.json {d}/a.json {d}/t.json "
             f"--out {d}/out --reconcile {d}/reconcile.json 2>&1 | tail -2",
             shell=True, capture_output=True, text=True).stdout
         lines = [ln for ln in merged.splitlines() if ln.strip()]
@@ -1183,7 +1183,7 @@ def test_failure_survives_a_tail_because_stdout_is_line_buffered():
 def test_a_duplicate_id_inside_one_fragment_is_a_merge_problem():
     """The help promises a refusal; two rows with one id in ONE file assembled to a map carrying
     both, exit 0, and only `validate` caught it downstream."""
-    from coyodex.model import Component
+    from coyomap.model import Component
     frag = ProjectModel()
     frag.components = [Component(id="C1", name="A", purpose="a"), Component(id="C1", name="B", purpose="b")]
     _model, problems = merge_fragments([("h-one.json", frag)])
@@ -1194,7 +1194,7 @@ def test_a_recorded_correction_into_a_stray_file_is_refused_on_replay_too():
     """The guard in `fix apply-drift` stops a new stray correction; a stray recorded BEFORE the
     guard existed sits in `reconcile.json` and would be re-applied on every assemble."""
     import subprocess, tempfile
-    from coyodex.model import FORMAT
+    from coyomap.model import FORMAT
     frag = {"format": FORMAT, "title": "t", "goal": "g",
             "components": [{"id": "C1", "name": "A", "purpose": "a", "source": "a.py:1", "files": ["a.py"]},
                            {"id": "C2", "name": "B", "purpose": "b", "source": "b.py:1", "files": ["b.py"]}],

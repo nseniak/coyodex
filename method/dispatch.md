@@ -1,22 +1,22 @@
-# Dispatch — what to do when coyodex is invoked
+# Dispatch — what to do when coyomap is invoked
 
-The user invoked coyodex on a repo. Decide the mode, then read the listed doc(s) **fully** and
-follow them — don't restate them or work from memory. The tooling is the `coyodex` CLI, installed
-into this clone's venv (`.venv/bin/coyodex`; source under `tools/coyodex/`).
+The user invoked coyomap on a repo. Decide the mode, then read the listed doc(s) **fully** and
+follow them — don't restate them or work from memory. The tooling is the `coyomap` CLI, installed
+into this clone's venv (`.venv/bin/coyomap`; source under `tools/coyomap/`).
 The clone's `internal/` folder is design rationale, not the method — ignore it.
 
-**Path reminder:** every `method.md` / `method/...` / template / `.venv/bin/coyodex` path below is
-under the coyodex clone (`COYODEX_HOME` from the skill), **not** the repo you are mapping (your cwd).
-Read/run them with that absolute prefix. Only `.coyodex/...` paths are in the analyzed repo.
+**Path reminder:** every `method.md` / `method/...` / template / `.venv/bin/coyomap` path below is
+under the coyomap clone (`COYOMAP_HOME` from the skill), **not** the repo you are mapping (your cwd).
+Read/run them with that absolute prefix. Only `.coyomap/...` paths are in the analyzed repo.
 
 ## Step 0 — brief the user BEFORE doing anything else
 
-The first thing the user sees must be what coyodex is about to read, and what the map will claim
+The first thing the user sees must be what coyomap is about to read, and what the map will claim
 about the code. Run this immediately — before choosing a mode, before reading the repo (an ABSOLUTE
 path: your cwd is the analyzed repo, which has no `.venv/`):
 
 ```
-<COYODEX_HOME>/.venv/bin/coyodex scope --repo <repo>
+<COYOMAP_HOME>/.venv/bin/coyomap scope --repo <repo>
 ```
 
 **Show its output verbatim, as your first message.** Do not summarise, re-word or "the highlights
@@ -24,9 +24,9 @@ are" it. **First message means FIRST: before the first tool call, not after the 
 build ran `scope` at turn 6 and emitted exactly two user-facing messages in its first seventy
 turns, neither of them the briefing and neither naming the mode; the operator learned what the map
 had covered only when the map was finished. The briefing is cheap to print and impossible to
-reconstruct later, because by then the reader has the map and no reason to doubt its scope. It states the rule that decides the file set (git, minus `.gitignore`, minus coyodex's
+reconstruct later, because by then the reader has the map and no reason to doubt its scope. It states the rule that decides the file set (git, minus `.gitignore`, minus coyomap's
 built-in exclusions — `node_modules/`, `dist/`, build output, lock files — minus
-`.coyodex/.ignore`), how many files that came to, what each ignore pattern removed — naming any
+`.coyomap/.ignore`), how many files that came to, what each ignore pattern removed — naming any
 pattern that removed nothing — and what the commit pin will mean. Paraphrase it and the narrowing
 turns into silence, after which the map reads complete because the evidence of what it skipped never
 reached the person reading it. The only paths it lists are the uncommitted ones; the in-scope and
@@ -42,7 +42,7 @@ Then, with the mode decided, act on what the briefing said about the pin:
 - **Uncommitted code, and the mode is Build (or a rebuild)** → ask before starting the work, and say
   which mode you are in so the question has a reason. This is the same A/B choice `method.md`'s pin
   gate asks, moved from the END of the build to the front, where changing your mind is free:
-  - **A (recommended)** — **the user** commits or stashes the code, then you re-run `coyodex scope`
+  - **A (recommended)** — **the user** commits or stashes the code, then you re-run `coyomap scope`
     (show it again — it is the same briefing about a now-different tree) and continue. Never commit
     or stash the user's code yourself: it is their working tree and their commit message, and this
     step is a question, not a mandate.
@@ -62,14 +62,14 @@ about what it decided is the thing Step 0 exists to prevent.
 ## Step 1 — did the user name a mode?
 
 If the invocation explicitly names a mode — **`build`**, **`analyze`**, or **`accept`** (the verbs
-the README teaches, e.g. `/coyodex analyze`) — do that mode directly: Build → `method.md`, Analyze /
-Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall through to Step 2.)
+the README teaches, e.g. `/coyomap analyze`) — do that mode directly: Build → `method.md`, Analyze /
+Accept → `method/change-impact.md`. (Bare `/coyomap` names nothing, so fall through to Step 2.)
 
 A **request to see one thing in the map** ("show me the use case about rate limiting in the map",
 "link to the component that sends invoices", "open the map on this rule") is a **Link**: no build,
-no analysis, nothing written. Find the element in `.coyodex/project-map.json` (grep for the words the
-user used; `coyodex dump --id <ID>` says what an id is), then run
-`<COYODEX_HOME>/.venv/bin/coyodex url <ID> --repo <repo>` and end the answer with the address it
+no analysis, nothing written. Find the element in `.coyomap/project-map.json` (grep for the words the
+user used; `coyomap dump --id <ID>` says what an id is), then run
+`<COYOMAP_HOME>/.venv/bin/coyomap url <ID> --repo <repo>` and end the answer with the address it
 prints — clickable, opening the running map on that element. `--context` gives the element's home
 view with it lit instead of its own page. Never compose the address by hand: the part after `#` is
 the viewer's own grammar, and the port belongs to whichever server is running.
@@ -81,10 +81,10 @@ not treat such a request as "nothing to analyze / baseline up to date".
 
 ## Step 2 — is there already a baseline?
 
-Look **only at the working tree** of the analyzed repo for `.coyodex/project-map.json`. If the file
+Look **only at the working tree** of the analyzed repo for `.coyomap/project-map.json`. If the file
 is not on disk, **there is no baseline — even if git history still has a committed copy.** A deleted
 working-tree file is a deliberate signal to start from scratch. **Never restore, `git checkout`,
-`git show`, or otherwise recover a deleted `.coyodex/` file from git; never treat a git-committed
+`git show`, or otherwise recover a deleted `.coyomap/` file from git; never treat a git-committed
 copy as the baseline when the working-tree file is gone.** Fall through to Build below.
 
 ### No baseline → Build
@@ -92,7 +92,7 @@ copy as the baseline when the working-tree file is gone.** Fall through to Build
 Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`, and
 `method/diagrams.md` — `method.md` cites it as the authority on Happy-Path rendering and the
 leaf-only map, and it was missing from this list, so a whole build never opened it): agents return
-structured rows and `coyodex assemble` writes the model + views.
+structured rows and `coyomap assemble` writes the model + views.
 
 **`method.md` is ~2,500 lines and cannot be read in one tool call.** A `cat` and a `sed -n
 '1,400p'` both overflow the tool-result cap and spill into a persisted-output file that nobody then
@@ -108,7 +108,7 @@ failed, and 400 was never the ceiling — it was just the first thing tried. Re-
 `method.md` grows past ~2,700 lines; do not raise it on a guess, because the failure mode is a
 silent spill to a file nobody opens.
 
-**When you archive, remember the archived map at the GATE.** `coyodex finalize --access-baseline
+**When you archive, remember the archived map at the GATE.** `coyomap finalize --access-baseline
 <archived-map.json>` adds one advisory leg: files that held ACCESS enforcement in that map and are
 named by no access rule in the new one. It runs after the map is written, so it cannot contaminate
 the rebuild, and before the commit, which is the last moment anybody looks. It is not a
@@ -123,29 +123,29 @@ gate that sees an auth claim disappear between two maps of unchanged code. (The 
 name `'access-baseline <path>: <why>'` under "Audit exceptions", whose keys are ids, not paths — so
 one live build wrote twenty records that nothing could read and nothing ever read.)
 
-**Archiving an existing map is `coyodex-eval archive <repo>`.** Say so before the rest of this
+**Archiving an existing map is `coyomap-eval archive <repo>`.** Say so before the rest of this
 paragraph, because the rest is a prohibition and the command is the permitted action: a build asked
-to archive first did it by hand — `mv .coyodex .coyodex-archive-<date>` — before the skill was even
+to archive first did it by hand — `mv .coyomap .coyomap-archive-<date>` — before the skill was even
 loaded, which left ~59 files of the old map inside the harvest scope (2731 analysed against 2672
 once it was filed properly), and then spent four turns discovering the command in `--help`. It files
-the map under `.coyodex/dev-rebuilds/NNNN/`, which is excluded from the walk.
+the map under `.coyomap/dev-rebuilds/NNNN/`, which is excluded from the walk.
 
 **Read the retro backlog's open experiments — this is the only place they reach a build.**
-`COYODEX_HOME/eval/retro/backlog.md` ends with "Open — questions a retro could not answer", and some
+`COYOMAP_HOME/eval/retro/backlog.md` ends with "Open — questions a retro could not answer", and some
 of those rows carry `owner: the next build`. Nothing put them in front of one. Question 3 was raised
 on 2026-08-19 with its whole experiment written out — *"re-run ONE block's rule worker with a
-`coyodex dump --members`-derived candidate list instead of the hand-curated one, and compare which
+`coyomap dump --members`-derived candidate list instead of the hand-curated one, and compare which
 files earn sites. One extra agent on the next build"* — and the next build ran nine rule agents,
 none of them that one, then a retrospective parked the same question a third time. Read the table,
 run any row owned by the build (they are costed in agents, and so far always ONE), and say in the
 final report what it returned. A question nobody can be assigned is a question nobody answers.
-(This is a COYODEX-DEVELOPER step: a user of coyodex has no backlog. Skip it when the file is absent.)
+(This is a COYOMAP-DEVELOPER step: a user of coyomap has no backlog. Skip it when the file is absent.)
 
 **Do not open a previous map while building.** Not the one git still has, and not one filed under
-`.coyodex/dev-rebuilds/` (the coyodex author's own archive; a user of coyodex never has that
+`.coyomap/dev-rebuilds/` (the coyomap author's own archive; a user of coyomap never has that
 directory). A build that reads the map it is replacing is no longer independent of it: the new text
 may even be right, but nobody can tell any more, and an eval comparing two maps of one repo reads
-the agreement as convergence when it is copying. Archiving the old map (`coyodex-eval archive`) is
+the agreement as convergence when it is copying. Archiving the old map (`coyomap-eval archive`) is
 filing it, not consulting it, and stays fine. If a project genuinely needs a vocabulary to stay
 stable across rebuilds, record it in the map (`Bucket vocabulary`) so the next build inherits it
 from a DECLARATION rather than by reading the artifact. (L3 assertion 29 watches this.)
@@ -157,12 +157,12 @@ loses manual fixes and the pin history. So it is **never** the default. Read the
 the model's `commit` / `committed` fields, then:
 
 1. **Is there anything to analyze?** Compare the pin to the **current working tree** (so a later
-   commit *and* uncommitted edits both count), ignoring coyodex's own files. The tree matches the pin
+   commit *and* uncommitted edits both count), ignoring coyomap's own files. The tree matches the pin
    only when there is no diff **and** no untracked file:
 
    ```
-   git -C <repo> diff --quiet <pin> -- . ':(exclude).coyodex' \
-     && [ -z "$(git -C <repo> ls-files --others --exclude-standard -- . ':(exclude).coyodex')" ]
+   git -C <repo> diff --quiet <pin> -- . ':(exclude).coyomap' \
+     && [ -z "$(git -C <repo> ls-files --others --exclude-standard -- . ':(exclude).coyomap')" ]
    ```
 
    (Use the pin's bare sha; if the pin ends in `-dirty` it never matched a clean commit, so skip
@@ -170,8 +170,8 @@ the model's `commit` / `committed` fields, then:
 
    - **Both true — current source == the pin** → the baseline is current. Tell the user
      `baseline is up to date @ commit <id> from <date>` and stop; do **not** produce an empty diff.
-     (If only the committed `.coyodex/project-map.md` view is stale, just re-render it with
-     `coyodex render … project-map.md` — that is a render, not a rebuild.)
+     (If only the committed `.coyomap/project-map.md` view is stale, just re-render it with
+     `coyomap render … project-map.md` — that is a render, not a rebuild.)
    - **Otherwise — the source differs** (a later commit, uncommitted edits, or new files) →
      **Analyze**: read `method/change-impact.md` and follow it. The diff it computes is
      `git diff <pin>` (pin → working tree) plus any untracked files.
@@ -183,7 +183,7 @@ the model's `commit` / `committed` fields, then:
    component in two", "create a subsystem for the reporting components", "add a use case for an admin
    resetting a password". This is **not** Analyze (there may be no code change to diff) — do it
    directly:
-   - **Make the edit surgically to the model** (`.coyodex/project-map.json`) — the same field/array
+   - **Make the edit surgically to the model** (`.coyomap/project-map.json`) — the same field/array
      edits Accept applies (`method/change-impact.md`), never a rebuild.
    - **Stay grounded in the code** (the same rule as Build): a map describes what the code does, so
      reorganize / rename / re-drill what exists, but do not invent elements the code doesn't back — an
@@ -199,23 +199,23 @@ the model's `commit` / `committed` fields, then:
 
 ## Invariant (every mode)
 
-The map is the single source at the analyzed repo's `.coyodex/project-map.json`; the committed
-`.coyodex/project-map.md` is a generated view of it (never hand-edited), and the interactive C4
-diagram is served live by `coyodex serve` (not a committed file). After every write — **including a
+The map is the single source at the analyzed repo's `.coyomap/project-map.json`; the committed
+`.coyomap/project-map.md` is a generated view of it (never hand-edited), and the interactive C4
+diagram is served live by `coyomap serve` (not a committed file). After every write — **including a
 Direct map change made at the user's request**, not only Build / Accept — the invariant is
-**validate → audit → render**. Validate (`coyodex validate --check-sources`) checks schema +
-semantics (and that the committed markdown view is fresh); audit (`coyodex audit`) is the adversarial
+**validate → audit → render**. Validate (`coyomap validate --check-sources`) checks schema +
+semantics (and that the committed markdown view is fresh); audit (`coyomap audit`) is the adversarial
 pass — it makes the narrative Happy Path and
 the mechanism flows/edges refute each other. It blocks only on a hard contradiction (a forward/dangling
 `why:` reference); read-before-create and actor-attribution are ADVISORY (lossy attribution — reconcile,
 don't treat as fact), and it prints an L2 grounding worklist to disprove against the code with
-fresh-context skeptics (see `method.md`); render (`coyodex render … project-map.md`) — the markdown
+fresh-context skeptics (see `method.md`); render (`coyomap render … project-map.md`) — the markdown
 view is a rendering, never a second source, and the diagram is served on demand from the model.
 
 **Going deeper stays in the one map.** When a part of the system needs finer detail than its current
 altitude, refine it IN PLACE — nest subsystems/subdomains, or promote a leaf component into a subsystem
 (see `method.md` "Drilling deeper"). The viewer drills these nested levels recursively. **Never write a
-second map file** (a per-area `.coyodex/<area>/project-map.md` "child map"): a separate file is a
+second map file** (a per-area `.coyomap/<area>/project-map.md` "child map"): a separate file is a
 separate ID space, so cross-references can't resolve, bidirectional links and shared elements break, the
 viewer can't drill across it, and Analyze/Accept/change-impact only ever track this one baseline. Child
 maps are **not supported**.

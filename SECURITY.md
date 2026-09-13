@@ -1,6 +1,6 @@
 # Security Policy
 
-coyodex is **alpha (v0.1.0)** software. We take security reports seriously, but
+coyomap is **alpha (v0.1.0)** software. We take security reports seriously, but
 please note there is no formal support contract or guaranteed response time yet.
 
 ## Supported versions
@@ -23,7 +23,7 @@ Report it privately through one of these channels:
    repository's **Security** tab → **Report a vulnerability**. This opens a
    private advisory visible only to the maintainers.
 2. **Email.** If you can't use the form, email **nseniak@gmail.com** with
-   `coyodex security` in the subject line.
+   `coyomap security` in the subject line.
 
 Please include:
 
@@ -37,20 +37,20 @@ release notes unless you'd rather stay anonymous.
 
 ## Scope and threat model
 
-coyodex runs **locally**, driven from your AI coding agent. It reads your repo,
-writes a map under `.coyodex/`, and serves an **interactive viewer** over a local
-HTTP server (`coyodex serve`, bound to 127.0.0.1). A few things worth keeping in
+coyomap runs **locally**, driven from your AI coding agent. It reads your repo,
+writes a map under `.coyomap/`, and serves an **interactive viewer** over a local
+HTTP server (`coyomap serve`, bound to 127.0.0.1). A few things worth keeping in
 mind when assessing risk:
 
-- The viewer is served by `coyodex serve`: a generic frontend fetches the map's
+- The viewer is served by `coyomap serve`: a generic frontend fetches the map's
   data (and, on demand, source files read from git at the map's commit) from the
   local server. Reports about the viewer or server mishandling repo content (for
   example, unescaped file paths or code rendered into the page, or the server
   serving files outside the mapped commit) are in scope.
-- The Python tooling under `tools/coyodex/` parses the map and analysis files. Reports
+- The Python tooling under `tools/coyomap/` parses the map and analysis files. Reports
   about parsing untrusted map/analysis input unsafely are in scope.
-- coyodex sends your code and map context to whatever AI agent / model you drive
+- coyomap sends your code and map context to whatever AI agent / model you drive
   it with. How that third-party agent handles your data is **out of scope** for
   this policy — review your agent's own privacy and security terms.
 
-Thanks for helping keep coyodex and its users safe.
+Thanks for helping keep coyomap and its users safe.

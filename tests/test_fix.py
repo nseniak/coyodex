@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex fix` — the in-place reconcile verbs (apply-drift / drop-edge / dedup-relation).
+"""Tests for `coyomap fix` — the in-place reconcile verbs (apply-drift / drop-edge / dedup-relation).
 
 Run either way (needs an editable install: `make deps`):
     python3 tests/test_fix.py
@@ -12,8 +12,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex import audit_model, fix
-from coyodex.model import FORMAT, load_model_path
+from coyomap import audit_model, fix
+from coyomap.model import FORMAT, load_model_path
 
 
 # --- builders -------------------------------------------------------------------
@@ -75,7 +75,7 @@ def test_apply_drift_rewrites_drifted_security_source():
     with tempfile.TemporaryDirectory() as td:
         mp, vp = write(td, m, {"grounding": []})
         # find the exact security claim string the worklist builds, then drift it
-        from coyodex.audit_model import l2_worklist_model
+        from coyomap.audit_model import l2_worklist_model
         sec_claim = next(w.claim for w in l2_worklist_model(load_model_path(mp))
                          if w.claim.startswith(claim_prefix))
         Path(vp).write_text(json.dumps({"grounding": [
@@ -92,7 +92,7 @@ def test_apply_drift_rewrites_security_and_leaves_a_paired_edge_untouched():
                  security=[{"surface": "POST /pay", "who": "admin", "source": "a.py:5"}])
     with tempfile.TemporaryDirectory() as td:
         mp, vp = write(td, m)
-        from coyodex.audit_model import l2_worklist_model
+        from coyomap.audit_model import l2_worklist_model
         sec_claim = next(w.claim for w in l2_worklist_model(load_model_path(mp))
                          if w.claim.startswith("Auth surface 'POST /pay'"))
         Path(vp).write_text(json.dumps({"grounding": [
@@ -291,7 +291,7 @@ def test_an_edge_anchor_is_still_rewritten_and_says_so_on_the_last_line(capsys):
 def make_model_touching_every_theme():
     """A model carrying at least one claim of EVERY theme the audit emits, so the partition test can
     ask the audit which themes it declares report-only instead of being told in a literal."""
-    from coyodex.model import load_model
+    from coyomap.model import load_model
 
     doc = make_map([{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"},
                     {"src": "C1", "verb": "uses", "dst": "D1", "why": "w", "where": "a.py:2"},
@@ -334,7 +334,7 @@ def test_the_writable_theme_partition_covers_every_theme_the_audit_emits():
     """F10's pin. `_WRITABLE_THEMES` partitions `audit_model._THEMES`, in a different module, with no
     guard — so a new claim kind would silently become "not applicable", and if it were writable
     `apply-drift` would quietly stop applying it. Same shape as the `_THEMES` closed-set test."""
-    from coyodex import audit_model
+    from coyomap import audit_model
     known = set(audit_model._THEMES)
     assert fix._WRITABLE_THEMES <= known, fix._WRITABLE_THEMES - known
     # Every theme is on exactly one side, and the split is the documented one.
@@ -508,7 +508,7 @@ def test_accept_suggested_never_silently_overrides_an_explicit_keep():
 
 def test_grounding_sub_verbs_also_answer_help(capsys):
     """The same hole lived in a second dispatcher; only the `fix` half was covered by a test."""
-    from coyodex import grounding
+    from coyomap import grounding
     for verb in ("write", "report"):
         assert grounding.main([verb, "--help"]) == 0, verb
         assert capsys.readouterr().out.strip(), f"grounding {verb} printed no help"
@@ -517,7 +517,7 @@ def test_grounding_sub_verbs_also_answer_help(capsys):
 def test_subverb_help_falls_back_to_the_whole_usage_when_no_block_matches():
     """The fallback is the branch production actually takes for 2 of the 6 surfaces, so it is the
     one that must never print nothing."""
-    from coyodex import subverb_help
+    from coyomap import subverb_help
     usage = "usage: tool <verb>\n\n  alpha --x\n      does alpha\n  beta --y\n      does beta\n"
     alpha = subverb_help.verb_block(usage, "alpha")
     assert alpha is not None and alpha.strip().startswith("alpha")
@@ -794,8 +794,8 @@ def test_apply_drift_to_reconcile_records_instead_of_editing_the_map():
 def test_a_recorded_anchor_is_applied_by_the_reconcile_pass():
     """The round trip: what `--to-reconcile` records, `assemble --reconcile` must apply — through
     the SAME writer, so the durable record and the in-place edit cannot disagree."""
-    from coyodex.model import load_model
-    from coyodex.reconcile import apply_reconcile, load_reconcile
+    from coyomap.model import load_model
+    from coyomap.reconcile import apply_reconcile, load_reconcile
     m = load_model(json.dumps(make_map(
         [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])))
     rec = load_reconcile(json.dumps(
@@ -807,8 +807,8 @@ def test_a_recorded_anchor_is_applied_by_the_reconcile_pass():
 def test_a_recorded_anchor_whose_claim_is_gone_notes_and_never_fails():
     """A reconcile file must not rot when a later fragment edit rewrites the claim it was keyed on —
     the same 0-match rule `drop_edges` and `keep_edges` already follow."""
-    from coyodex.model import load_model
-    from coyodex.reconcile import apply_reconcile, load_reconcile
+    from coyomap.model import load_model
+    from coyomap.reconcile import apply_reconcile, load_reconcile
     m = load_model(json.dumps(make_map(
         [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])))
     rec = load_reconcile(json.dumps(
@@ -925,8 +925,8 @@ def test_two_corrections_landing_on_one_row_are_both_refused():
     """A single-pass writer matched against the model it was mutating, so the outcome depended on
     worklist order: one order applied both corrections, the other skipped the second and left two
     byte-identical security rows behind."""
-    from coyodex.audit_model import apply_anchor_corrections, security_claim
-    from coyodex.model import load_model
+    from coyomap.audit_model import apply_anchor_corrections, security_claim
+    from coyomap.model import load_model
     m = load_model(json.dumps(make_security_map([
         {"surface": "S", "source": "a.py:1"}, {"surface": "S", "source": "b.py:2"}])))
     c0 = (security_claim("S", "a.py:1"), "b.py:2")
@@ -942,8 +942,8 @@ def test_two_corrections_landing_on_one_row_are_both_refused():
 
 
 def test_two_corrections_targeting_the_same_element_are_skipped_not_ordered():
-    from coyodex.audit_model import apply_anchor_corrections
-    from coyodex.model import load_model
+    from coyomap.audit_model import apply_anchor_corrections
+    from coyomap.model import load_model
     m = load_model(json.dumps(make_map(
         [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])))
     counts, notes = apply_anchor_corrections(
@@ -998,7 +998,7 @@ def test_drop_edge_to_reconcile_updates_rather_than_duplicating():
 def test_drop_edge_to_reconcile_emits_a_directive_the_real_loader_accepts():
     """The file is input to `assemble --reconcile`, so it must load through the real parser — the
     `reconcile --dry-run` class of defect is a writer emitting something the consumer rejects."""
-    from coyodex.reconcile import load_reconcile
+    from coyomap.reconcile import load_reconcile
     m = make_map([{"src": "C1", "verb": "calls", "dst": "E1", "where": "a.py:10"}])
     with tempfile.TemporaryDirectory() as td:
         mp, _ = write(td, m)
@@ -1054,7 +1054,7 @@ def test_the_usage_block_shown_is_the_one_for_the_verb_that_failed(capsys):
 def test_every_dispatched_fix_verb_answers_an_unknown_option_with_usage(capsys):
     """The six `--help` holes were six parsers forgetting the same thing separately. This is the pin
     that stops a seventh parser being written without the cure."""
-    from coyodex.subverb_help import verb_block
+    from coyomap.subverb_help import verb_block
 
     with tempfile.TemporaryDirectory() as td:
         m = Path(td) / "m.json"
@@ -1247,7 +1247,7 @@ def test_row_edits_survive_a_re_assemble_which_is_the_whole_point():
     with tempfile.TemporaryDirectory() as td:
         d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
         assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "durable"]) == 0
-        from coyodex import assemble as _asm
+        from coyomap import assemble as _asm
         assert _asm.main([*[str(p) for p in sorted(d.glob("*.json"))], "--out", str(d.parent)]) == 0
         m = json.loads((d.parent / "project-map.json").read_text())
         assert m["rules"][0]["risk"] == "durable"
@@ -1379,11 +1379,11 @@ def test_a_draft_fragment_is_a_NOTE_and_must_not_block_an_edit():
         assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "R"]) == 0
 
 
-def test_row_refuses_a_coyodex_dir_and_never_edits_the_assembled_map(capsys):
-    """Pointing `--fragments` at `.coyodex/` instead of `.coyodex/build-fragments/` is the obvious
+def test_row_refuses_a_coyomap_dir_and_never_edits_the_assembled_map(capsys):
+    """Pointing `--fragments` at `.coyomap/` instead of `.coyomap/build-fragments/` is the obvious
     slip, and it used to edit `project-map.json` — the build product the verb exists to avoid."""
     with tempfile.TemporaryDirectory() as td:
-        coy = Path(td) / ".coyodex"
+        coy = Path(td) / ".coyomap"
         coy.mkdir()
         (coy / "project-map.json").write_text(json.dumps(
             {**make_map([]), "rules": [make_rule("BR1", "A token is checked")]}), encoding="utf-8")
@@ -1433,7 +1433,7 @@ def test_row_keeps_an_ascii_escaped_fragment_ascii_escaped():
 # Verified before fixing: swapping this function's two returns passed all 1916 tests.
 
 def make_relation_model(entities: list[dict]):
-    from coyodex.model import load_model
+    from coyomap.model import load_model
     return load_model(json.dumps({**make_map([]), "entities": entities}))
 
 
@@ -1497,8 +1497,8 @@ def test_drop_all_refuses_to_make_a_reciprocal_judgement_for_you():
     a modelling judgement, and `fix`'s own header warns that a wrong drop deletes a real domain
     fact. Sweeping those silently would trade a quoting problem for a correctness one."""
     import json, tempfile, os
-    from coyodex.fix import main
-    m = {"format": "coyodex-map", "title": "t", "goal": "g",
+    from coyomap.fix import main
+    m = {"format": "coyomap-map", "title": "t", "goal": "g",
          "entities": [
              {"id": "E1", "name": "Order", "source": "a.py:1", "meaning": "m",
               "store": {"dep": "D1", "container": "o", "mode": "collection"},
@@ -1545,7 +1545,7 @@ def test_a_structured_field_can_be_rewritten_without_a_hand_script():
     with `python3 - <<'PY'` — the failure `fix` exists to remove — and the reason they hand-scripted
     them is that no flag could express a nested value."""
     import json, tempfile, os
-    from coyodex.fix import main
+    from coyomap.fix import main
     with tempfile.TemporaryDirectory() as tmp:
         d = _frag_dir(tmp, _entity_doc())
         new = {"states": ["open", "closed"],
@@ -1560,7 +1560,7 @@ def test_a_structured_field_can_be_rewritten_without_a_hand_script():
 def test_a_structured_edit_that_would_break_assembly_is_refused_like_a_text_one():
     """The JSON path must inherit every guard the text path has — it is the same write."""
     import json, tempfile, os
-    from coyodex.fix import main
+    from coyomap.fix import main
     with tempfile.TemporaryDirectory() as tmp:
         d = _frag_dir(tmp, _entity_doc())
         before = open(os.path.join(d, "domain.json")).read()
@@ -1572,7 +1572,7 @@ def test_a_field_the_row_does_not_have_is_refused_rather_than_invented():
     """Adding a key is a schema change, not a correction — and a typo'd field name would otherwise
     write a new one silently and pass every downstream check."""
     import tempfile
-    from coyodex.fix import main
+    from coyomap.fix import main
     with tempfile.TemporaryDirectory() as tmp:
         d = _frag_dir(tmp, _entity_doc())
         assert main(["row", "--fragments", d, "--id", "E1", "--set-json-staets", "[]"]) == 2
@@ -1602,7 +1602,7 @@ def _edge_why(d: Path) -> str:
 
 
 def test_an_edge_why_is_addressable_by_its_triple(tmp_path: Path) -> None:
-    from coyodex.fix import main
+    from coyomap.fix import main
     d = _edge_fragment(tmp_path)
     assert main(["row", "--fragments", str(d), "--edge", "C1:calls:C2",
                  "--set-why", "hands the request on"]) == 0
@@ -1610,14 +1610,14 @@ def test_an_edge_why_is_addressable_by_its_triple(tmp_path: Path) -> None:
 
 
 def test_a_triple_that_matches_nothing_is_refused_not_guessed(tmp_path: Path) -> None:
-    from coyodex.fix import main
+    from coyomap.fix import main
     d = _edge_fragment(tmp_path)
     assert main(["row", "--fragments", str(d), "--edge", "C1:reads:C2", "--set-why", "x"]) == 2
     assert _edge_why(d) == "reads the settings", "nothing may be written on a failed resolve"
 
 
 def test_a_malformed_triple_is_a_usage_error(tmp_path: Path) -> None:
-    from coyodex.fix import main
+    from coyomap.fix import main
     d = _edge_fragment(tmp_path)
     assert main(["row", "--fragments", str(d), "--edge", "C1:calls", "--set-why", "x"]) == 2
     assert main(["row", "--fragments", str(d), "--edge", "C1::C2", "--set-why", "x"]) == 2
@@ -1626,14 +1626,14 @@ def test_a_malformed_triple_is_a_usage_error(tmp_path: Path) -> None:
 def test_id_and_edge_are_not_combinable(tmp_path: Path) -> None:
     """They address different things; guessing which one the caller meant is the failure mode every
     other resolver here refuses."""
-    from coyodex.fix import main
+    from coyomap.fix import main
     d = _edge_fragment(tmp_path)
     assert main(["row", "--fragments", str(d), "--id", "C1", "--edge", "C1:calls:C2",
                  "--set-why", "x"]) == 2
 
 
 def test_neither_id_nor_edge_is_a_usage_error(tmp_path: Path) -> None:
-    from coyodex.fix import main
+    from coyomap.fix import main
     d = _edge_fragment(tmp_path)
     assert main(["row", "--fragments", str(d), "--set-why", "x"]) == 2
 

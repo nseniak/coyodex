@@ -1,8 +1,8 @@
-"""Tests for `coyodex-eval arrows` — the check that catches a rebuild dropping true relations.
+"""Tests for `coyomap-eval arrows` — the check that catches a rebuild dropping true relations.
 
 The failure this exists for was silent in every other instrument at once: a rebuild lost 24 arrows,
 22 of them real, including all eight `plugin -> analytics` edges the trapdoor fixture plants as trap
-O3 — while `validate` passed, `audit` passed, and `coyodex-eval run` said DRIFT because the edge
+O3 — while `validate` passed, `audit` passed, and `coyomap-eval run` said DRIFT because the edge
 shrink came in at 27.4% against a 30% band.
 
 So the tests below pin the two things that would make this instrument useless:
@@ -18,12 +18,12 @@ import json
 import subprocess
 from pathlib import Path
 
-from coyodex_eval import arrows
+from coyomap_eval import arrows
 
 
 def make_map(commit: str, boxes: dict[str, str], edges: list[dict[str, str]]) -> dict[str, object]:
     """A map is just its rows. `boxes` is id -> source anchor; `edges` are src/verb/dst/where."""
-    return {"format": "coyodex-map", "commit": commit,
+    return {"format": "coyomap-map", "commit": commit,
             "components": [{"id": i, "source": s} for i, s in boxes.items()],
             "edges": list(edges)}
 
@@ -63,7 +63,7 @@ def test_an_arrow_is_addressed_by_the_files_its_ends_live_in() -> None:
 
 
 def test_the_same_arrow_matches_across_two_builds_that_renumbered_everything() -> None:
-    """This is the whole reason the command exists: `coyodex diff` matches by id and says in its
+    """This is the whole reason the command exists: `coyomap diff` matches by id and says in its
     own docstring that it cannot compare two independent builds."""
     old = make_map("abc", {"C1": "a.py:1", "C2": "b.py:1"},
                    [{"src": "C1", "verb": "calls", "dst": "C2", "where": "a.py:3"}])
@@ -151,10 +151,10 @@ def test_a_map_with_no_pin_is_refused_rather_than_assumed_unchanged(tmp_path: Pa
 def test_committing_the_previous_map_does_not_read_as_the_code_changing(tmp_path: Path) -> None:
     """The bug this check shipped with. Comparing the two pin STRINGS refused the first real pair it
     met, because the baseline map had been COMMITTED between the two builds. Seven files moved and
-    every one was under `.coyodex/`."""
+    every one was under `.coyomap/`."""
     repo, first = make_git_repo(tmp_path, {"a.py": "x = 1\n"})
-    (repo / ".coyodex").mkdir(exist_ok=True)
-    (repo / ".coyodex" / "project-map.json").write_text("{}", encoding="utf-8")
+    (repo / ".coyomap").mkdir(exist_ok=True)
+    (repo / ".coyomap" / "project-map.json").write_text("{}", encoding="utf-8")
     env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
            "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin:/usr/local/bin"}
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=env, capture_output=True)

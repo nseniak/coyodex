@@ -1,4 +1,4 @@
-"""`coyodex-eval live-numbers` — does a sentence about a live map still match the map?
+"""`coyomap-eval live-numbers` — does a sentence about a live map still match the map?
 
 The tests that matter here are the two the design turns on: a row goes STALE when the MAP moved,
 and DRIFTED when the COMMENT moved. A ledger that caught only the first would repeat the failure it
@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coyodex_eval import live_numbers as LN
+from coyomap_eval import live_numbers as LN
 
 
 # --- builders -------------------------------------------------------------------
-def make_repo(tmp: Path, body: str, rel: str = "tools/coyodex/thing.py") -> Path:
+def make_repo(tmp: Path, body: str, rel: str = "tools/coyomap/thing.py") -> Path:
     """A checkout holding one file with `body` in it."""
     repo = tmp / "repo"
     path = repo / rel
@@ -21,8 +21,8 @@ def make_repo(tmp: Path, body: str, rel: str = "tools/coyodex/thing.py") -> Path
     return repo
 
 
-def make_claim(quote: str, returns: str, site: str = "tools/coyodex/thing.py:2",
-               maps: tuple[str, ...] = ("coyodex",)) -> LN.Claim:
+def make_claim(quote: str, returns: str, site: str = "tools/coyomap/thing.py:2",
+               maps: tuple[str, ...] = ("coyomap",)) -> LN.Claim:
     """One ledger row whose measure always returns `returns`."""
     return LN.Claim(site=site, maps=maps, quote=quote, measure=lambda _m: returns, note="t")
 
@@ -47,14 +47,14 @@ def test_normalise_handles_docstring_js_and_sphinx_markers() -> None:
 def test_a_sentence_the_map_still_produces_holds(tmp_path: Path) -> None:
     repo = make_repo(tmp_path, "x = 1\n# the map has 5 saved records\ny = 2\n")
     claim = make_claim("the map has 5 saved records", "the map has 5 saved records")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert [r.verdict for r in rows] == ["holds"]
 
 
 def test_the_map_moving_makes_the_row_stale(tmp_path: Path) -> None:
     repo = make_repo(tmp_path, "x = 1\n# the map has 5 saved records\ny = 2\n")
     claim = make_claim("the map has 5 saved records", "the map has 9 saved records")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "STALE"
     assert rows[0].measured == "the map has 9 saved records"
 
@@ -63,15 +63,15 @@ def test_the_comment_moving_makes_the_row_drifted(tmp_path: Path) -> None:
     """The half a number-only ledger cannot see: somebody corrected the code and not the ledger."""
     repo = make_repo(tmp_path, "x = 1\n# the map has 9 saved records\ny = 2\n")
     claim = make_claim("the map has 5 saved records", "the map has 9 saved records")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "DRIFTED"
     assert "no longer in" in rows[0].detail
 
 
 def test_a_file_that_is_gone_is_drifted_not_an_error(tmp_path: Path) -> None:
     repo = make_repo(tmp_path, "x = 1\n")
-    claim = make_claim("anything", "anything", site="tools/coyodex/vanished.py:1")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    claim = make_claim("anything", "anything", site="tools/coyomap/vanished.py:1")
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "DRIFTED"
     assert "does not exist" in rows[0].detail
 
@@ -81,9 +81,9 @@ def test_a_map_nobody_supplied_skips_its_rows(tmp_path: Path) -> None:
     """Two of the three maps live outside this repo. A check that FAILS when it cannot look is a
     check people learn to ignore, so a missing map skips."""
     repo = make_repo(tmp_path, "# the map has 5 saved records\n")
-    claim = make_claim("the map has 5 saved records", "x", site="tools/coyodex/thing.py:1",
-                       maps=("coyodex", "mcpolis"))
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    claim = make_claim("the map has 5 saved records", "x", site="tools/coyomap/thing.py:1",
+                       maps=("coyomap", "mcpolis"))
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "skipped"
     assert "mcpolis" in rows[0].detail
 
@@ -93,7 +93,7 @@ def test_drift_is_seen_even_when_the_row_s_map_is_absent(tmp_path: Path) -> None
     with whether its map is to hand — but the skip ran first, so in the configuration the sweep
     actually runs in (no external maps) not one DRIFTED row could ever be reported."""
     repo = make_repo(tmp_path, "# the map has 9 saved records\n")
-    claim = make_claim("the map has 5 saved records", "x", site="tools/coyodex/thing.py:1",
+    claim = make_claim("the map has 5 saved records", "x", site="tools/coyomap/thing.py:1",
                        maps=("mcpolis",))
     rows = LN.run(repo, {}, (claim,))
     assert rows[0].verdict == "DRIFTED"
@@ -105,9 +105,9 @@ def test_a_measure_that_raises_is_reported_never_crashes_the_run(tmp_path: Path)
     def boom(_m: dict) -> str:
         raise KeyError("entities")
 
-    claim = LN.Claim(site="tools/coyodex/thing.py:1", maps=("coyodex",),
+    claim = LN.Claim(site="tools/coyomap/thing.py:1", maps=("coyomap",),
                      quote="the map has 5 saved records", measure=boom)
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "ERROR"
     assert "KeyError" in rows[0].detail
 
@@ -116,17 +116,17 @@ def test_a_measure_that_raises_is_reported_never_crashes_the_run(tmp_path: Path)
 def test_a_sentence_that_only_shifted_lines_still_holds_and_says_where(tmp_path: Path) -> None:
     repo = make_repo(tmp_path, "\n" * 30 + "# the map has 5 saved records\n")
     claim = make_claim("the map has 5 saved records", "the map has 5 saved records",
-                       site="tools/coyodex/thing.py:2")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+                       site="tools/coyomap/thing.py:2")
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "holds"
-    assert "moved to tools/coyodex/thing.py:31" in rows[0].detail
+    assert "moved to tools/coyomap/thing.py:31" in rows[0].detail
 
 
 def test_a_sentence_at_its_recorded_line_reports_no_move(tmp_path: Path) -> None:
     repo = make_repo(tmp_path, "x = 1\n# the map has 5 saved records\n")
     claim = make_claim("the map has 5 saved records", "the map has 5 saved records",
-                       site="tools/coyodex/thing.py:2")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+                       site="tools/coyomap/thing.py:2")
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].detail == ""
 
 
@@ -191,10 +191,10 @@ def test_a_broken_ledger_exits_2_and_a_stale_sentence_exits_1(tmp_path: Path) ->
     would have passed it."""
     repo = make_repo(tmp_path, "# the map has 5 saved records\n")
     stale = make_claim("the map has 5 saved records", "the map has 9 saved records",
-                       site="tools/coyodex/thing.py:1")
-    gone = make_claim("a sentence nobody wrote", "x", site="tools/coyodex/thing.py:1")
-    assert LN.run(repo, make_maps("coyodex"), (stale,))[0].verdict == "STALE"
-    assert LN.run(repo, make_maps("coyodex"), (gone,))[0].verdict == "DRIFTED"
+                       site="tools/coyomap/thing.py:1")
+    gone = make_claim("a sentence nobody wrote", "x", site="tools/coyomap/thing.py:1")
+    assert LN.run(repo, make_maps("coyomap"), (stale,))[0].verdict == "STALE"
+    assert LN.run(repo, make_maps("coyomap"), (gone,))[0].verdict == "DRIFTED"
 
 
 def test_a_malformed_site_is_reported_not_a_crash(tmp_path: Path) -> None:
@@ -202,16 +202,16 @@ def test_a_malformed_site_is_reported_not_a_crash(tmp_path: Path) -> None:
     killed the whole run instead of failing one row."""
     repo = make_repo(tmp_path, "# anything\n")
     claim = make_claim("anything", "anything", site="no-colon-here")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "DRIFTED"
     assert "path:line" in rows[0].detail
 
 
 def test_a_measure_returning_something_other_than_a_sentence_is_an_error(tmp_path: Path) -> None:
     repo = make_repo(tmp_path, "# the map has 5 saved records\n")
-    claim = LN.Claim(site="tools/coyodex/thing.py:1", maps=("coyodex",),
+    claim = LN.Claim(site="tools/coyomap/thing.py:1", maps=("coyomap",),
                      quote="the map has 5 saved records", measure=lambda _m: None)  # type: ignore[arg-type,return-value]
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "ERROR"
     assert "not a sentence" in rows[0].detail
 
@@ -221,10 +221,10 @@ def test_a_quote_longer_than_the_old_fixed_window_still_re_pins(tmp_path: Path) 
     silently reported no move however far the sentence had travelled."""
     quote = "\n".join(f"# line {i} of a very long sentence" for i in range(30))
     repo = make_repo(tmp_path, "\n" * 50 + quote + "\n")
-    claim = make_claim(quote, quote, site="tools/coyodex/thing.py:2")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+    claim = make_claim(quote, quote, site="tools/coyomap/thing.py:2")
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert rows[0].verdict == "holds"
-    assert "moved to tools/coyodex/thing.py:51" in rows[0].detail
+    assert "moved to tools/coyomap/thing.py:51" in rows[0].detail
 
 
 def test_a_sentence_written_twice_in_one_file_reports_the_pin_as_ambiguous(tmp_path: Path) -> None:
@@ -232,8 +232,8 @@ def test_a_sentence_written_twice_in_one_file_reports_the_pin_as_ambiguous(tmp_p
     line = "# the map has 5 saved records\n"
     repo = make_repo(tmp_path, line + "\n" * 100 + line)
     claim = make_claim("the map has 5 saved records", "the map has 5 saved records",
-                       site="tools/coyodex/thing.py:1")
-    rows = LN.run(repo, make_maps("coyodex"), (claim,))
+                       site="tools/coyomap/thing.py:1")
+    rows = LN.run(repo, make_maps("coyomap"), (claim,))
     assert "more than once" in rows[0].detail
 
 
@@ -242,7 +242,7 @@ def test_a_sentence_written_twice_in_one_file_reports_the_pin_as_ambiguous(tmp_p
 # main()'s exit-code split to `return 0` left all 21 earlier tests green: not one of them called
 # `main`, and not one of them ran a shipped measure — every runner test used a lambda.
 def run_cli(args: list[str]) -> int:
-    from coyodex_eval import cli
+    from coyomap_eval import cli
     return cli.main(["live-numbers", *args])
 
 
@@ -250,11 +250,11 @@ def test_the_cli_exits_1_on_a_stale_sentence_and_0_when_all_hold(tmp_path: Path,
                                                                  capsys) -> None:
     repo = make_repo(tmp_path, "# the map has 5 saved records\n")
     stale = make_claim("the map has 5 saved records", "the map has 9 saved records",
-                       site="tools/coyodex/thing.py:1")
+                       site="tools/coyomap/thing.py:1")
     holds = make_claim("the map has 5 saved records", "the map has 5 saved records",
-                       site="tools/coyodex/thing.py:1")
-    assert [r.verdict for r in LN.run(repo, make_maps("coyodex"), (stale,))] == ["STALE"]
-    assert [r.verdict for r in LN.run(repo, make_maps("coyodex"), (holds,))] == ["holds"]
+                       site="tools/coyomap/thing.py:1")
+    assert [r.verdict for r in LN.run(repo, make_maps("coyomap"), (stale,))] == ["STALE"]
+    assert [r.verdict for r in LN.run(repo, make_maps("coyomap"), (holds,))] == ["holds"]
 
 
 def test_a_map_that_will_not_open_exits_2_not_1(tmp_path: Path) -> None:
@@ -269,7 +269,7 @@ def test_a_map_that_will_not_open_exits_2_not_1(tmp_path: Path) -> None:
 def test_the_cli_exits_2_when_a_ledger_sentence_is_gone(tmp_path: Path) -> None:
     """A broken ledger is not the same news as a stale sentence, and must not share its exit code."""
     repo = tmp_path / "empty"
-    (repo / ".coyodex").mkdir(parents=True)
+    (repo / ".coyomap").mkdir(parents=True)
     assert run_cli(["--repo", str(repo)]) == 2
 
 
@@ -287,19 +287,19 @@ def test_every_shipped_measure_returns_a_sentence_shaped_like_its_quote() -> Non
     all."""
     import os
     import re
-    from coyodex import model as M
-    paths = {"coyodex": Path(__file__).resolve().parents[2] / ".coyodex" / "project-map.json",
-             "argus": Path("/Users/nitsanseniak/Projects/argus/.coyodex/project-map.json"),
-             "mcpolis": Path("/Users/nitsanseniak/mee6/repos/mcpolis/.coyodex/project-map.json")}
-    before = os.environ.get("COYODEX_SELF_MAP")
-    os.environ["COYODEX_SELF_MAP"] = "1"
+    from coyomap import model as M
+    paths = {"coyomap": Path(__file__).resolve().parents[2] / ".coyomap" / "project-map.json",
+             "argus": Path("/Users/nitsanseniak/Projects/argus/.coyomap/project-map.json"),
+             "mcpolis": Path("/Users/nitsanseniak/mee6/repos/mcpolis/.coyomap/project-map.json")}
+    before = os.environ.get("COYOMAP_SELF_MAP")
+    os.environ["COYOMAP_SELF_MAP"] = "1"
     try:
         maps = {n: M.load_model_path(p) for n, p in paths.items() if p.exists()}
     finally:
         if before is None:
-            os.environ.pop("COYODEX_SELF_MAP", None)
+            os.environ.pop("COYOMAP_SELF_MAP", None)
         else:
-            os.environ["COYODEX_SELF_MAP"] = before
+            os.environ["COYOMAP_SELF_MAP"] = before
     checked = 0
     for claim in LN.LEDGER:
         if any(n not in maps for n in claim.maps):

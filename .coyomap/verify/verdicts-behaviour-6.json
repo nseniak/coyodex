@@ -1,0 +1,256 @@
+{
+ "grounding": [
+  {
+   "claim": "SF1 step 8: C130 → I6 [in] — look for a map already in the project's map folder",
+   "grounded": true,
+   "evidence": "method/dispatch.md:75",
+   "skeptic": "behaviour-6",
+   "note": "Read dispatch.md:73-79: Step 2 says to look ONLY at the working tree of the analyzed repo for `.coyomap/project-map.json`, and never to recover a deleted copy from git. That is exactly the step's 'look for a map already in the project's map folder', at the cited line."
+  },
+  {
+   "claim": "SF2 step 1: C20 → C6 — run every name, link, story and record check over the map",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:156",
+   "skeptic": "behaviour-6",
+   "note": "Read cli.py:154-156: the `validate` branch calls `validate_model.main(_default_map(rest))`. validate_model.py holds 45 check functions, covering names (_check_leading_article), links (_check_story_anchors, check_anchor_existence_model), stories (_check_flows, _check_walk_records_still_true) and records (check_entity_sources_model, check_domain_relations)."
+  },
+  {
+   "claim": "SF2 step 2: C6 → E1 [in] — read the stored map back and refuse one whose shape is wrong",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:6585",
+   "skeptic": "behaviour-6",
+   "note": "Read validate_model.py:6583-6589: `m = load_model(resolved.read_text(...))` reads the stored map file and the `except ModelError` immediately below prints 'VALIDATION FAILED (schema)' and returns 1. Reading the map back and refusing a wrong shape both happen at and beside the cited line."
+  },
+  {
+   "claim": "SF2 step 3: C6 → I8 [in] — open every cited file and line to prove the code links exist",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:6265",
+   "skeptic": "behaviour-6",
+   "note": "Read validate_model.py:6256-6265, then the function it calls at 5845-5889: check_anchor_existence_model walks every anchor pair, resolves each to a real file under the repo roots, reads the file to count its lines (5878) and reports any cited line the file does not have. The cited line is the call site inside the `--check-sources` block."
+  },
+  {
+   "claim": "SF2 step 4: C20 → C21 — make the map's stories and its arrows refute each other",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:159",
+   "skeptic": "behaviour-6",
+   "note": "Read cli.py:157-159 (`audit_model.main`), audit_model.py:938-945 (the six checks) and check_precedence at 678-687, which walks the happy-path steps against the map's read/write touch sets. method/dispatch.md:198-200 states the same thing in words: audit 'makes the narrative Happy Path and the mechanism flows/edges refute each other'."
+  },
+  {
+   "claim": "SF2 step 5: C20 → C80 — render the map's readable view",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:165",
+   "skeptic": "behaviour-6",
+   "note": "Read cli.py:163-165: the `render` branch calls `render.main(rest)` in coyomap.viewer.render, which produces the markdown view of the map. The cited line is that call."
+  },
+  {
+   "claim": "SF2 step 6: C80 → I6 [out] — write the readable view beside the stored map",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/render.py:53",
+   "skeptic": "behaviour-6",
+   "note": "Read render.py:32-57: after loading the model from the given `.json`, line 53 is `out.write_text(model_to_markdown(model), ...)`, and line 40 refuses any output that is not a `.md`. The output path is the map's own folder (line 56 registers `out.parent`), so the readable view is written beside the stored map."
+  },
+  {
+   "claim": "SF20 step 1: R2 → I3 — open the map server's home address",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:639",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:633-640: do_GET checks the loopback host guard, splits the path, and when there are no path parts (the home address) sends the landing page. The step itself is the reader's own act of opening the address; what the code settles is that the home address exists and is served here."
+  },
+  {
+   "claim": "SF20 step 2: I3 → C83 [in] — pass the browser's request to the map server",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:640",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:633-642: the browser's GET arrives at do_GET (633) and the empty-path branch at 639-640 answers it with INDEX_HTML. The cited line is where the home-address request lands in the server."
+  },
+  {
+   "claim": "SF20 step 3: C83 → C85 — re-read the project folders this machine remembers",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:675",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:670-677: the `/api/recents` branch takes the state lock and calls `self.store.reload()` at 675, then rebuilds `Handler.projects`. The comment at 672-673 says why: a project registered since startup must show up without a restart. That is re-reading the remembered project folders."
+  },
+  {
+   "claim": "SF20 step 4: C83 → I3 [out] — list every remembered project with its title and its commit",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:677",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:677 (`return self._json(_recents_payload(self.store, self.projects))`) and _recents_payload at 597-620: each remembered folder becomes an item carrying `title` (610) and `commit` (614), plus path, goal and openability. Title and commit are both in the payload, as the step says."
+  },
+  {
+   "claim": "SF20 step 5: I3 → R2 — show one card per remembered project",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:1059",
+   "skeptic": "behaviour-6",
+   "note": "Read the landing page script in serve.py:1053-1070: loadRecents fetches /api/recents (1054) and loops over the result (1058), creating one `.card` div per remembered project (1059) carrying the map title (1067) and the short commit sha (1062)."
+  },
+  {
+   "claim": "SF20 step 6: R2 → I3 — pick a project card",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:1070",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:1069-1070: a card whose map is valid gets the `clickable` class and an onclick that sets `location.href='/p/'+encodeURIComponent(it.slug)+'/'`. Picking a project card navigates the browser to that project's own address."
+  },
+  {
+   "claim": "SF20 step 7: I3 → C83 [in] — pass the chosen project's address to the server",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:645",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:645-651: `/p/<slug>/...` is where the chosen project's address reaches the server — parts[1] is looked up in self.projects, a 404 is returned for an unknown slug, and the request is handed to _project. The map's anchor (730) is the RESPONSE (sending viewer.html), not the arrival of the request."
+  },
+  {
+   "claim": "SF20 step 8: C83 → C70 — send back the page frame every map is drawn with",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:730",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:722-735: with no sub-path, _project sends `_FRONTEND_DIR / 'viewer.html'` at line 730 (or the same file with the dev-reload script injected, 735). The comment at 726-727 calls it 'the generic shell — identical for every project', which is the page frame every map is drawn with."
+  },
+  {
+   "claim": "SF20 step 9: C70 → C60 — start the script that loads the map",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/viewer.html:359",
+   "skeptic": "behaviour-6",
+   "note": "Read viewer.html:359: `<script type=\"module\" src=\"/static/viewer.js\"></script>`, the last element before </body>. That is the shell starting the script that goes on to load the map (viewer.js:172 fetches the view bundle)."
+  },
+  {
+   "claim": "SF20 step 10: C60 → C83 — ask the server for this map's whole drawing data",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/viewer.js:172",
+   "skeptic": "behaviour-6",
+   "note": "Read viewer.js:165-178: a top-level await fetches `API_BASE + 'view'` at line 172 and passes the JSON to applyBundle at 174; the comment at 165-166 says every statement below needs it in place. That is the page asking the server for this map's whole drawing data."
+  },
+  {
+   "claim": "SF20 step 11: C83 → E1 [in] — read the stored project map",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:509",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:497-518 (project_view): line 509 is `model = load_model(proj.map_json.read_text(encoding='utf-8'))`, the read of the stored `.coyomap/project-map.json` for that project, done once and then cached on the Project."
+  },
+  {
+   "claim": "SF20 step 12: C83 → C80 — turn the stored map into the graph the browser draws",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:511",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:510-511: `graph = model_to_graph(model, extents)`. model_to_graph is defined in tools/coyomap/views.py:1049, the map-rendering module, and its return value is the node/edge graph the browser draws."
+  },
+  {
+   "claim": "SF20 step 13: C80 → E39 [out] — assemble the graph, one box per element",
+   "grounded": true,
+   "evidence": "tools/coyomap/views.py:1282",
+   "skeptic": "behaviour-6",
+   "note": "Read views.py:1279-1299, the `return {...}` that ends model_to_graph (defined at 1049): it emits `nodes` as one dict entry per element id (1289) alongside edges, happy_path, flows and subflows. One box per element, assembled at the cited line."
+  },
+  {
+   "claim": "SF20 step 14: C83 → C82 — pre-render every diagram, timeline and flow of this map",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:516",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:512-517: `build_view_bundle(graph, report..., proj.map_json.parent, model=model, extents=extents)`. The docstring at 498-502 says the bundle is 'the graph plus every pre-rendered diagram, flow, colour, and config flag the generic frontend needs', which is the pre-rendering the step names."
+  },
+  {
+   "claim": "SF20 step 15: C83 → C60 — return the finished drawing data",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:752",
+   "skeptic": "behaviour-6",
+   "note": "Read serve.py:747-755: the `view` API branch returns `self._json(project_view(proj))`, wrapped so a bad map yields a clean 500. That is the finished view bundle going back to the browser script that asked for it."
+  },
+  {
+   "claim": "SF20 step 16: C60 → C62 — draw the screen the address names",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/viewer.js:15892",
+   "skeptic": "behaviour-6",
+   "note": "Read viewer.js:15882-15892: LANDING picks a fallback view, and line 15892 calls `go((URL_SYNC && stateFromUrl(location.hash)) || { kind: LANDING })`. The comment at 15887 says the URL names the screen to open and the landing view is only the fallback — the address decides the screen drawn."
+  },
+  {
+   "claim": "SF20 step 17: C62 → I3 [out] — put the drawn map on the page",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/viewer.js:13104",
+   "skeptic": "behaviour-6",
+   "note": "Read viewer.js:13090-13114: after mermaid.render produces `svg` (13096), line 13104 is `diagram.innerHTML = svg`, followed by the label centring, slot filling and binding passes. That is where the drawn map is put into the page."
+  },
+  {
+   "claim": "SF20 step 18: I3 → R2 — show the reader the product's map",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/viewer.js:13104",
+   "skeptic": "behaviour-6",
+   "note": "Same paint, read at viewer.js:13090-13114: `diagram.innerHTML = svg` (13104) is what a reader ends up looking at, and 13105-13114 decorate it into the interactive map. This step is the reader-facing half of the write at step 17; there is no separate code line for a person seeing a page."
+  },
+  {
+   "claim": "UC1 Install coyomap into a coding agent: Someone who has cloned this project asks to install it. Their coding agent gains a new command, and the tools it drives are built and ready.",
+   "grounded": true,
+   "evidence": "Makefile:70",
+   "skeptic": "behaviour-6",
+   "note": "Read the Makefile: `install: deps` at line 70 copies skill/coyomap/SKILL.md into each skills home with the repo path baked in (74), which is how the agent gains `/coyomap`; the `deps` prerequisite at 39-40 pip-installs the CLI into the venv, which is the tools being built. The map's anchor (40) covers only the tools half."
+  },
+  {
+   "claim": "UC2 Build a project's first map: A person asks their coding agent for a map of a project that has none. A map of that project exists, pinned to the commit it describes.",
+   "grounded": true,
+   "evidence": "method/dispatch.md:81",
+   "skeptic": "behaviour-6",
+   "note": "Read skill/coyomap/SKILL.md:27 (the anchor — it points the agent at method/dispatch.md) and then dispatch.md:73-83: with no `.coyomap/project-map.json` in the working tree there is no baseline, and the '### No baseline → Build' section at 81 tells the agent to create one. The map's commit pin is written into the model (views.py:1283 reads m.commit)."
+  },
+  {
+   "claim": "UC3 Leave code off the map: A person names committed code the map is not meant to describe. Later maps leave that code out, and every count the tools print says so.",
+   "grounded": true,
+   "evidence": "tools/coyomap/ignorefile.py:195",
+   "skeptic": "behaviour-6",
+   "note": "Read ignorefile.py:182-199: load_ignore reads `<root>/.coyomap/.ignore` and parses it at line 195, returning an empty spec when the file is absent. validate_model.py:6279-6285 states the second half — the ignore file narrows the tree every check measures, and the narrowing is disclosed unconditionally so the printed counts say so."
+  },
+  {
+   "claim": "UC4 Serve the maps on this machine: A person starts the local map server. Every project they have mapped is listed on one page in their browser.",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:168",
+   "skeptic": "behaviour-6",
+   "note": "Read cli.py:166-168: the `serve` branch calls `serve.main(rest)`. serve.py:639-640 answers the home address with the landing page, whose script (1053-1070) lists one card per remembered project. The map's anchor (139) is the generic `_dispatch` call, one level above the serve branch."
+  },
+  {
+   "claim": "UC5 Explore a project's map: A person opens a project's map. They see what the product does and drill from one feature down to a single box.",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/viewer.html:118",
+   "skeptic": "behaviour-6",
+   "note": "Read viewer.html:112-120: line 118 is the Features view button (`data-view=\"usecases\" data-group=\"product\"`), commented as the product description then a grid of feature cards, each drilling to that feature's page. viewer.js:13015-13018 handles that drill (`s.kind === 'capability'` → renderUseCases), so opening a map and drilling from a feature is real."
+  },
+  {
+   "claim": "UC6 Open the code behind a box: A reader picks the code link on a box. The file opens at that line, in their own editor or on the code host.",
+   "grounded": false,
+   "evidence": "tools/coyomap/viewer/viewer.js:14943",
+   "skeptic": "behaviour-6",
+   "note": "The trigger and the outcome no longer connect. Read viewer.js:14938-14945: the box-level open-source affordance (corner icon, cmd-click, double-click) is 'intentionally RETIRED' and `const srcNode = (_id) => null` disables all of them. Read openInCodeViewer at 14591-14605: on a served map a code link opens the file in the IN-APP code viewer, not an editor; only the code viewer header's arrow (13930) calls openSource (14914/14921), which builds the editor scheme URI or the GitHub blob URL. So a code link on a box does not open the editor or the code host — that needs a second click in the code viewer, and the direct box path is dead code. The map's anchor (13011) is renderElementDetails, a different behaviour again."
+  },
+  {
+   "claim": "UC7 See what a code change did to the map: The code has moved on since the map was pinned. A report names the parts of the map the change touched.",
+   "grounded": true,
+   "evidence": "method/dispatch.md:167",
+   "skeptic": "behaviour-6",
+   "note": "Read skill/coyomap/SKILL.md:27 (the anchor, pointing at dispatch.md) and dispatch.md:144-168: when a baseline exists the pin is compared to the working tree, and when the source differs the agent reads method/change-impact.md and follows it (167), diffing pin to working tree plus untracked files. That is the report naming what the change touched."
+  },
+  {
+   "claim": "UC8 Fold a change report into the baseline: A person agrees the change report is right. The map is edited to match, re-pinned, and checked again.",
+   "grounded": true,
+   "evidence": "method/dispatch.md:170",
+   "skeptic": "behaviour-6",
+   "note": "Read skill/coyomap/SKILL.md:27 and dispatch.md:170: item 2 under 'Baseline exists' is '**Accept** — when the user says the report looks right, read `method/change-impact.md` (Accept)'. dispatch.md:191-197 adds the invariant that every write is followed by validate, audit and render, which is the 're-pinned and checked again' half."
+  },
+  {
+   "claim": "UC9 Change the map by asking: A person asks in plain language for a part of the map to move, split or be renamed. The map is edited in place and passes its checks.",
+   "grounded": true,
+   "evidence": "method/dispatch.md:172",
+   "skeptic": "behaviour-6",
+   "note": "Read skill/coyomap/SKILL.md:27 and dispatch.md:172-185: item 3 is the Direct map change — a plain-language request to move, rename or split part of the map, applied as surgical field edits to `.coyomap/project-map.json` (177-178) and then put through the gates (183-185). Both halves of the claim are there."
+  },
+  {
+   "claim": "UC10 Score whether the method got better: Someone changed the instructions and wants to know the cost. Two maps of one project are scored and compared, with a verdict.",
+   "grounded": true,
+   "evidence": "eval/SKILL.md:28",
+   "skeptic": "behaviour-6",
+   "note": "Read eval/SKILL.md:23-29, which points at eval/method.md, and then eval/method.md:1-19: it compares two maps of the same code (the current map against an archived predecessor under `.coyomap/dev-rebuilds/`) and reports whether the method got better or worse. The verdict vocabulary PASS / DRIFT / REGRESSED appears at eval/method.md:66 and 161-198."
+  },
+  {
+   "claim": "UC11 Review a finished build: A build has finished and its chat is on disk. A report names the friction, the bugs and the gaps that run revealed.",
+   "grounded": true,
+   "evidence": "eval/retro/SKILL.md:28",
+   "skeptic": "behaviour-6",
+   "note": "Read eval/retro/SKILL.md:23-29, which points at eval/retro/method.md, and eval/retro/method.md:4 and 12: it reads a finished build's map and the chat transcript that produced it, and 'its answer is a list of bugs, friction and gaps'. Report only — it changes nothing."
+  }
+ ]
+}

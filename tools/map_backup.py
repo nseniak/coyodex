@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Provenance stamping + deterministic backup for a repo's `.coyodex/` map.
+"""Provenance stamping + deterministic backup for a repo's `.coyomap/` map.
 
 Two subcommands:
 
-  stamp   Called by the coyodex BUILD (and accept) flow. Records the session id
+  stamp   Called by the coyomap BUILD (and accept) flow. Records the session id
           of the conversation that produced the map plus the minute-precise build
-          time into `<repo>/.coyodex/provenance.json` (committed, machine-readable).
+          time into `<repo>/.coyomap/provenance.json` (committed, machine-readable).
           Idempotent per session: re-stamping the same session updates its entry.
 
   backup  Called by the user, later, from any session. Reads the stamped
           provenance, then bundles the map files + the exact conversation
-          transcript(s) into `<coyodex-home>/map-backups/<project>-<build-time>/`.
-          By default it MOVES the `.coyodex` files out of the source repo; `--keep`
+          transcript(s) into `<coyomap-home>/map-backups/<project>-<build-time>/`.
+          By default it MOVES the `.coyomap` files out of the source repo; `--keep`
           copies instead. Transcripts are always COPIED (they live in Claude Code's
           live store and must not be moved).
 
@@ -35,14 +35,14 @@ from pathlib import Path
 # Paths / constants
 # ---------------------------------------------------------------------------
 
-COYODEX_HOME = Path(__file__).resolve().parents[1]  # tools/map_backup.py -> repo root
-MAP_BACKUPS_DIR = COYODEX_HOME / "map-backups"
+COYOMAP_HOME = Path(__file__).resolve().parents[1]  # tools/map_backup.py -> repo root
+MAP_BACKUPS_DIR = COYOMAP_HOME / "map-backups"
 CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
 
-COYODEX_SUBDIR = ".coyodex"
+COYOMAP_SUBDIR = ".coyomap"
 PROVENANCE_NAME = "provenance.json"
 MAP_MD_NAME = "project-map.md"
-PROVENANCE_SCHEMA = "coyodex-provenance/v1"
+PROVENANCE_SCHEMA = "coyomap-provenance/v1"
 SESSION_ENV = "CLAUDE_CODE_SESSION_ID"
 
 
@@ -51,11 +51,11 @@ SESSION_ENV = "CLAUDE_CODE_SESSION_ID"
 # ---------------------------------------------------------------------------
 
 
-# The provenance MODEL now lives in the installed package (coyodex.provenance) so that
-# `coyodex provenance stamp` and this script cannot drift into two shapes of one file. It was
+# The provenance MODEL now lives in the installed package (coyomap.provenance) so that
+# `coyomap provenance stamp` and this script cannot drift into two shapes of one file. It was
 # defined here, which meant `finalize` demanded an artifact the shipped CLI could not produce.
 # Re-exported below under the old names so the rest of this script is unchanged.
-from coyodex.provenance import (  # noqa: E402
+from coyomap.provenance import (  # noqa: E402
     Provenance,
     SessionEntry,
     stamp as _stamp_pkg,
@@ -77,23 +77,23 @@ def _compact(built_at: str) -> str:
     return built_at.replace(" ", "_").replace(":", "")
 
 
-def _map_mtime_minute(coyodex_dir: Path) -> str | None:
+def _map_mtime_minute(coyomap_dir: Path) -> str | None:
     """Minute-precise mtime of the map file, for un-stamped maps.
 
     Gives an un-stamped backup a *deterministic* folder timestamp tied to when the
     map was last written, rather than the wall-clock at backup time.
     """
-    map_file = coyodex_dir / MAP_MD_NAME
+    map_file = coyomap_dir / MAP_MD_NAME
     if not map_file.is_file():
         return None
     return datetime.fromtimestamp(map_file.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
 
 
-def _resolve_coyodex_dir(repo: Path) -> Path:
-    coyodex_dir = repo / COYODEX_SUBDIR
-    if not coyodex_dir.is_dir():
-        _die(f"no {COYODEX_SUBDIR}/ directory under {repo}")
-    return coyodex_dir
+def _resolve_coyomap_dir(repo: Path) -> Path:
+    coyomap_dir = repo / COYOMAP_SUBDIR
+    if not coyomap_dir.is_dir():
+        _die(f"no {COYOMAP_SUBDIR}/ directory under {repo}")
+    return coyomap_dir
 
 
 def _die(msg: str) -> "None":
@@ -286,7 +286,7 @@ def _copy_transcripts(
 
 
 def cmd_stamp(args: argparse.Namespace) -> int:
-    """Thin wrapper over `coyodex.provenance.stamp` — the same code `coyodex provenance stamp`
+    """Thin wrapper over `coyomap.provenance.stamp` — the same code `coyomap provenance stamp`
     runs, so the two entry points cannot write different shapes of one file."""
     repo = Path(args.repo).resolve()
     try:
@@ -308,12 +308,12 @@ def cmd_stamp(args: argparse.Namespace) -> int:
 
 def cmd_backup(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
-    coyodex_dir = _resolve_coyodex_dir(repo)
+    coyomap_dir = _resolve_coyomap_dir(repo)
     dry_run: bool = args.dry_run
     keep: bool = args.keep
 
     try:
-        prov = Provenance.load(coyodex_dir / PROVENANCE_NAME)
+        prov = Provenance.load(coyomap_dir / PROVENANCE_NAME)
     except ValueError as exc:
         _die(f"{exc}; fix or delete it, or re-stamp the map, then retry")
         return 2  # unreachable; keeps the type checker happy
@@ -323,7 +323,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
         latest = prov.latest()
         assert latest is not None
         project = prov.project or repo.name
-        built_at = latest.built_at or _map_mtime_minute(coyodex_dir) or _now_minute()
+        built_at = latest.built_at or _map_mtime_minute(coyomap_dir) or _now_minute()
         session_ids = [s.session_id for s in prov.sessions]
         prov_note = (
             f"provenance: {len(session_ids)} session(s), latest built {built_at}"
@@ -332,7 +332,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
         project = repo.name
         # No stamp: pin the folder to when the map was written (deterministic across
         # re-runs) rather than to the wall-clock at backup time.
-        built_at = _map_mtime_minute(coyodex_dir) or _now_minute()
+        built_at = _map_mtime_minute(coyomap_dir) or _now_minute()
         session_ids = []
         prov_note = "provenance: none (un-stamped map)"
 
@@ -353,7 +353,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
 
     action = "MOVE" if not keep else "COPY"
     dest_base = MAP_BACKUPS_DIR / f"{project}-{_compact(built_at)}"
-    print(f"backup: {action} {coyodex_dir}  ->  {dest_base}")
+    print(f"backup: {action} {coyomap_dir}  ->  {dest_base}")
     print(f"  {prov_note}")
 
     # A MOVE with no conversation defeats the feature *and* deletes the source. Refuse
@@ -370,7 +370,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
     if dry_run:
         dest = _unique_dir(dest_base)
         print("  [dry-run] would create:")
-        print(f"    {dest / 'map'}/        <- {COYODEX_SUBDIR}/ files ({action.lower()})")
+        print(f"    {dest / 'map'}/        <- {COYOMAP_SUBDIR}/ files ({action.lower()})")
         notes, _ = _copy_transcripts(session_ids, dest / "conversation", dry_run=True)
         print(f"    {dest / 'conversation'}/      <- {bundled} conversation transcript(s)")
         for note in notes:
@@ -378,7 +378,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
         if bundled == 0:
             print("  ! no conversation would be bundled (map-only copy)")
         print(
-            f"  [dry-run] source {COYODEX_SUBDIR}/ would be "
+            f"  [dry-run] source {COYOMAP_SUBDIR}/ would be "
             f"{'left in place' if keep else 'REMOVED from ' + str(repo)}"
         )
         return 0
@@ -388,8 +388,8 @@ def cmd_backup(args: argparse.Namespace) -> int:
 
     # 1) Copy the map files first (copy-then-delete, so a mid-run failure loses nothing).
     #    symlinks=True: copy links verbatim instead of crashing on a dangling one.
-    shutil.copytree(coyodex_dir, dest / "map", symlinks=True)
-    print(f"  copied {COYODEX_SUBDIR}/ -> {dest / 'map'}/")
+    shutil.copytree(coyomap_dir, dest / "map", symlinks=True)
+    print(f"  copied {COYOMAP_SUBDIR}/ -> {dest / 'map'}/")
 
     # 2) Copy the conversation transcript(s).
     (dest / "conversation").mkdir(parents=True, exist_ok=True)
@@ -401,7 +401,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
 
     # 3) Manifest.
     manifest: dict[str, object] = {
-        "schema": "coyodex-map-backup/v1",
+        "schema": "coyomap-map-backup/v1",
         "project": project,
         "source_repo": str(repo),
         "built_at": built_at,
@@ -417,24 +417,24 @@ def cmd_backup(args: argparse.Namespace) -> int:
 
     # 4) Move => remove the source now that the copy is safely in place.
     if not keep:
-        _remove_source(coyodex_dir)
+        _remove_source(coyomap_dir)
         print(
-            f"  removed {coyodex_dir} (moved out; the source repo now shows it deleted)"
+            f"  removed {coyomap_dir} (moved out; the source repo now shows it deleted)"
         )
 
     print(f"backup complete: {dest}")
     return 0
 
 
-def _remove_source(coyodex_dir: Path) -> None:
-    """Remove the source .coyodex after its copy is safely in the backup.
+def _remove_source(coyomap_dir: Path) -> None:
+    """Remove the source .coyomap after its copy is safely in the backup.
 
-    Handles the case where .coyodex is itself a symlink (rmtree would raise on it).
+    Handles the case where .coyomap is itself a symlink (rmtree would raise on it).
     """
-    if coyodex_dir.is_symlink():
-        coyodex_dir.unlink()
+    if coyomap_dir.is_symlink():
+        coyomap_dir.unlink()
     else:
-        shutil.rmtree(coyodex_dir)
+        shutil.rmtree(coyomap_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +445,7 @@ def _remove_source(coyodex_dir: Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="map_backup",
-        description="Stamp provenance into, and back up, a repo's .coyodex/ map.",
+        description="Stamp provenance into, and back up, a repo's .coyomap/ map.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -454,7 +454,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="record session id + minute-precise build time into provenance.json",
     )
     p_stamp.add_argument(
-        "repo", help="path to the analyzed repo (the one holding .coyodex/)"
+        "repo", help="path to the analyzed repo (the one holding .coyomap/)"
     )
     p_stamp.add_argument(
         "--mode",
@@ -479,7 +479,7 @@ def build_parser() -> argparse.ArgumentParser:
         "backup", help="bundle the map files + conversation into map-backups/"
     )
     p_backup.add_argument(
-        "repo", help="path to the analyzed repo (the one holding .coyodex/)"
+        "repo", help="path to the analyzed repo (the one holding .coyomap/)"
     )
     p_backup.add_argument(
         "--keep",

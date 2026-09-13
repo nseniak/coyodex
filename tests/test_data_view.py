@@ -11,7 +11,7 @@ Conventions: top-level test functions, no classes/fixtures; models built via mak
 """
 from __future__ import annotations
 
-from coyodex.model import (
+from coyomap.model import (
     Component,
     Dep,
     Edge,
@@ -22,9 +22,9 @@ from coyodex.model import (
     StateMachine,
     Store,
 )
-from coyodex.validate_model import unexplained_persistence_pairs
-from coyodex.views import model_to_graph
-from coyodex.viewer.gen_viewer import (
+from coyomap.validate_model import unexplained_persistence_pairs
+from coyomap.views import model_to_graph
+from coyomap.viewer.gen_viewer import (
     ENTITY_STYLE,
     entity_store_links,
     gen_channel_mermaids,

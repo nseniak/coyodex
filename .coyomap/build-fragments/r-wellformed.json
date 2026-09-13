@@ -1,0 +1,166 @@
+{
+  "rules": [
+    {
+      "id": "BR60",
+      "name": "Advisory never blocks",
+      "statement": "An advisory never stops a build; only a gate does.",
+      "access": false,
+      "risk": "A build stopped by a matter of judgement teaches its author to ignore every finding the tools print.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/validate_model.py:6657",
+          "why": "fails a build on gate findings alone, however many advisories were printed"
+        },
+        {
+          "where": "tools/coyomap/lint_fragment.py:654",
+          "why": "passes one fragment, counting its advisories, when no gate finding was found"
+        },
+        {
+          "where": "method.md:1604",
+          "why": "states that the component count check advises, and that a justified exception stays a judgement call"
+        }
+      ]
+    },
+    {
+      "id": "BR61",
+      "name": "Clean is the narrowest verdict",
+      "statement": "A build is clean only when every gate ran and no advisory is left open.",
+      "access": false,
+      "risk": "A gate that was skipped would read as a gate that passed, hiding a broken map behind a green report.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/finalize.py:693",
+          "why": "calls a build incomplete when a gate that should have run did not"
+        },
+        {
+          "where": "tools/coyomap/finalize.py:695",
+          "why": "calls a build advisory when only advisories were found, which is not clean"
+        },
+        {
+          "where": "tools/coyomap/finalize.py:1286",
+          "why": "exits with failure on an incomplete build, so a skipped gate cannot read as a pass"
+        },
+        {
+          "where": "tools/coyomap/ship.py:353",
+          "why": "stops the closing sequence at the first failing step, and names the steps that never ran"
+        }
+      ]
+    },
+    {
+      "id": "BR62",
+      "name": "Silence by recorded reason",
+      "statement": "An advisory the operator decides to live with is silenced only by a reason recorded in the map.",
+      "access": false,
+      "risk": "Without one place to record the reason, the same advisory fires on every build until people stop reading.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "method.md:1620",
+          "why": "says a durably justified exception is recorded in the map and silences its own advisory"
+        },
+        {
+          "where": "method.md:1640",
+          "why": "forbids rewording the map to dodge an advisory, and asks for a recorded reason instead"
+        },
+        {
+          "where": "tools/coyomap/records.py:324",
+          "why": "matches a finding against the recorded reasons, so only a recorded one is passed over"
+        }
+      ]
+    },
+    {
+      "id": "BR63",
+      "name": "Recorded reasons must name a finding",
+      "statement": "A recorded reason is refused unless it names a finding the checks really read.",
+      "access": false,
+      "risk": "An operator would believe an advisory was answered while it keeps firing, and nothing would say so.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/record.py:268",
+          "why": "refuses a reason filed under a heading no check ever reads"
+        },
+        {
+          "where": "tools/coyomap/record.py:309",
+          "why": "refuses a reason that answers no finding, and writes nothing at all"
+        },
+        {
+          "where": "tools/coyomap/records.py:243",
+          "why": "reads nothing from a reason listing several things when one of them is not a finding"
+        }
+      ]
+    },
+    {
+      "id": "BR64",
+      "name": "Every silence is announced",
+      "statement": "Every advisory a recorded reason silenced is still counted out loud in the build's report.",
+      "access": false,
+      "risk": "A silence nobody can see reads the same as having no findings, so a map can look clean by suppression.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/validate_model.py:720",
+          "why": "adds a line saying how many advisories the recorded reasons silenced, and on which elements"
+        },
+        {
+          "where": "tools/coyomap/validate_analysis.py:329",
+          "why": "names on every build the code a written exclusion removed from every check"
+        },
+        {
+          "where": "tools/coyomap/records.py:286",
+          "why": "reports a reason that failed to parse instead of dropping it in silence"
+        },
+        {
+          "where": "tools/coyomap/anchor_drift.py:199",
+          "why": "collects a line that tries to be a reason and answers nothing, so the build reports it"
+        },
+        {
+          "where": "tests/test_method_contract.py:671",
+          "why": "keeps the announcement of a silence out of reach of any recorded reason"
+        }
+      ]
+    },
+    {
+      "id": "BR65",
+      "name": "Some findings carry no excuse",
+      "statement": "A finding whose only honest answer is a fix cannot be silenced by a recorded reason.",
+      "access": false,
+      "risk": "An escape here would let a map record its own gaps as acceptable, which the checks exist to stop.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "tests/test_method_contract.py:531",
+          "why": "holds the findings no recorded reason may silence, each beside the reason it cannot"
+        },
+        {
+          "where": "method.md:2093",
+          "why": "refuses any way to record a use case as deliberately left untold"
+        },
+        {
+          "where": "tools/coyomap/anchor_drift.py:437",
+          "why": "tells an operator that a recorded reason cannot answer a finding about a code link's shape"
+        }
+      ]
+    },
+    {
+      "id": "BR66",
+      "name": "Every advisory says where to answer it",
+      "statement": "An advisory must say where the operator records the reason for living with it.",
+      "access": false,
+      "risk": "An advisory with nowhere to answer it is waved through forever, so the check changes nothing.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tests/test_method_contract.py:716",
+          "why": "fails when an advisory leaves the reader nowhere to record the decision"
+        },
+        {
+          "where": "tools/coyomap/validate_model.py:6676",
+          "why": "prints beside the advisories the command that records a reason the checks will find"
+        }
+      ]
+    }
+  ]
+}

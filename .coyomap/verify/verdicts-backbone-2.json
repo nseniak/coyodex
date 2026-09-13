@@ -1,0 +1,263 @@
+{
+ "grounding": [
+  {
+   "claim": "C137 cites C120",
+   "grounded": true,
+   "evidence": "README.md:117",
+   "skeptic": "backbone-2",
+   "note": "Read README.md:117 whole: it says these steps also work by pasting \"Read `method.md` and follow it to ...\". That is the ONLY method.md citation in README.md (grep), so C137's file does cite C120's file (method.md)."
+  },
+  {
+   "claim": "C138 cites C139",
+   "grounded": true,
+   "evidence": "CONTRIBUTING.md:59",
+   "skeptic": "backbone-2",
+   "note": "Read CONTRIBUTING.md:59: the register table's Incident-record row points at `internal/docs/method-rationale.md`, which is C139's file. Line 43 cites it a second time."
+  },
+  {
+   "claim": "C139 cites C120",
+   "grounded": true,
+   "evidence": "internal/docs/method-rationale.md:31",
+   "skeptic": "backbone-2",
+   "note": "Opened the anchor line 32 (`- **Anchor**: ...`) and the entry around it: the citation is one line up, line 31 `- **Where**: `method.md``, repeated for all 40+ entries, plus line 4. Line drift of 1 inside a real file, so the relation stands."
+  },
+  {
+   "claim": "C20 calls C5",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:189",
+   "skeptic": "backbone-2",
+   "note": "Read cli.py:189 in `_dispatch`: `return lint_fragment.main(rest)` under `if cmd == \"lint-fragment\"`, with `from coyomap import lint_fragment` on line 188. lint_fragment.py is C5's only file."
+  },
+  {
+   "claim": "C25 calls C5",
+   "grounded": true,
+   "evidence": "tools/coyomap/ship.py:326",
+   "skeptic": "backbone-2",
+   "note": "Read ship.py:326 in ship's own `_dispatch`: `return lint_fragment.main(rest)` under `if cmd == \"lint-fragment\"` with the lazy import on line 325. ship.py is C25's file."
+  },
+  {
+   "claim": "C5 calls C4",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:590",
+   "skeptic": "backbone-2",
+   "note": "Read lint_fragment.py:590: `m = load_fragment(text, p.name)`; `load_fragment` is imported at line 27 from `coyomap.assemble` and defined at assemble.py:140. assemble.py is C4's only file."
+  },
+  {
+   "claim": "C5 calls C6",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:198",
+   "skeptic": "backbone-2",
+   "note": "Read lint_fragment.py:198: `problems += check_anchor_existence_model(m, roots)`, imported at line 29 from coyomap.validate_model (def at validate_model.py:5845). Anchor existence is C6's stated job (\"each code link is well formed and really exists\")."
+  },
+  {
+   "claim": "C5 calls C7",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:161",
+   "skeptic": "backbone-2",
+   "note": "Read lint_fragment.py:161: `flow_problems, flow_warnings = _check_flows(m)`, imported from coyomap.validate_model; `_check_flows` is defined at validate_model.py:400 and C7's own anchor (line 405) sits inside it."
+  },
+  {
+   "claim": "C5 calls C8",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:180",
+   "skeptic": "backbone-2",
+   "note": "Read lint_fragment.py:180: `problems += rule_row_problems(m)`, imported from coyomap.validate_model, defined at validate_model.py:1662 — the business-rule row checks C8 owns (its anchor 1748 is inside `check_rules_model`)."
+  },
+  {
+   "claim": "C5 calls C9",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:153",
+   "skeptic": "backbone-2",
+   "note": "Read lint_fragment.py:153: `msg_problems, _msg_warnings = _check_messaging(m)`, imported from coyomap.validate_model, defined at validate_model.py:3620. Channel/messaging wiring is C9's theme (its anchor 2700 is inside `_check_interfaces`)."
+  },
+  {
+   "claim": "C5 calls C10",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:149",
+   "skeptic": "backbone-2",
+   "note": "Read lint_fragment.py:149: `problems += _check_stores(m)`, imported from coyomap.validate_model, defined at validate_model.py:4188 — and C10's own anchor (4205) is inside `_check_stores`."
+  },
+  {
+   "claim": "C5 calls C27",
+   "grounded": true,
+   "evidence": "tools/coyomap/lint_fragment.py:280",
+   "skeptic": "backbone-2",
+   "note": "Read lint_fragment.py:280 in the pin check: `dirty = provenance.dirty_paths(repo_root)`; `provenance` is imported at line 25 and `dirty_paths` is defined at provenance.py:157. provenance.py is C27's file."
+  },
+  {
+   "claim": "C80 calls C7",
+   "grounded": true,
+   "evidence": "tools/coyomap/views.py:1003",
+   "skeptic": "backbone-2",
+   "note": "Read views.py:1003: `anchored = anchored_flow_steps(m)`, imported at views.py:38-54 from coyomap.validate_model, defined at validate_model.py:1393 — flow-step derivation, C7's story area."
+  },
+  {
+   "claim": "C81 calls C7",
+   "grounded": true,
+   "evidence": "tools/coyomap/features.py:467",
+   "skeptic": "backbone-2",
+   "note": "Read features.py:467: `steps = anchored_flow_steps(m)`, imported at features.py:44-53 from coyomap.validate_model (def validate_model.py:1393). features.py is C81's only file."
+  },
+  {
+   "claim": "C112 calls C7",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/live_numbers.py:192",
+   "skeptic": "backbone-2",
+   "note": "Read live_numbers.py:188-192: local `from coyomap import validate_model as V` then `hits = {n: V.record_direction_gaps(maps[n]) for n in pair}`; `record_direction_gaps` is at validate_model.py:963 and compares a record's arrows against what the flow steps show — the \"no story covers this\" family C7 owns. Note: validate_model.py is claimed by C6-C10 alike, so the file alone cannot pick which; the story-coverage reading is what puts it on C7."
+  },
+  {
+   "claim": "C7 reads C1",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:404",
+   "skeptic": "backbone-2",
+   "note": "Read validate_model.py:400-408: inside `_check_flows`, line 404 is `for f in m.flows:` — reading the ProjectModel's flow list. ProjectModel and its `flows` come from `coyomap.model` (imported at validate_model.py:45), and model.py is C1's only file."
+  },
+  {
+   "claim": "C80 calls C8",
+   "grounded": true,
+   "evidence": "tools/coyomap/views.py:1024",
+   "skeptic": "backbone-2",
+   "note": "Read views.py:1021-1026: `for l in rule_steps(m, r, extents, anchored)` at line 1024, with `rule_components(m, r, owners)` two lines on; both imported from coyomap.validate_model (defs at 1421 and 1382) and both are business-rule machinery, C8's area."
+  },
+  {
+   "claim": "C81 calls C8",
+   "grounded": true,
+   "evidence": "tools/coyomap/features.py:469",
+   "skeptic": "backbone-2",
+   "note": "Read features.py:469: `hit = {uc_cap[link.uc] for link in rule_steps(m, r, extents, steps)`; `rule_steps` is imported from coyomap.validate_model (def 1421), the rule-site walk C8 owns."
+  },
+  {
+   "claim": "C21 calls C8",
+   "grounded": true,
+   "evidence": "tools/coyomap/audit_model.py:1055",
+   "skeptic": "backbone-2",
+   "note": "Read audit_model.py:1049-1055: the documented circular-import exception `from coyomap.validate_model import site_components` on line 1054, then `comps = site_components(m, site, owners)` on 1055. `site_components` (validate_model.py:1370) takes a RuleSite — C8's rule-site checks."
+  },
+  {
+   "claim": "C8 calls C49",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:1453",
+   "skeptic": "backbone-2",
+   "note": "Read validate_model.py:1453 inside `rule_steps` (def 1421): `site_ext = (enclosing_extent(ext.get(site_path, []), site_lo) ...)`; `enclosing_extent` is imported at validate_model.py:43 from coyomap.impact_lib, one of C49's three files."
+  },
+  {
+   "claim": "C80 calls C9",
+   "grounded": true,
+   "evidence": "tools/coyomap/views.py:1175",
+   "skeptic": "backbone-2",
+   "note": "Read views.py:1173-1176: `iface_dirs = interface_directions(m)` at 1175, feeding the interface nodes; imported from coyomap.validate_model (def 1152). Interfaces are C9's area (its anchor 2700 is inside `_check_interfaces`)."
+  },
+  {
+   "claim": "C81 calls C9",
+   "grounded": true,
+   "evidence": "tools/coyomap/features.py:554",
+   "skeptic": "backbone-2",
+   "note": "Read features.py:551-556: `iface_dirs = interface_directions(m)` at 554, with the comment that it replaced the hand-written `carries[]`; imported from coyomap.validate_model (def 1152)."
+  },
+  {
+   "claim": "C21 calls C9",
+   "grounded": true,
+   "evidence": "tools/coyomap/audit_model.py:1243",
+   "skeptic": "backbone-2",
+   "note": "Read audit_model.py:1242-1243: `from coyomap.validate_model import interface_directions  # noqa: PLC0415 — circular at import`, then `iface_dirs = interface_directions(m)`, used to walk `theirs` interfaces — C9's interface checks."
+  },
+  {
+   "claim": "C9 calls C48",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:3640",
+   "skeptic": "backbone-2",
+   "note": "Read validate_model.py:3640 inside `_check_messaging` (def 3620): `excepted = balance_lib._exceptions(m)`; `balance_lib` is imported at validate_model.py:31 and balance_lib.py is one of C48's two files."
+  },
+  {
+   "claim": "C80 calls C10",
+   "grounded": true,
+   "evidence": "tools/coyomap/views.py:952",
+   "skeptic": "backbone-2",
+   "note": "Read views.py:949-954: `for cid, verb, d in unexplained_persistence_pairs(m):` at 952, under the \"coverage gaps (the shared persistence rule)\" comment; imported from coyomap.validate_model (def 4215), next door to C10's own anchor 4205 in `_check_stores`."
+  },
+  {
+   "claim": "C10 calls C21",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:3928",
+   "skeptic": "backbone-2",
+   "note": "Read validate_model.py:3922-3934 inside `_grounding_warnings` (def 3905): `claim_surface = len(l2_worklist_model(m))`, imported at validate_model.py:32 from coyomap.audit_model — C21's main file. `_grounding_warnings` measures how much of the map was challenged, which is C10's stated \"how much of the map was verified\"."
+  },
+  {
+   "claim": "C20 calls C21",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:159",
+   "skeptic": "backbone-2",
+   "note": "Read cli.py:157-159 in `_dispatch`: `if cmd == \"audit\"` / `from coyomap import audit_model` / `return audit_model.main(_default_map(rest))`. audit_model.py is C21's main file."
+  },
+  {
+   "claim": "C22 calls C21",
+   "grounded": true,
+   "evidence": "tools/coyomap/grounding.py:1585",
+   "skeptic": "backbone-2",
+   "note": "Read grounding.py:1585: `checks, _unresolved = element_checks(live, [w.claim for w in l2_worklist_model(live)], rows)`; `l2_worklist_model` is imported at grounding.py:36 from coyomap.audit_model (and `load_verdicts` from anchor_drift at line 35) — both C21 files."
+  },
+  {
+   "claim": "C47 calls C21",
+   "grounded": true,
+   "evidence": "tools/coyomap/reconcile.py:680",
+   "skeptic": "backbone-2",
+   "note": "Read reconcile.py:676-682: `cross_file_refusals(...)` at 678 and `counts, anchor_notes = apply_anchor_corrections(m, kept)` at 680; both imported at reconcile.py:37 from coyomap.audit_model."
+  },
+  {
+   "claim": "C103 calls C21",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/judge.py:234",
+   "skeptic": "backbone-2",
+   "note": "Read judge.py:226-240: inside `build_judge_report`, line 234 is `worklist = audit_model.l2_worklist_model(load_model(map_text))`, with `from coyomap import audit_model` at judge.py:31."
+  },
+  {
+   "claim": "C20 calls C27",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:213",
+   "skeptic": "backbone-2",
+   "note": "Read cli.py:211-213: `if cmd == \"provenance\"` / `from coyomap import provenance` / `return provenance.main(rest)`. provenance.py is C27's main file."
+  },
+  {
+   "claim": "C26 calls C27",
+   "grounded": true,
+   "evidence": "tools/coyomap/scope.py:68",
+   "skeptic": "backbone-2",
+   "note": "Read scope.py:64-69: `dirty = provenance.dirty_paths(root)` at 68, with the comment that this is the one shared definition of \"dirty\"; `provenance` imported at scope.py:27, `dirty_paths` at provenance.py:157."
+  },
+  {
+   "claim": "C50 calls C27",
+   "grounded": true,
+   "evidence": "tools/map_backup.py:293",
+   "skeptic": "backbone-2",
+   "note": "Read map_backup.py:288-295: `cmd_stamp` calls `_stamp_pkg(repo, mode=..., session_id=..., built_at=...)` at 293, and map_backup.py:58-62 imports `stamp as _stamp_pkg` from coyomap.provenance — the docstring says it is a thin wrapper over the same code."
+  },
+  {
+   "claim": "C110 reads C27",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/retro_precheck.py:179",
+   "skeptic": "backbone-2",
+   "note": "Read retro_precheck.py:172-183: line 179 is `sessions = json.loads(prov_path.read_text(encoding=\"utf-8\")).get(\"sessions\", [])`, where prov_path is `.coyomap/provenance.json`, then it takes `sessions[-1]['session_id']`. It reads C27's build-log FILE directly with json; it does not import provenance.py — grounded as a data read, not a code call."
+  },
+  {
+   "claim": "C83 calls C49",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/serve.py:476",
+   "skeptic": "backbone-2",
+   "note": "Read serve.py:468-479 in `project_impact`: `core = compute_impact(proj.repo_root, model, extents, base, target)` at 476, then `build_impact_result(...)` at 479; imported at serve.py:40 and 42 from coyomap.impact_git and coyomap.impact_ripple, both C49 files."
+  },
+  {
+   "claim": "C82 calls C49",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/gen_viewer.py:3345",
+   "skeptic": "backbone-2",
+   "note": "Read gen_viewer.py:3340-3348 in `build_view_bundle`: `extents = load_map_extents(map_json)` at 3345, imported at gen_viewer.py:44 from coyomap.impact_git — a C49 file."
+  },
+  {
+   "claim": "C62 calls C63",
+   "grounded": true,
+   "evidence": "tools/coyomap/viewer/viewer.js:13113",
+   "skeptic": "backbone-2",
+   "note": "Read viewer.js:13103-13118: after the mermaid render at 13096 (C62's own anchor) the same function calls `bindFor(s)` at 13113. `bindFor` (viewer.js:7627) is the one dispatcher into the click binders, and its first branch is `bindContext()` at viewer.js:5345 — the function C63's anchor (5346) sits inside."
+  }
+ ]
+}

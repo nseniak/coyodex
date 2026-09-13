@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Land a worktree branch on main: merge main in, run the gates, fast-forward main — and again if
-main moved meanwhile. FOR SOMEONE WORKING ON COYODEX in a git worktree, not for users.
+main moved meanwhile. FOR SOMEONE WORKING ON COYOMAP in a git worktree, not for users.
 
 Run it with `make land` from inside the worktree. The order is the one that keeps every conflict
 inside the checkout nobody else is typing in:
@@ -27,7 +27,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VIEWER_DIR = "tools/coyodex/viewer/"
+VIEWER_DIR = "tools/coyomap/viewer/"
 
 
 class LandError(Exception):

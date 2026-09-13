@@ -1,4 +1,4 @@
-"""Tests for `coyodex anchor-drift` (Phase G build command)."""
+"""Tests for `coyomap anchor-drift` (Phase G build command)."""
 from __future__ import annotations
 
 import contextlib
@@ -7,10 +7,10 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex import anchor_drift as ad
-from coyodex import audit_model
-from coyodex.audit_model import WorkItem, l2_worklist_model
-from coyodex.model import FORMAT, ProjectModel, load_model
+from coyomap import anchor_drift as ad
+from coyomap import audit_model
+from coyomap.audit_model import WorkItem, l2_worklist_model
+from coyomap.model import FORMAT, ProjectModel, load_model
 
 
 def make_item(claim: str, anchor: str, drift_eligible: bool = True) -> WorkItem:
@@ -253,8 +253,8 @@ def test_a_split_vote_is_a_tie_in_either_order_and_votes_are_never_deduped():
     row seen twice: on this repo's own recorded build, two independent reads of the security batch
     agree exactly on 37 of 40 claims. A correct fix needs a per-vote identity the verdicts format does
     not carry."""
-    from coyodex.anchor_drift import _confirmed_drifts
-    from coyodex.audit_model import WorkItem
+    from coyomap.anchor_drift import _confirmed_drifts
+    from coyomap.audit_model import WorkItem
     w = WorkItem(claim="C1 reads E1", anchor="a.py:10", why_risky="x", theme="ownership")
     yes = {"claim": "C1 reads E1", "grounded": True, "evidence": "a.py:40"}
     no = {"claim": "C1 reads E1", "grounded": False, "evidence": ""}

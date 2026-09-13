@@ -20,7 +20,7 @@ __pycache__/
 # …and the folder they get filed into when a session keeps a set to compare across runs. Same rule
 # as the loose ones: they are how a change was checked, not part of the product.
 .shots/
-tools/coyodex/viewer/build/
+tools/coyomap/viewer/build/
 map-backups/
 .venv/
 build/

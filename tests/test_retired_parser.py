@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Guard: the old hand-authored markdown-MAP parse (the full grammar/validator the deleted
-`coyodex convert` command depended on) must stay fully deleted — not just confined to one file,
+`coyomap convert` command depended on) must stay fully deleted — not just confined to one file,
 since there is no longer any legitimate reader of it anywhere in production.
 
 `grammar.py` and `validate_analysis.py` still exist (they host grammar/helpers the CURRENT
@@ -20,7 +20,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 # Production sources that must stay free of the v1 map parse.
-PRODUCTION_DIRS = (REPO / "tools" / "coyodex", REPO / "eval" / "tools" / "coyodex_eval")
+PRODUCTION_DIRS = (REPO / "tools" / "coyomap", REPO / "eval" / "tools" / "coyomap_eval")
 
 # The old markdown-map parse surface: the card/flow/definition-table grammar constructs, the
 # whole-map validator, the retired graph/audit parse functions, and the deleted modules' names.
@@ -63,17 +63,17 @@ def test_no_production_module_references_the_v1_map_parse() -> None:
 
 
 def test_the_retired_modules_and_files_stay_deleted() -> None:
-    for retired in ("tools/coyodex/audit_analysis.py", "tools/coyodex/convert_md.py"):
+    for retired in ("tools/coyomap/audit_analysis.py", "tools/coyomap/convert_md.py"):
         assert not (REPO / retired).exists(), f"{retired} was retired — it must stay deleted"
-    bg = (REPO / "tools" / "coyodex" / "viewer" / "build_graph.py").read_text(encoding="utf-8")
+    bg = (REPO / "tools" / "coyomap" / "viewer" / "build_graph.py").read_text(encoding="utf-8")
     for retired in ("def build(", "def parse_nodes_edges(", "def parse_domain(",
                     "def parse_element_nodes(", "def parse_roles("):
         assert retired not in bg, f"build_graph.py regrew the retired v1 map parse: {retired}"
 
 
 def test_no_command_dispatches_to_convert() -> None:
-    cli_src = (REPO / "tools" / "coyodex" / "cli.py").read_text(encoding="utf-8")
-    assert '"convert"' not in cli_src, "the retired `coyodex convert` command must stay removed"
+    cli_src = (REPO / "tools" / "coyomap" / "cli.py").read_text(encoding="utf-8")
+    assert '"convert"' not in cli_src, "the retired `coyomap convert` command must stay removed"
 
 
 if __name__ == "__main__":

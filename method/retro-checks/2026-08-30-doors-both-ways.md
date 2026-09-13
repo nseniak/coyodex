@@ -5,7 +5,7 @@ half already existed and was already gated; the hand-off half is new (`Cn → In
 drawn even when it is the SAME surface the story arrived by). `interfaces[].actors` gains a THIRD
 and strongest source — any role standing at a step next to the surface — and `interfaces[].party` is
 DELETED · method.md, method/model.md, method/project-map.schema.json,
-method/templates/project-map.template.md, tools/coyodex/model.py, features.py, validate_model.py,
+method/templates/project-map.template.md, tools/coyomap/model.py, features.py, validate_model.py,
 audit_model.py, views.py, json_schema.py, the viewer, eval profile and rubric.
 
 Escalation: if check 2 fails as surfaces authored with openings and no closings, the rule was read as
@@ -17,7 +17,7 @@ not exist, and `assemble` will say so.
 
 **The arrival was gated and the hand-off was not, so a map could pass the doors gate having done half
 the rule.** Measured on the two live maps the day it shipped: 57 stories ended at a person naming no
-surface (coyodex 30, mcpolis 27), and neither map's `interface_doors` count could see it, because
+surface (coyomap 30, mcpolis 27), and neither map's `interface_doors` count could see it, because
 that count rises on the openings alone.
 
 **"ENDPOINTS ONLY" SHIPPED, AND WAS WITHDRAWN THE SAME DAY. Do not bring it back.** The first

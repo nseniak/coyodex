@@ -1,4 +1,4 @@
-"""Tests for `coyodex lint-fragment` — the per-fragment self-check (B1)."""
+"""Tests for `coyomap lint-fragment` — the per-fragment self-check (B1)."""
 from __future__ import annotations
 
 import json
@@ -6,9 +6,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from coyodex import lint_fragment
-from coyodex.assemble import load_fragment
-from coyodex.model import ProjectModel
+from coyomap import lint_fragment
+from coyomap.assemble import load_fragment
+from coyomap.model import ProjectModel
 
 
 def make_fragment(obj: dict) -> ProjectModel:
@@ -300,7 +300,7 @@ def test_an_unreadable_path_is_not_reported_as_a_rule_violation():
     import subprocess
     import sys
     with tempfile.TemporaryDirectory() as tmp:
-        r = subprocess.run([sys.executable, "-m", "coyodex.lint_fragment",
+        r = subprocess.run([sys.executable, "-m", "coyomap.lint_fragment",
                             str(Path(tmp) / "nope.json")], capture_output=True, text=True)
         assert r.returncode == 2, "a missing file is not a lint failure (exit 1)"
         assert "cannot read" in r.stderr
@@ -385,7 +385,7 @@ def test_an_already_built_map_still_validates_without_risks():
     """The gate is on NEW work. `validate` shares `rule_row_problems` with the fragment linter, so
     putting the check there would make two committed maps — 44 and 47 access rules, none with a risk
     — fail to validate, blocking the very rebuild that would fix them."""
-    from coyodex.validate_model import check_rules_model, rule_row_problems
+    from coyomap.validate_model import check_rules_model, rule_row_problems
     m = make_fragment(make_access_rule_fragment())
     assert not [p for p in rule_row_problems(m) if "empty `risk`" in p]
     assert not [p for p in check_rules_model(m)[0] if "empty `risk`" in p]
@@ -413,7 +413,7 @@ def test_the_verdict_survives_a_truncating_pipe():
                 json.dump(body, fh)
             out = subprocess.run(
                 [sys.executable, "-c",
-                 "import sys;from coyodex.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
+                 "import sys;from coyomap.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
                  name],
                 capture_output=True, text=True, cwd=d,
                 stdin=subprocess.DEVNULL)
@@ -430,7 +430,7 @@ def test_lint_catches_a_relation_authored_on_both_cards():
     fragment self-checked OK and `validate` then failed the ASSEMBLED map on 33 of these — every
     one of them inside that fragment. A self-check that cannot fail on the commonest domain-card
     mistake sends the agent home with a fragment that bounces at assembly."""
-    from coyodex.lint_fragment import lint_fragment_problems
+    from coyomap.lint_fragment import lint_fragment_problems
     m = make_fragment({"entities": [
         {"id": "E1", "name": "Order", "source": "a/x.py:1", "meaning": "an order",
          "store": {"dep": "D1", "container": "orders", "mode": "collection"},
@@ -457,7 +457,7 @@ def test_the_verdict_counts_are_not_string_matched_out_of_free_text():
             json.dump(frag, fh)
         out = subprocess.run(
             [sys.executable, "-c",
-             "import sys;from coyodex.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
+             "import sys;from coyomap.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
              "m.json"], capture_output=True, text=True, cwd=d, stdin=subprocess.DEVNULL)
     verdict = (out.stdout + out.stderr).splitlines()[0]
     assert verdict.startswith("LINT FAILED"), verdict
@@ -477,7 +477,7 @@ def test_the_verdict_does_not_collide_with_a_fragment_ok_row_on_stdout():
             json.dump({"roles": [{"id": "R2", "name": "X", "nope": 1}]}, fh)
         out = subprocess.run(
             [sys.executable, "-c",
-             "import sys;from coyodex.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
+             "import sys;from coyomap.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
              "good.json", "bad.json"],
             capture_output=True, text=True, cwd=d, stdin=subprocess.DEVNULL)
     assert out.returncode == 1, "the bad fragment must fail the lint"
@@ -492,8 +492,8 @@ def test_runs_in_in_a_fragment_is_an_advisory_not_a_failure():
     raised 17 BLOCKING lines. It is ADVISORY on purpose: the lead's own synthesis fragment
     legitimately carries `runs_in` (the committed corpus has one with 35 such rows) and this linter
     cannot tell the two apart."""
-    from coyodex.lint_fragment import lint_fragment_problems, lint_fragment_warnings
-    from coyodex.model import Component, ProjectModel
+    from coyomap.lint_fragment import lint_fragment_problems, lint_fragment_warnings
+    from coyomap.model import Component, ProjectModel
     m = ProjectModel(components=[
         Component(id="C1", name="A", purpose="p", source="a.py:1", runs_in=["backend"])])
     assert lint_fragment_problems(m, None) == []
@@ -503,8 +503,8 @@ def test_runs_in_in_a_fragment_is_an_advisory_not_a_failure():
 
 
 def test_a_fragment_without_runs_in_says_nothing_about_it():
-    from coyodex.lint_fragment import lint_fragment_warnings
-    from coyodex.model import Component, ProjectModel
+    from coyomap.lint_fragment import lint_fragment_warnings
+    from coyomap.model import Component, ProjectModel
     m = ProjectModel(components=[Component(id="C1", name="A", purpose="p", source="a.py:1")])
     assert not any("runs_in" in w for w in lint_fragment_warnings(m))
 
@@ -521,12 +521,12 @@ def test_the_duplication_advisory_does_not_fire_at_fragment_lint():
     The check itself is unchanged and still runs at `validate`, where the escape is readable —
     `test_the_duplication_advisory_still_fires_at_validate` holds that half.
     """
-    from coyodex.lint_fragment import lint_fragment_warnings
-    from coyodex.model import load_model
+    from coyomap.lint_fragment import lint_fragment_warnings
+    from coyomap.model import load_model
     steps = [{"n": i, "src": "C70", "dst": "C1", "phrase": f"does thing {i}",
               "where": f"a.py:{i}"} for i in range(1, 5)]
     frag = json.dumps({
-        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
         "components": [{"id": "C70", "name": "G", "purpose": "p"},
                        {"id": "C1", "name": "P", "purpose": "p"}],
         "use_cases": [{"id": "UC13", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"},
@@ -558,7 +558,7 @@ def test_lint_sees_a_drifted_anchor_and_says_so_in_the_verdict(tmp_path, capsys)
                    encoding="utf-8")
     frag = tmp_path / "T1.json"
     frag.write_text(json.dumps({
-        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
         "components": [{"id": "C1", "name": "A", "purpose": "p"},
                        {"id": "C2", "name": "B", "purpose": "p"}],
         "use_cases": [{"id": "UC1", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"}],
@@ -603,7 +603,7 @@ def make_repo_with_header(tmp_path: Path, pin: str, dirty_path: str | None) -> t
         p.write_text("changed\n", encoding="utf-8")
     header = tmp_path / "header.json"
     header.write_text(json.dumps({
-        "format": "coyodex-map", "title": "T", "goal": "g",
+        "format": "coyomap-map", "title": "T", "goal": "g",
         "commit": pin, "committed": "2026-01-01", "built": "2026-01-01 00:00",
     }), encoding="utf-8")
     return repo, header
@@ -633,13 +633,13 @@ def test_a_bare_pin_on_a_clean_tree_is_clean(tmp_path: Path) -> None:
     assert _pin_problems(repo, header) == []
 
 
-def test_coyodex_own_scratch_never_makes_the_tree_read_as_dirty(tmp_path: Path) -> None:
-    """`.coyodex-eval/` is this toolchain's git-ignored scratch. It was the ONLY path `scope`
-    reported on a live build, so the operator was asked to pin dirty because of a directory coyodex
+def test_coyomap_own_scratch_never_makes_the_tree_read_as_dirty(tmp_path: Path) -> None:
+    """`.coyomap-eval/` is this toolchain's git-ignored scratch. It was the ONLY path `scope`
+    reported on a live build, so the operator was asked to pin dirty because of a directory coyomap
     had just written itself."""
-    repo, header = make_repo_with_header(tmp_path, "abc1234", ".coyodex-eval/retro/x/report.md")
+    repo, header = make_repo_with_header(tmp_path, "abc1234", ".coyomap-eval/retro/x/report.md")
     assert _pin_problems(repo, header) == []
-    repo2, header2 = make_repo_with_header(tmp_path / "two", "abc1234", ".coyodex/project-map.json")
+    repo2, header2 = make_repo_with_header(tmp_path / "two", "abc1234", ".coyomap/project-map.json")
     assert _pin_problems(repo2, header2) == []
 
 
@@ -725,11 +725,11 @@ def _iface_fragment(**over) -> dict:
            "facing": "user", "kind": "api", "ways_in": ["EP1"],
            "evidence": [{"file": "src/a.py:3", "why": "forms the outgoing call"}]}
     row.update(over)
-    return {"format": "coyodex-map", "interfaces": [row]}
+    return {"format": "coyomap-map", "interfaces": [row]}
 
 
 def _lint_iface(**over) -> list[str]:
-    from coyodex.lint_fragment import lint_fragment_problems
+    from coyomap.lint_fragment import lint_fragment_problems
     return lint_fragment_problems(load_fragment(json.dumps(_iface_fragment(**over)), "f.json"), None)
 
 
@@ -773,10 +773,10 @@ def test_a_purpose_shaped_kind_is_a_lint_problem():
 
 
 def test_a_minted_kind_draws_ONE_aggregated_lint_line():
-    frag = {"format": "coyodex-map", "interfaces": [
+    frag = {"format": "coyomap-map", "interfaces": [
         {"id": "I1", "name": "A", "side": "ours", "kind": "browser-extension"},
         {"id": "I2", "name": "B", "side": "ours", "kind": "telephony"}]}
-    from coyodex.lint_fragment import lint_fragment_problems
+    from coyomap.lint_fragment import lint_fragment_problems
     hits = lint_fragment_problems(load_fragment(json.dumps(frag), "f.json"), None)
     agg = [h for h in hits if "are not seeds" in h]
     assert len(agg) == 1, hits
@@ -799,7 +799,7 @@ def test_a_seed_kind_lints_clean():
 # `verified` and `inferred` appeared only on `tests` rows — a constant that reads as an assurance.
 
 def _warn(fragment: dict) -> list[str]:
-    from coyodex.lint_fragment import lint_fragment_warnings
+    from coyomap.lint_fragment import lint_fragment_warnings
     return lint_fragment_warnings(load_fragment(json.dumps(fragment), "f.json"))
 
 
@@ -825,7 +825,7 @@ def _labels(values: list[str], kind: str = "components") -> list[str]:
                          "confidence": v})
         else:
             raise AssertionError(kind)
-    return _warn({"format": "coyodex-map", kind: rows})
+    return _warn({"format": "coyomap-map", kind: rows})
 
 
 def test_a_fragment_whose_labels_are_ALL_ONE_VALUE_is_an_advisory():

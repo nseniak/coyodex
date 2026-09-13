@@ -5,7 +5,7 @@ Change (2026-09-05): `validate` gains an advisory — a record this codebase KEE
 central touch as a `Cn → En` step) and the escape (`<En>: <why>` under a "Balance exceptions" extras
 heading). A record INSIDE another one counts as reached when its container is. New derivation
 `record_use_cases`. The method and the trace contract say so at the point steps are authored ·
-tools/coyodex/validate_model.py, method.md, method/model.md, method/templates/trace-contract.md.
+tools/coyomap/validate_model.py, method.md, method/model.md, method/templates/trace-contract.md.
 Seven records were storied into the mcpolis map in the same change.
 
 Escalation: if check 1 fails on a rebuild, the instruction is not reaching the worker that authors

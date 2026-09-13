@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex.validate_model` — the semantic checks over a model, including the
+"""Tests for `coyomap.validate_model` — the semantic checks over a model, including the
 v2-only behaviors: the deployment_linked orphan-dep exemption, the non_entity_types under-harvest
 marker, and the generated-view freshness check.
 
@@ -17,10 +17,10 @@ import re
 import tempfile
 from pathlib import Path
 
-from coyodex import grammar, lint_fragment, reporting
-from coyodex import balance_lib as balance_lib_mod
-from coyodex import validate_model as validate_model_mod
-from coyodex.model import (
+from coyomap import grammar, lint_fragment, reporting
+from coyomap import balance_lib as balance_lib_mod
+from coyomap import validate_model as validate_model_mod
+from coyomap.model import (
     Interface,
     ModelError,
     load_model,
@@ -59,7 +59,7 @@ from coyodex.model import (
     VariantTag,
     to_canonical_json,
 )
-from coyodex.validate_model import (
+from coyomap.validate_model import (
     INTERFACE_EXCEPTIONS_HEADING,
     NAMING_EXCEPTIONS_HEADING,
     _anchor_pairs,
@@ -75,7 +75,7 @@ from coyodex.validate_model import (
     validate_model,
     walk_jumps,
 )
-from coyodex.views import model_to_markdown
+from coyomap.views import model_to_markdown
 
 
 # --- builders -------------------------------------------------------------------
@@ -132,7 +132,7 @@ def test_entry_point_coverage_splits_the_two_arms_of_claiming():
     component is claimed by a rule that cannot tell a real door from a sibling row in the same file.
     On a live map the loose half was the LARGE half. This is a number, never an advisory: the
     unclaimed check's signal is already thin, and the fix for coarseness is not more warnings."""
-    from coyodex.model import Component, EntryPoint, Flow, FlowStep, ProjectModel, UseCase
+    from coyomap.model import Component, EntryPoint, Flow, FlowStep, ProjectModel, UseCase
     m = ProjectModel(title="T", goal="G")
     m.components = [Component(id="C1", name="Doors", purpose="p", source="a.py:1")]
     m.entry_points = [
@@ -162,7 +162,7 @@ def test_entry_point_coverage_splits_the_two_arms_of_claiming():
 
 def test_entry_point_coverage_counts_a_flow_step_at_the_way_ins_own_line():
     """The third bucket. The traversal arm is component-grain, so one flow through a component
-    marks every way in it owns as covered — 87 of coyodex's own 97 the day this landed. A surface
+    marks every way in it owns as covered — 87 of coyomap's own 97 the day this landed. A surface
     step carries the way in's own `source` line (method.md), so a step anchored within 3 lines of a
     way in is evidence a flow RUNS it: derived, at way-in grain, no new authored field. A number,
     not an advisory — it is the ruler any rule about drawing steps at ways in is judged with."""
@@ -240,7 +240,7 @@ def storyless_warnings(m: ProjectModel) -> list[str]:
 
 def test_storyless_ways_in_warn_once_per_interface_and_honour_the_records():
     """The walk, checked. The component arm cannot see a skipped walk: one flow through a component
-    marks every way in it owns as covered (87 of coyodex's own 97). So every way in NO use case
+    marks every way in it owns as covered (87 of coyomap's own 97). So every way in NO use case
     names and NO flow step runs is listed, once per interface, and each is adjudicated by a use
     case or by a record — per way in (`EPn`), per surface (`In`), or per component (`Cn`, the
     line that already exists). A pipe (`middleware`) is never a door, and a way in the map already
@@ -2231,7 +2231,7 @@ def test_glossary_where_dead_anchor_blocks_with_check_sources():
 def test_extensionless_edge_where_existence_is_verified():
     # A2 + B3: an extensionless edge anchor (`Dockerfile:1`) is format-valid AND its existence is
     # actually checked (the `_where_href`/`_BARE_PATH` path used to skip extensionless files silently).
-    from coyodex.model import Edge, ProjectModel
+    from coyomap.model import Edge, ProjectModel
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         (root / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
@@ -2465,7 +2465,7 @@ def test_granularity_advisory_silent_within_band():
 # --- Coverage exceptions (per-directory suppression of the --check-coverage wall) ---
 
 def test_recorded_coverage_dirs_reads_line_leading_dirs():
-    from coyodex.validate_model import _recorded_coverage_dirs
+    from coyomap.validate_model import _recorded_coverage_dirs
     m = make_valid_model()
     m.extras = [ExtraSection(heading="Coverage exceptions",
                              body="plugins/: coarse altitude\n  foo/bar/: generated\nprose plugins/x mid-line")]
@@ -2473,7 +2473,7 @@ def test_recorded_coverage_dirs_reads_line_leading_dirs():
 
 
 def test_compression_coverage_exception_is_boundary_aware():
-    from coyodex.validate_analysis import compression_coverage_from_refs
+    from coyomap.validate_analysis import compression_coverage_from_refs
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         for base in ("plugins", "plugins_legacy"):   # a NAME-PREFIX sibling, not a path child
@@ -2510,7 +2510,7 @@ def test_coverage_exception_drops_recorded_domain_dir_from_denominator():
 
 
 def test_coverage_exception_silences_unclaimed_surface_by_dir():
-    from coyodex.validate_model import _completeness_warnings
+    from coyomap.validate_model import _completeness_warnings
     m = make_valid_model()
     m.components.append(Component(id="C2", name="Plugin", purpose="a plugin",
                                   source="plugins/achievements/plugin.py:1"))
@@ -2923,7 +2923,7 @@ def test_roleless_verb_off_the_dep_boundary_is_not_flagged():
 # --- File-level harvest coverage (WS4) -----------------------------------------
 
 def test_file_level_coverage_flags_loose_py_with_the_exclusions():
-    from coyodex.validate_analysis import file_level_coverage
+    from coyomap.validate_analysis import file_level_coverage
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         (root / "adapters").mkdir()
@@ -2933,15 +2933,15 @@ def test_file_level_coverage_flags_loose_py_with_the_exclusions():
         (root / "adapters" / "__init__.py").write_text("\n", encoding="utf-8")  # package marker → excluded (4)
         (root / "tests").mkdir()
         (root / "tests" / "t.py").write_text("x\n", encoding="utf-8")           # non-product → excluded (3)
-        (root / ".coyodex-eval").mkdir()
-        (root / ".coyodex-eval" / "e.py").write_text("x\n", encoding="utf-8")   # coyodex artifact → excluded (3)
+        (root / ".coyomap-eval").mkdir()
+        (root / ".coyomap-eval" / "e.py").write_text("x\n", encoding="utf-8")   # coyomap artifact → excluded (3)
         refs = {"adapters/a.py"}
         out = file_level_coverage(refs, root)
         assert any("loose.py" in w for w in out)
         assert not any("README" in w for w in out)
         assert not any("__init__.py" in w for w in out)        # package marker not flagged
         assert not any("tests/t.py" in w for w in out)
-        assert not any(".coyodex-eval" in w for w in out)      # coyodex's own output not flagged
+        assert not any(".coyomap-eval" in w for w in out)      # coyomap's own output not flagged
         assert any("adapters/ (1)" in w for w in out)          # GROUPED by directory with a count
         # exclusion 1: a referenced DIRECTORY covers its whole subtree
         assert not file_level_coverage({"adapters"}, root)
@@ -2950,7 +2950,7 @@ def test_file_level_coverage_flags_loose_py_with_the_exclusions():
 
 
 def test_file_level_coverage_groups_root_files_under_root_label():
-    from coyodex.validate_analysis import file_level_coverage
+    from coyomap.validate_analysis import file_level_coverage
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         (root / "loose1.py").write_text("x\n", encoding="utf-8")
@@ -2980,7 +2980,7 @@ def test_referenced_paths_matches_root_files_but_not_root_directories():
     shares its name with words that appear in ordinary map prose, and accepting them let a `Why`
     sentence mark a whole tree as referenced (on a live map that silenced a true "i18n/ has no path
     referenced — likely an unmapped module" finding)."""
-    from coyodex.validate_model import referenced_paths
+    from coyomap.validate_model import referenced_paths
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "Makefile").write_text("all:\n")
@@ -3266,7 +3266,7 @@ def test_json_mode_does_not_clip_trigger_prose_either():
 
 
 def test_no_hand_written_truncation_bypasses_the_helper():
-    """The structural guard: no finding-list truncation outside `coyodex.reporting`.
+    """The structural guard: no finding-list truncation outside `coyomap.reporting`.
 
     A hand-written tail is invisible to `--json`, which then reports a completeness it does not have.
     The first version of this test sliced ONE file after `def _shown(` and grepped for one exact
@@ -3293,7 +3293,7 @@ def test_no_hand_written_truncation_bypasses_the_helper():
             if tail.search(code) and not any(h in code for h in ("shown(", "capped(", "clip(")):
                 offenders.append(f"{name}:{n}: {code.strip()[:90]}")
     assert not offenders, (
-        "hand-written truncation bypasses coyodex.reporting, so `--json` silently under-reports:\n"
+        "hand-written truncation bypasses coyomap.reporting, so `--json` silently under-reports:\n"
         + "\n".join(offenders))
 
 
@@ -3484,9 +3484,9 @@ def test_ignore_exceptions_re_reads_the_map_with_every_recorded_line_dropped():
             "format": FORMAT, "title": "T", "goal": "g",
             "extras": [{"heading": "Balance exceptions", "body": "UC1: granularity — a why.\n"}],
         }), encoding="utf-8")
-        plain = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p)],
+        plain = subprocess.run([sys.executable, "-m", "coyomap.validate_model", str(p)],
                                capture_output=True, text=True)
-        rescan = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p),
+        rescan = subprocess.run([sys.executable, "-m", "coyomap.validate_model", str(p),
                                  "--ignore-exceptions"], capture_output=True, text=True)
         assert "--ignore-exceptions" in rescan.stdout
         assert "1 recorded line(s) were dropped" in rescan.stdout
@@ -3504,18 +3504,18 @@ def test_ignore_exceptions_does_not_report_a_stale_view_on_a_current_one():
     The A/B is the whole test: the same map, the same `.md`, with and without the flag."""
     import subprocess
     import sys
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "project-map.json"
         doc = {"format": FORMAT, "title": "T", "goal": "g",
                "extras": [{"heading": "Balance exceptions", "body": "UC1: granularity — a why.\n"}]}
         p.write_text(json.dumps(doc), encoding="utf-8")
-        # A view that IS current, written the way `coyodex render` writes it.
+        # A view that IS current, written the way `coyomap render` writes it.
         (Path(tmp) / "project-map.md").write_text(
             model_to_markdown(load_model(p.read_text(encoding="utf-8"))), encoding="utf-8")
-        plain = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p)],
+        plain = subprocess.run([sys.executable, "-m", "coyomap.validate_model", str(p)],
                                capture_output=True, text=True)
-        rescan = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p),
+        rescan = subprocess.run([sys.executable, "-m", "coyomap.validate_model", str(p),
                                  "--ignore-exceptions"], capture_output=True, text=True)
         assert "differs from the view generated" not in plain.stdout, plain.stdout
         assert "differs from the view generated" not in rescan.stdout, rescan.stdout
@@ -3532,7 +3532,7 @@ def test_a_genuinely_stale_view_is_still_caught_without_the_flag():
         p = Path(tmp) / "project-map.json"
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g"}), encoding="utf-8")
         (Path(tmp) / "project-map.md").write_text("hand-edited\n", encoding="utf-8")
-        plain = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p)],
+        plain = subprocess.run([sys.executable, "-m", "coyomap.validate_model", str(p)],
                                capture_output=True, text=True)
         assert "differs from the view generated" in plain.stdout, plain.stdout
 
@@ -3622,7 +3622,7 @@ def test_the_inert_record_phrase_has_exactly_one_producer():
     same words would make it report a silent false 0. Pinning the phrase here means the assertion
     and its producer cannot drift apart unnoticed."""
     src = (Path(__file__).resolve().parent.parent
-           / "tools" / "coyodex" / "validate_model.py").read_text(encoding="utf-8")
+           / "tools" / "coyomap" / "validate_model.py").read_text(encoding="utf-8")
     assert src.count("currently suppressing nothing") == 1, (
         "assertion 24 keys on this phrase; a second producer makes its 0 ambiguous")
 
@@ -4025,16 +4025,16 @@ def test_a_map_with_no_access_rules_is_not_asked_for_a_granularity():
 
 # --- a map with only its generated views is NAMED (retro 2026-08-14) ------------------------------
 # One repo sits in this state: `project-map.md` and `project-map.html` present, the model gone. The
-# views still look authoritative to a reader, and `ERROR: … not found` reads as "no coyodex here"
+# views still look authoritative to a reader, and `ERROR: … not found` reads as "no coyomap here"
 # when in fact a build ran and its source was lost. The recovery differs from an empty directory's.
 
 def test_views_without_a_model_are_reported_as_such(capsys):
     import tempfile
 
-    from coyodex import validate_model as vm
+    from coyomap import validate_model as vm
 
     with tempfile.TemporaryDirectory() as td:
-        coy = Path(td) / ".coyodex"
+        coy = Path(td) / ".coyomap"
         coy.mkdir()
         (coy / "project-map.md").write_text("# a rendered map\n", encoding="utf-8")
         (coy / "project-map.html").write_text("<html></html>", encoding="utf-8")
@@ -4048,10 +4048,10 @@ def test_views_without_a_model_are_reported_as_such(capsys):
 def test_an_empty_map_directory_keeps_the_plain_not_found(capsys):
     import tempfile
 
-    from coyodex import validate_model as vm
+    from coyomap import validate_model as vm
 
     with tempfile.TemporaryDirectory() as td:
-        coy = Path(td) / ".coyodex"
+        coy = Path(td) / ".coyomap"
         coy.mkdir()
         assert vm.main([str(coy / "project-map.json")]) == 1
         err = capsys.readouterr().err
@@ -4062,10 +4062,10 @@ def test_an_empty_map_directory_keeps_the_plain_not_found(capsys):
 def test_only_the_markdown_view_surviving_is_still_reported(capsys):
     import tempfile
 
-    from coyodex import validate_model as vm
+    from coyomap import validate_model as vm
 
     with tempfile.TemporaryDirectory() as td:
-        coy = Path(td) / ".coyodex"
+        coy = Path(td) / ".coyomap"
         coy.mkdir()
         (coy / "project-map.md").write_text("# a rendered map\n", encoding="utf-8")
         assert vm.main([str(coy / "project-map.json")]) == 1
@@ -4080,12 +4080,12 @@ def test_the_duplication_advisory_still_fires_at_validate():
     map, so the 'Accepted duplications' escape the message names is actually readable, and the
     advisory is answerable.
     """
-    from coyodex.validate_model import _duplication_warnings
-    from coyodex.model import load_model
+    from coyomap.validate_model import _duplication_warnings
+    from coyomap.model import load_model
     steps = [{"n": i, "src": "C70", "dst": "C1", "phrase": f"does thing {i}",
               "where": f"a.py:{i}"} for i in range(1, 5)]
     base = {
-        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
         "components": [{"id": "C70", "name": "G", "purpose": "p"},
                        {"id": "C1", "name": "P", "purpose": "p"}],
         "use_cases": [{"id": "UC13", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"},
@@ -4104,17 +4104,17 @@ def test_the_duplication_advisory_still_fires_at_validate():
 def test_validate_names_the_writer_command_when_an_advisory_asks_for_a_record(capsys, tmp_path):
     """Sixty advisory strings end by naming an extras heading, and none named what writes one.
 
-    `coyodex record` is named six times in `method.md` and a measured build used it ZERO times —
+    `coyomap record` is named six times in `method.md` and a measured build used it ZERO times —
     against forty on the build before — hand-appending every record with a `python3` heredoc,
     which is the anti-pattern `record --help` opens by quoting. One of those hand-written lines
     keyed no ids and cost three extra finalize rounds. A footer, not sixty rewritten strings: the
     sentence lands once and stays right.
     """
-    from coyodex import validate_model
+    from coyomap import validate_model
     steps = [{"n": i, "src": "C70", "dst": "C1", "phrase": f"does thing {i}",
               "where": f"a.py:{i}"} for i in range(1, 5)]
     doc = {
-        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
         "components": [{"id": "C70", "name": "G", "purpose": "p"},
                        {"id": "C1", "name": "P", "purpose": "p"}],
         "use_cases": [{"id": "UC13", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"},
@@ -4127,20 +4127,20 @@ def test_validate_names_the_writer_command_when_an_advisory_asks_for_a_record(ca
     validate_model.main([str(p)])
     out = capsys.readouterr().out
     assert "share a run of" in out, "the fixture must raise an advisory that names a heading"
-    assert "coyodex record --map" in out, out
+    assert "coyomap record --map" in out, out
     assert "shape-checks" in out, "it must say why the command beats a heredoc"
 
     # A map raising no advisory that names a heading gets no footer: the line appears where there
     # is something to record, not on every run. (Verified on a real map too — the 2026-08-18
     # mcpolis map has every escape recorded and prints no footer.)
-    quiet = {"format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+    quiet = {"format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
              "components": [{"id": "C70", "name": "G", "purpose": "p"}]}
     q = tmp_path / "quiet.json"
     q.write_text(json.dumps(quiet), encoding="utf-8")
     validate_model.main([str(q)])
     quiet_out = capsys.readouterr().out
     if "extras heading" not in quiet_out:
-        assert "coyodex record --map" not in quiet_out, quiet_out
+        assert "coyomap record --map" not in quiet_out, quiet_out
 
 
 # --- role relations: referential integrity plus the closed kind pair, nothing more ---------------
@@ -4624,7 +4624,7 @@ def test_a_theirs_surface_the_product_merely_calls_derives_NO_actor():
 
 def test_a_handoff_surface_derives_the_roles_whose_stories_reach_it():
     """The two kinds that MEAN a person goes there are the gate — and they are exactly the case an
-    authored field existed for: coyodex's GitHub and code editor name no actor and have no ways in."""
+    authored field existed for: coyomap's GitHub and code editor name no actor and have no ways in."""
     m = make_interface_model()
     m.interfaces[0].side = "theirs"
     m.interfaces[0].kind = "handoff"
@@ -4709,7 +4709,7 @@ def test_a_step_still_pointing_at_a_dependency_that_stands_on_a_surface_is_flagg
 
 def test_a_flow_that_hands_its_result_to_an_actor_without_a_door_is_flagged():
     """The OUT half. The arrival was already gated; the hand-off was not, so a map could open every
-    story at a door and still show 57 stories walking out past it (coyodex 30, mcpolis 27, measured
+    story at a door and still show 57 stories walking out past it (coyomap 30, mcpolis 27, measured
     the day this shipped)."""
     m = make_interface_model()
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
@@ -5183,7 +5183,7 @@ def test_a_name_starting_with_the_is_nudged():
 
 
 def test_the_naming_nudge_reads_EVERY_element_type_not_only_surfaces():
-    """Surfaces are where it was found, but the convention belongs to every name. coyodex's own map
+    """Surfaces are where it was found, but the convention belongs to every name. coyomap's own map
     had 5 components and 3 subsystems doing the same thing."""
     for setter in (lambda m: setattr(m.components[0], "name", "The viewer"),
                    lambda m: setattr(m.deps[0], "name", "The database"),
@@ -5741,7 +5741,7 @@ def test_a_walk_that_leaves_its_person_with_no_reply_is_reported():
     and the map lost its only `handoff` surface while the use case's own outcome still reads "their
     own mail program opens". Measured across the two maps: 0 person-facing walks fire on the
     previous one and 5 of 43 on that build, including the story in question."""
-    from coyodex.model import (Component, ExtraSection, Flow, FlowStep, Interface, ProjectModel,
+    from coyomap.model import (Component, ExtraSection, Flow, FlowStep, Interface, ProjectModel,
                                Role, UseCase)
     m = ProjectModel(title="T", goal="G")
     m.roles = [Role(id="R1", name="Visitor", kind="human", audience="user")]
@@ -5786,7 +5786,7 @@ def test_a_whole_kind_of_front_door_that_nobody_names_is_reported():
     screen plus the address behind it as one party arriving twice, kept the screen and dropped the
     address. Per kind: `http-route` named went 38 of 114 to 2 of 118 and `mcp-tool` 6 of 43 to 1 of
     43, while `ui-route` held at 20 of 39 and 21 of 36. Only the action-level kinds moved."""
-    from coyodex.model import Component, EntryPoint, ExtraSection, ProjectModel, UseCase
+    from coyomap.model import Component, EntryPoint, ExtraSection, ProjectModel, UseCase
     m = ProjectModel(title="T", goal="G")
     m.components = [Component(id="C1", name="Routes", purpose="serves", source="a.py:1")]
     m.entry_points = [EntryPoint(id=f"EP{i}", kind="http-route", activation="external",
@@ -5838,7 +5838,7 @@ def test_a_record_kept_inside_nothing_that_is_kept_is_reported():
     rule, and on that map one line — "E54, E68, E75, E78: three of these live inside a record a
     story already reaches" — pre-silenced all four before this check existed, with a reason the
     map's own data contradicts."""
-    from coyodex.model import Entity, EntityField, EntityRelation, ExtraSection, ProjectModel, Store
+    from coyomap.model import Entity, EntityField, EntityRelation, ExtraSection, ProjectModel, Store
     m = ProjectModel(title="T", goal="G")
     holder = Entity(id="E1", name="Page answer", meaning="what one screen returns",
                     source="a.py:1", store=Store(mode="projection", container="the detail page"))
@@ -5883,9 +5883,9 @@ def test_the_embedded_holder_chain_must_end_somewhere_real():
     The first version asked only whether an immediate holder `is_saved`, and `embedded` counts as
     saved. So a record embedded inside an embedded inside a read shape passed, and a record naming
     ITSELF as its holder passed on its own say-so. An adversarial reader found the second on
-    coyodex's own map: E38 `DirExpectation`, whose only holder is E38. A cycle of two never
+    coyomap's own map: E38 `DirExpectation`, whose only holder is E38. A cycle of two never
     converges at all, which is why `seen` is not optional."""
-    from coyodex.model import Entity, EntityField, ProjectModel, Store
+    from coyomap.model import Entity, EntityField, ProjectModel, Store
 
     def rec(i, mode, holds=None):
         e = Entity(id=i, name=i, meaning="m", source=f"a.py:{i[1:]}",
@@ -5917,10 +5917,10 @@ def test_the_embedded_holder_chain_must_end_somewhere_real():
 def test_a_machine_step_after_a_person_no_longer_hides_the_dead_end():
     """The first version took the last step touching ANY actor and then asked whether that one was
     a person. So a single machine step after a person's dead end hid it, and an adversarial reader
-    found the shipped check silent on argus UC3 and on coyodex's own UC38 — the exact defect it
+    found the shipped check silent on argus UC3 and on coyomap's own UC38 — the exact defect it
     exists for. It also read a walk's OWN steps, so a reply handed back inside a shared sub-use case
     read as no reply, and a dead end inside one was invisible."""
-    from coyodex.model import (Component, Flow, FlowStep, Interface, ProjectModel, Role, SubFlow,
+    from coyomap.model import (Component, Flow, FlowStep, Interface, ProjectModel, Role, SubFlow,
                                UseCase)
     m = ProjectModel(title="T", goal="G")
     m.roles = [Role(id="R1", name="Visitor", kind="human", audience="user"),
@@ -5959,7 +5959,7 @@ def test_validate_json_carries_the_sweep_worklist_as_rows():
     """`audit --json` has a structured `worklist`; `validate --json` hid its sweep worklist inside one
     clipped prose advisory. A build hand-parsed the text and then searched the JSON for a key that
     did not exist. The rows are here now."""
-    from coyodex.validate_model import sweep_worklist
+    from coyomap.validate_model import sweep_worklist
     m = ProjectModel(title="T", goal="G")
     m.use_cases = [UseCase(id="UC1", name="Delete")]
     m.components = [Component(id="C1", name="A", purpose="a", source="src/a.py:1"),

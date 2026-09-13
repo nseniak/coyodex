@@ -2,7 +2,7 @@
 
 Change (2026-09-06): T2b in `method.md` gains one line — the route that serves the built app, and
 the catch-all that serves its shell, belong to the web surface they serve. The note beside
-`_PLUMBING_EP_KINDS` in `tools/coyodex/validate_model.py` is corrected: it claimed those two rows
+`_PLUMBING_EP_KINDS` in `tools/coyomap/validate_model.py` is corrected: it claimed those two rows
 "can never belong to a surface", which is what left the advisory unsatisfiable. NO live map was
 hand-fixed and no filter was widened.
 

@@ -1,7 +1,7 @@
 {
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "trapdoor",
-  "goal": "trapdoor is a synthetic ticketing service that exists to be MAPPED WRONG. Every directory in it plants a defect class that four real coyodex builds produced, so a regression suite can assert what the map tooling says about a real tree rather than about a toy in-memory object. Support agents move tickets through a declared lifecycle, reporters comment on them, and a background worker rolls resolved tickets up; that product story is only realistic enough to hang the traps on.",
+  "goal": "trapdoor is a synthetic ticketing service that exists to be MAPPED WRONG. Every directory in it plants a defect class that four real coyomap builds produced, so a regression suite can assert what the map tooling says about a real tree rather than about a toy in-memory object. Support agents move tickets through a declared lifecycle, reporters comment on them, and a background worker rolls resolved tickets up; that product story is only realistic enough to hang the traps on.",
   "commit": "fixture",
   "committed": "2026-07-29",
   "built": "2026-07-29 15:00",
@@ -2050,7 +2050,7 @@
       "per_env": "Same everywhere."
     }
   ],
-  "tests_note": "The suite was NOT run to build this table — the fixture ships no test suite of its own, by design: what exercises this tree is the coyodex regression suite in tests/, not tests inside the fixture. Every row below is inferred from that outside suite, and the gaps are the deliverable.",
+  "tests_note": "The suite was NOT run to build this table — the fixture ships no test suite of its own, by design: what exercises this tree is the coyomap regression suite in tests/, not tests inside the fixture. Every row below is inferred from that outside suite, and the gaps are the deliverable.",
   "tests": [
     {
       "targets": [

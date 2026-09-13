@@ -10,7 +10,7 @@ Change (2026-09-03): the viewer shows `interfaces[].carries[]` and the flow step
 surface SIDE BY SIDE on that surface's own page, and an actor's page switches from the authored rows
 to that actor's OWN steps. New derivations `interface_walk_steps` and `interface_steps_by_use_case`.
 The audit worklist now challenges SUB-FLOW step phrases too. The advisory demanding a `where` on
-every crossing is deleted · method.md, method/model.md, tools/coyodex/validate_model.py,
+every crossing is deleted · method.md, method/model.md, tools/coyomap/validate_model.py,
 features.py, audit_model.py, the viewer.
 
 **`carries[]` IS NOT REMOVED** — true on 2026-09-03, and no longer true. A change deleting it in
@@ -29,7 +29,7 @@ accepting the map.
 was measured and did not hold.** Measured on the three live maps:
 
 - **16 of the 39 surfaces have no flow step at all**, so the derivation would have turned 22
-  authored sentences into silence — including every one of coyodex's own 11 surfaces, whose map
+  authored sentences into silence — including every one of coyomap's own 11 surfaces, whose map
   draws no doors. Three of the 22 are redaction guarantees ("a log record, with secret-shaped fields
   and credential headers stripped before it leaves the host") that no story reaches.
 - **Direction is not derivable.** A step records who talks to whom, not which way data goes: a PULL
@@ -45,7 +45,7 @@ at. So the two are shown together, and neither is derived from the other.
 **Two real defects were fixed on the way.** An actor's page fell back to EVERY step at a surface when
 the walks named no step of that actor's own, so argus told a reader that the software "Assistant"
 picks a Google account and approves — a step belonging to the human "Visitor". And the audit worklist
-read `flows[].steps` only, so 195 sub-flow step phrases across the three maps (coyodex 59, argus 65,
+read `flows[].steps` only, so 195 sub-flow step phrases across the three maps (coyomap 59, argus 65,
 mcpolis 71) reached readers with no skeptic on them.
 
 ## What the partial run changed, and one thing it found in a LIVE map
@@ -93,13 +93,13 @@ line that proves the value is not readable later."* Either that row earns an anc
    the underivable claim has come back.
 
 4. expect: `audit` challenges every sub-flow step phrase, once each, under its own `SFn` id. The
-   behavioural worklist grows by roughly the sub-flow phrase count (coyodex +59, argus +65,
+   behavioural worklist grows by roughly the sub-flow phrase count (coyomap +59, argus +65,
    mcpolis +71) and no `SFn` step appears twice.
    regression sign: a claim reading `UCn step n` whose phrase lives in a sub-flow — expansion crept
    in and several skeptics are being sent at one line.
 
 5. expect: `validate` raises no crossing-anchor advisory on any map, and an interface grounded ONLY
-   by a crossing's `where` still passes. coyodex's Settings and Project source files are that case.
+   by a crossing's `where` still passes. coyomap's Settings and Project source files are that case.
    regression sign: either the advisory returns, or those two surfaces start failing "grounded by
    nothing" — the grounding arm was removed along with the advisory, and it must not be.
 
@@ -107,7 +107,7 @@ line that proves the value is not readable later."* Either that row earns an anc
 
 **RETIRED 2026-09-05, SUPERSEDED AND NOT VERIFIED.** `interfaces[].carries[]` is removed;
 every check above grades behaviour that no longer exists, and check 5 grades as a PASS the exact
-shape that made coyodex's own map stop validating. Kept here, not deleted, because the reason it
+shape that made coyomap's own map stop validating. Kept here, not deleted, because the reason it
 survived on 2026-09-03 is the reason the second removal is different: the objection was never the
 sentence, it was DIRECTION, and the step now carries one. Its successor is
 `2026-09-05-what-crosses-is-a-step-with-a-direction.md`.

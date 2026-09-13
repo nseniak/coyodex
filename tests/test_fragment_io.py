@@ -15,8 +15,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.assemble import dump_preserving, load_map_or_fragment
-from coyodex.model import FORMAT, ModelError, to_canonical_json
+from coyomap.assemble import dump_preserving, load_map_or_fragment
+from coyomap.model import FORMAT, ModelError, to_canonical_json
 
 FRAGMENT = {"components": [{"id": "C1", "name": "X", "purpose": "p", "entry_point": "a.py:1"}],
             "edges": [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:3"}]}
@@ -81,7 +81,7 @@ def test_an_edit_to_a_section_the_fragment_does_not_declare_is_dropped_by_design
     p = make_file(FRAGMENT)
     m, present = load_map_or_fragment(p)
     m.use_cases.append(type(m.use_cases)().__class__ and __import__(
-        "coyodex.model", fromlist=["UseCase"]).UseCase(id="UC1", name="New"))
+        "coyomap.model", fromlist=["UseCase"]).UseCase(id="UC1", name="New"))
     out = json.loads(dump_preserving(m, present))
     assert "use_cases" not in out
 

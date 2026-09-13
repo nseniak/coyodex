@@ -24,8 +24,8 @@ produces. Pinning our own expected output keeps this test independent of the eva
 Regenerate after an INTENTIONAL output change:
 
     cd eval/fixtures/trapdoor
-    coyodex reconcile --rules rules.json --fragments fragments --out reconcile.json
-    coyodex assemble fragments/*.json --out /tmp/exp --reconcile reconcile.json
+    coyomap reconcile --rules rules.json --fragments fragments --out reconcile.json
+    coyomap assemble fragments/*.json --out /tmp/exp --reconcile reconcile.json
     python -c "import json,pathlib;m=json.load(open('/tmp/exp/project-map.json'));\
 [m.pop(k,None) for k in ('tool_commit','tool_committed','built')];\
 pathlib.Path('expected/project-map.json').write_text(json.dumps(m,indent=1,ensure_ascii=False)+'\\n')"
@@ -50,7 +50,7 @@ def _cli(*args: str, cwd: Path = FIXTURE) -> subprocess.CompletedProcess:
     """Drive the real CLI in a subprocess. In-process calls would miss argument parsing, exit
     codes and stream handling — three of the bugs this file exists to guard were in exactly those."""
     return subprocess.run([sys.executable, "-c",
-                           "import sys;from coyodex.cli import main;sys.exit(main(sys.argv[1:]))",
+                           "import sys;from coyomap.cli import main;sys.exit(main(sys.argv[1:]))",
                            *args],
                           capture_output=True, text=True, cwd=cwd, stdin=subprocess.DEVNULL)
 
@@ -97,7 +97,7 @@ def test_assembly_is_deterministic_across_processes(tmp_path):
     for seed in ("0", "1"):
         d = tmp_path / f"run{seed}"
         r = subprocess.run([sys.executable, "-c",
-                            "import sys;from coyodex.cli import main;sys.exit(main(sys.argv[1:]))",
+                            "import sys;from coyomap.cli import main;sys.exit(main(sys.argv[1:]))",
                             "assemble", *[str(p) for p in FRAGMENTS], "--out", str(d),
                             "--reconcile", str(FIXTURE / "reconcile.json")],
                            capture_output=True, text=True, cwd=FIXTURE,

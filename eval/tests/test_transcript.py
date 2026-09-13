@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex-eval transcript` — the retrospective's eye on a build transcript.
+"""Tests for `coyomap-eval transcript` — the retrospective's eye on a build transcript.
 
 Run either way (needs an editable install: `make install-eval`):
     python3 eval/tests/test_transcript.py
@@ -11,7 +11,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex_eval import transcript
+from coyomap_eval import transcript
 
 # --- the range applies to EVERY mode ---------------------------------------------
 # `--commands` and `--stats` accepted --from/--to and silently discarded them, so a reviewer told
@@ -22,8 +22,8 @@ from coyodex_eval import transcript
 
 def make_two_phase_transcript(tmp: Path) -> Path:
     lines = []
-    for i, cmd in enumerate(["coyodex preindex .", "coyodex assemble a.json",
-                             "coyodex validate map.json", "coyodex finalize map.json"]):
+    for i, cmd in enumerate(["coyomap preindex .", "coyomap assemble a.json",
+                             "coyomap validate map.json", "coyomap finalize map.json"]):
         lines.append(json.dumps({
             "type": "assistant",
             "message": {"id": f"m{i}", "content": [
@@ -112,7 +112,7 @@ def make_bash_call(command: str) -> "transcript.ToolCall":
 
 def test_a_subcommand_hidden_past_the_cut_is_named():
     long_prefix = "cd /a/very/long/path/that/eats/the/width " + "-" * 70
-    call = make_bash_call(f"{long_prefix} && coyodex grounding write --map m.json")
+    call = make_bash_call(f"{long_prefix} && coyomap grounding write --map m.json")
     line = transcript.summarise_call(call)
     assert "grounding write" in line, line
     assert "--commands" in line, line
@@ -120,16 +120,16 @@ def test_a_subcommand_hidden_past_the_cut_is_named():
 
 def test_several_hidden_subcommands_are_all_named_once_each():
     long_prefix = "x" * 120
-    call = make_bash_call(f"{long_prefix}; coyodex assemble a.json; coyodex validate m.json; "
-                          f"coyodex assemble b.json")
+    call = make_bash_call(f"{long_prefix}; coyomap assemble a.json; coyomap validate m.json; "
+                          f"coyomap assemble b.json")
     line = transcript.summarise_call(call)
     assert "assemble" in line and "validate" in line
     assert line.count("assemble") == 1, line
 
 
 def test_a_short_command_is_returned_untouched():
-    call = make_bash_call("coyodex validate m.json")
-    assert transcript.summarise_call(call) == "coyodex validate m.json"
+    call = make_bash_call("coyomap validate m.json")
+    assert transcript.summarise_call(call) == "coyomap validate m.json"
 
 
 def test_a_long_command_hiding_no_subcommand_is_truncated_silently():
@@ -141,7 +141,7 @@ def test_a_long_command_hiding_no_subcommand_is_truncated_silently():
 
 def test_the_visible_head_is_still_exactly_the_width():
     long_prefix = "z" * 150
-    call = make_bash_call(f"{long_prefix} && coyodex render m.json")
+    call = make_bash_call(f"{long_prefix} && coyomap render m.json")
     line = transcript.summarise_call(call)
     assert line.startswith("z" * 100)
     assert not line.startswith("z" * 101)
@@ -162,7 +162,7 @@ def make_transcript_with_prose(tmp: Path) -> Path:
         json.dumps({"type": "assistant", "message": {"id": "m1", "content": [
             {"type": "text", "text": "Running the pre-index now."},
             {"type": "tool_use", "id": "t1", "name": "Bash",
-             "input": {"command": "coyodex preindex ."}}]}}),
+             "input": {"command": "coyomap preindex ."}}]}}),
     ]
     p = tmp / "prose.jsonl"
     p.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -215,7 +215,7 @@ def test_a_tool_filtered_read_leaves_text_only_turns_out(capsys):
 def _subs(cmd: str) -> list[str]:
     call = transcript.ToolCall(name="Bash", input={"command": cmd})
     turn = transcript.Turn(index=1, role="assistant", tool_calls=(call,))
-    return [n for _i, n in transcript.coyodex_subcommands([turn])]
+    return [n for _i, n in transcript.coyomap_subcommands([turn])]
 
 
 def test_an_apostrophe_in_a_comment_does_not_swallow_the_command():
@@ -223,24 +223,24 @@ def test_an_apostrophe_in_a_comment_does_not_swallow_the_command():
     while `_heredoc_tags` reset per line, so one unbalanced quote merged every segment and a later
     program's `-h` again deleted a real invocation. Six real commands in the corpus carry a comment
     apostrophe; each was one `sort -h` away from vanishing."""
-    assert _subs("# don't do this\ncoyodex audit m.json\ndu -h /tmp/x") == ["audit"]
-    assert _subs("# it's fine\ncoyodex validate m.json\npython build.py --help") == ["validate"]
+    assert _subs("# don't do this\ncoyomap audit m.json\ndu -h /tmp/x") == ["audit"]
+    assert _subs("# it's fine\ncoyomap validate m.json\npython build.py --help") == ["validate"]
 
 
 def test_a_comment_cannot_open_a_phantom_heredoc():
     """`# use << EOF to redirect` opened a heredoc whose terminator never came, blanking every
     invocation below it. The round-one sweep abstracted "`<<` inside a quoted string" and stopped
     there; a comment is the same class."""
-    assert _subs("# use << EOF to redirect\ncoyodex audit m.json") == ["audit"]
+    assert _subs("# use << EOF to redirect\ncoyomap audit m.json") == ["audit"]
 
 
-def test_coyodex_shaped_prose_inside_a_quoted_string_is_not_a_run():
+def test_coyomap_shaped_prose_inside_a_quoted_string_is_not_a_run():
     """Quote-blanking was applied to the `--help` tail but never to the match, so the scan ruled
     that quoted text is not evidence of a help run but IS evidence of an invocation. Across the
     corpus 130 counted invocations sat inside quoted spans — echoed banners, `sed` replacement
     strings, commit messages describing what was run."""
-    assert _subs('echo "next step: coyodex reconcile the fragments"') == []
-    assert _subs('coyodex record --map x --line "then runs coyodex assemble"') == ["record"]
+    assert _subs('echo "next step: coyomap reconcile the fragments"') == []
+    assert _subs('coyomap record --map x --line "then runs coyomap assemble"') == ["record"]
     # the quote DELIMITER is ordinary syntax, so the careful `"$CY"` spelling still counts —
     # now via the CALL, because a function definition on its own is a template nobody ran
     assert _subs('rec() { "$CY" record --map m --line "$1"; }\nrec "Sweep debt" "a: why"') \
@@ -251,22 +251,22 @@ def test_a_plain_heredoc_terminator_must_not_be_indented():
     """Real bash requires column 0 for `<<TAG`; only `<<-` strips leading TABS. Accepting an
     indented terminator ended the body early and read the rest of it as shell — inventing an
     invocation, which is what heredoc stripping exists to prevent."""
-    assert _subs("cat <<EOF\n  EOF\ncoyodex dump m.json\nEOF\ncoyodex audit m.json") == ["audit"]
-    assert _subs("cat <<-EOF\n\tEOF\ncoyodex audit m.json") == ["audit"]
+    assert _subs("cat <<EOF\n  EOF\ncoyomap dump m.json\nEOF\ncoyomap audit m.json") == ["audit"]
+    assert _subs("cat <<-EOF\n\tEOF\ncoyomap audit m.json") == ["audit"]
 
 
 def test_a_heredoc_tag_may_hold_what_a_filename_may():
     """`<<'PY-END'` read as `[A-Za-z0-9_]+` truncated to `PY`, so the terminator was never matched
     and a perfectly valid heredoc blanked every invocation after it."""
-    assert _subs("cat > x <<'PY-END'\nnoise\nPY-END\ncoyodex audit m.json") == ["audit"]
-    assert _subs("cat > x <<'EOF.1'\nnoise\nEOF.1\ncoyodex audit m.json") == ["audit"]
+    assert _subs("cat > x <<'PY-END'\nnoise\nPY-END\ncoyomap audit m.json") == ["audit"]
+    assert _subs("cat > x <<'EOF.1'\nnoise\nEOF.1\ncoyomap audit m.json") == ["audit"]
 
 
 def test_a_variable_in_front_of_the_literal_binary_does_not_hide_it():
-    """`$WRAPPER coyodex audit` matched the alias branch with `coyodex` as the subcommand — not in
+    """`$WRAPPER coyomap audit` matched the alias branch with `coyomap` as the subcommand — not in
     the allowlist — and skipping to the match END stepped over the real binary behind it."""
-    assert _subs("$WRAPPER coyodex audit m.json") == ["audit"]
-    assert _subs("PATH=$X coyodex audit m.json") == ["audit"]
+    assert _subs("$WRAPPER coyomap audit m.json") == ["audit"]
+    assert _subs("PATH=$X coyomap audit m.json") == ["audit"]
 
 
 def test_the_index_names_only_what_the_commands_table_will_confirm():
@@ -275,8 +275,8 @@ def test_the_index_names_only_what_the_commands_table_will_confirm():
     a contract-template body, and pointed the reader at a table that denied them. That annotation
     exists BECAUSE a retro trusted the index; naming a run the table will not confirm is the same
     failure pointing the other way."""
-    cmd = ("cat > r.md <<'EOF'\n" + "x" * 110 + "\ncoyodex dump --map m.json\n"
-           "coyodex lint-fragment f.json\nEOF\ncoyodex record --map x")
+    cmd = ("cat > r.md <<'EOF'\n" + "x" * 110 + "\ncoyomap dump --map m.json\n"
+           "coyomap lint-fragment f.json\nEOF\ncoyomap record --map x")
     line = transcript.summarise_call(transcript.ToolCall(name="Bash", input={"command": cmd}))
     named = line.split("…+")[1].replace(" (use --commands)", "") if "…+" in line else ""
     assert named == "record", line
@@ -284,15 +284,15 @@ def test_the_index_names_only_what_the_commands_table_will_confirm():
 
 
 def test_shell_grammar_that_must_not_split_a_command():
-    """`2>&1` appears in almost every real coyodex call: splitting on its `&` must not orphan the
+    """`2>&1` appears in almost every real coyomap call: splitting on its `&` must not orphan the
     invocation or drag a later `-h` into its segment."""
-    assert _subs("coyodex validate m.json --check-sources 2>&1 | grep -h err") == ["validate"]
-    assert _subs("for b in a b; do coyodex dump $b; done") == ["dump"]
-    assert _subs("x=$(echo a; echo b); coyodex audit m.json") == ["audit"]
+    assert _subs("coyomap validate m.json --check-sources 2>&1 | grep -h err") == ["validate"]
+    assert _subs("for b in a b; do coyomap dump $b; done") == ["dump"]
+    assert _subs("x=$(echo a; echo b); coyomap audit m.json") == ["audit"]
 
 
 # --- the subverb allowlist, and the shell-function template ----------------------
-# `coyodex fix row` was tabled as a bare `fix` and `provenance stamp` as `provenance`, because six
+# `coyomap fix row` was tabled as a bare `fix` and `provenance stamp` as `provenance`, because six
 # of the twelve dispatched verbs were missing from the allowlist. Worse, a build that has six
 # near-identical edits writes the invocation once in a shell function and calls it six times, so
 # the scan counted the DEFINITION and reported one run. A retrospective read the resulting table
@@ -301,14 +301,14 @@ def test_shell_grammar_that_must_not_split_a_command():
 
 def test_subverbs_cover_every_dispatched_verb():
     """The allowlist is checked against the dispatch tables, not against a comment."""
-    from coyodex import fix, grounding, provenance  # the tools this reader measures
+    from coyomap import fix, grounding, provenance  # the tools this reader measures
 
     dispatched = set(fix._VERBS)
     dispatched |= {"write", "report", "lint"}          # grounding.main's own `verb not in (...)`
     dispatched |= {"stamp", "show"}                    # provenance.main's own guard
-    missing = sorted(dispatched - transcript._COYODEX_SUBVERBS)
+    missing = sorted(dispatched - transcript._COYOMAP_SUBVERBS)
     assert not missing, (
-        f"{missing} are dispatched but absent from _COYODEX_SUBVERBS, so `--commands` will report "
+        f"{missing} are dispatched but absent from _COYOMAP_SUBVERBS, so `--commands` will report "
         f"them at bare-subcommand granularity and a reader cannot tell them apart")
     # And the two source lists this test hard-codes must still be what the tools parse.
     assert "lint" in grounding.USAGE
@@ -316,7 +316,7 @@ def test_subverbs_cover_every_dispatched_verb():
 
 
 def test_a_verb_called_through_a_shell_function_is_counted_per_call():
-    cmd = ("CX=.venv/bin/coyodex\n"
+    cmd = ("CX=.venv/bin/coyomap\n"
            'run(){ echo "--- $1"; $CX fix row --fragments $FR --id "$1" "${@:2}" 2>&1 | tail -2; }\n'
            'run BR177 --set-statement "a"\n'
            'run BR181 --set-statement "b"\n'
@@ -324,28 +324,28 @@ def test_a_verb_called_through_a_shell_function_is_counted_per_call():
     names = [i.name for i in transcript._invocations_in(cmd)]
     assert names == ["fix row"] * 3, names
     # The binary is resolved from the alias assigned OUTSIDE the function.
-    assert all(i.binary == "coyodex" and i.alias_resolved
+    assert all(i.binary == "coyomap" and i.alias_resolved
                for i in transcript._invocations_in(cmd))
 
 
 def test_a_defined_but_never_called_function_counts_nothing():
     """The old scan counted the definition. A template nobody ran is not work that happened."""
-    cmd = ("CX=.venv/bin/coyodex\n"
+    cmd = ("CX=.venv/bin/coyomap\n"
            "rec(){ $CX record --map $F --heading \"$1\" --line \"$2\"; }\n"
            "echo 'defined, never called'\n")
     assert transcript._invocations_in(cmd) == []
 
 
-def test_a_helper_with_no_coyodex_call_expands_to_nothing():
+def test_a_helper_with_no_coyomap_call_expands_to_nothing():
     cmd = ("hunt(){ grep -rn \"$1\" backend/src; }\n"
            "hunt policy_engine\n"
-           "coyodex validate map.json\n")
+           "coyomap validate map.json\n")
     assert [i.name for i in transcript._invocations_in(cmd)] == ["validate"]
 
 
 def test_an_unbalanced_brace_leaves_the_text_alone():
     """Guessing at a broken definition would silently drop a real invocation."""
-    cmd = "run(){ coyodex validate map.json\ncoyodex audit map.json\n"
+    cmd = "run(){ coyomap validate map.json\ncoyomap audit map.json\n"
     names = [i.name for i in transcript._invocations_in(cmd)]
     assert "audit" in names
 
@@ -409,7 +409,7 @@ def test_a_short_command_carries_no_marker(capsys):
 
 def _one_user_turn(tmp: Path, text: str) -> str:
     import json as _json
-    from coyodex_eval.transcript import format_turns, read_turns
+    from coyomap_eval.transcript import format_turns, read_turns
     p = tmp / "t.jsonl"
     p.write_text("\n".join([
         _json.dumps({"type": "user", "message": {"role": "user",
@@ -432,7 +432,7 @@ def test_a_skill_body_is_not_the_operator():
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         out = _one_user_turn(Path(td),
-                             "Base directory for this skill: /Users/x/.claude/skills/coyodex-retro")
+                             "Base directory for this skill: /Users/x/.claude/skills/coyomap-retro")
     assert "(operator)" not in out, out
 
 
@@ -448,28 +448,28 @@ def test_a_system_reminder_is_not_the_operator():
 # rather than replacing it, and the reader dropped the whole record on seeing `<command-name>`.
 
 def test_a_slash_command_record_yields_the_operators_own_words():
-    from coyodex_eval.transcript import operator_text
-    raw = ("<command-message>coyodex is running…</command-message>\n"
-           "<command-name>coyodex</command-name>\n"
+    from coyomap_eval.transcript import operator_text
+    raw = ("<command-message>coyomap is running…</command-message>\n"
+           "<command-name>coyomap</command-name>\n"
            "<command-args>build the map, do not ask me anything</command-args>")
-    assert operator_text(raw) == "/coyodex build the map, do not ask me anything"
+    assert operator_text(raw) == "/coyomap build the map, do not ask me anything"
 
 
 def test_a_slash_command_with_no_args_is_still_the_operator_speaking():
-    from coyodex_eval.transcript import operator_text
-    assert operator_text("<command-name>coyodex-retro</command-name>\n"
-                         "<command-args></command-args>") == "/coyodex-retro"
+    from coyomap_eval.transcript import operator_text
+    assert operator_text("<command-name>coyomap-retro</command-name>\n"
+                         "<command-args></command-args>") == "/coyomap-retro"
 
 
 def test_plain_words_pass_through():
-    from coyodex_eval.transcript import operator_text
+    from coyomap_eval.transcript import operator_text
     assert operator_text("stop and show me the scope") == "stop and show me the scope"
 
 
 def test_real_harness_text_is_still_hidden():
     """Rendering machine text as a person is a worse answer than no answer — the question this
     reader exists to answer is "who noticed this"."""
-    from coyodex_eval.transcript import operator_text
+    from coyomap_eval.transcript import operator_text
     for raw in ("<system-reminder>do the thing</system-reminder>",
                 "Base directory for this skill: /x/y",
                 "<ide_opened_file>a.py</ide_opened_file>"):
@@ -479,13 +479,13 @@ def test_real_harness_text_is_still_hidden():
 def test_a_quoted_wrapper_inside_a_real_message_is_not_read_as_the_command():
     """Searching for the wrapper before the harness filter rendered any body that merely MENTIONED
     `<command-name>` as an operator saying that command — and threw the real words away."""
-    from coyodex_eval.transcript import operator_text
-    said = "stop — the skill body says `<command-name>coyodex</command-name>` is the wrapper"
+    from coyomap_eval.transcript import operator_text
+    said = "stop — the skill body says `<command-name>coyomap</command-name>` is the wrapper"
     assert operator_text(said) == said
 
 
 def test_harness_text_quoting_the_wrapper_is_still_hidden():
-    from coyodex_eval.transcript import operator_text
+    from coyomap_eval.transcript import operator_text
     assert operator_text("<system-reminder>\nran <command-name>clear</command-name>\n"
                          "</system-reminder>") == ""
 
@@ -493,7 +493,7 @@ def test_harness_text_quoting_the_wrapper_is_still_hidden():
 # --- a typed message arrives as a plain string ------------------------------------------
 # `read_turns` kept `content` only when it was a LIST of blocks, so every record the harness writes
 # as a bare string was dropped whole — and those are exactly the records that are a person talking.
-# On the 2026-09-06 mcpolis build that was 77 records: the `/coyodex build` that started it, 75
+# On the 2026-09-06 mcpolis build that was 77 records: the `/coyomap build` that started it, 75
 # task-notifications, and the one word the operator typed to unblock a guard. The process
 # scorecard's "did anyone notice" assertion read 0 operator lines on a session that had one, and
 # nothing anywhere said the reader had not looked.
@@ -502,12 +502,12 @@ def test_harness_text_quoting_the_wrapper_is_still_hidden():
 def make_string_content_transcript(tmp: Path) -> Path:
     lines = [
         json.dumps({"type": "user", "message": {"role": "user", "content":
-                    "<command-message>coyodex</command-message>\n"
-                    "<command-name>/coyodex</command-name>\n"
+                    "<command-message>coyomap</command-message>\n"
+                    "<command-name>/coyomap</command-name>\n"
                     "<command-args>build</command-args>"}}),
         json.dumps({"type": "assistant", "message": {"id": "m0", "content": [
             {"type": "tool_use", "id": "t0", "name": "Bash",
-             "input": {"command": "coyodex preindex ."}}]}}),
+             "input": {"command": "coyomap preindex ."}}]}}),
         json.dumps({"type": "user", "message": {"role": "user", "content":
                     "<task-notification>\n<task-id>abc</task-id>\n</task-notification>"}}),
         json.dumps({"type": "user", "message": {"role": "user", "content": "A"}}),
@@ -526,7 +526,7 @@ def test_a_typed_message_reaches_the_reader_and_the_harness_chatter_does_not():
     # The slash command and the one typed word, and NOTHING else. A background task announcing
     # itself is the harness; rendering it as a person is the failure `operator_text` exists to
     # avoid, and it only became reachable once string content stopped being dropped.
-    assert spoken == ["/coyodex build", "A"]
+    assert spoken == ["/coyomap build", "A"]
 
 
 def test_every_machine_class_that_arrives_as_a_string_stays_hidden():
@@ -572,9 +572,9 @@ def test_every_machine_class_that_arrives_as_a_string_stays_hidden():
 
 
 def test_a_command_name_tag_that_already_carries_its_slash_is_not_doubled():
-    """Claude Code 2.1.263 writes `<command-name>/coyodex</command-name>`; an earlier version wrote
+    """Claude Code 2.1.263 writes `<command-name>/coyomap</command-name>`; an earlier version wrote
     the bare word, which is what the unwrapping was built for. Prepending unconditionally rendered
-    the command that started a real build as `//coyodex build`."""
-    for tag in ("/coyodex", "coyodex"):
+    the command that started a real build as `//coyomap build`."""
+    for tag in ("/coyomap", "coyomap"):
         body = (f"<command-name>{tag}</command-name>\n<command-args>build</command-args>")
-        assert transcript.operator_text(body) == "/coyodex build"
+        assert transcript.operator_text(body) == "/coyomap build"

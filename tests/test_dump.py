@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex dump` — the fixed-slice JSON reader over the model.
+"""Tests for `coyomap dump` — the fixed-slice JSON reader over the model.
 
 Run either way (needs an editable install: `make deps`):
     python3 tests/test_dump.py
@@ -13,8 +13,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.dump import edges_of, main, members_of, record_of, resolve_id
-from coyodex.model import (
+from coyomap.dump import edges_of, main, members_of, record_of, resolve_id
+from coyomap.model import (
     Component,
     Edge,
     Entity,
@@ -25,7 +25,7 @@ from coyodex.model import (
     to_canonical_json,
 )
 
-CLI = [sys.executable, "-m", "coyodex.cli", "dump"]
+CLI = [sys.executable, "-m", "coyomap.cli", "dump"]
 
 
 # --- builders -------------------------------------------------------------------
@@ -184,11 +184,11 @@ if __name__ == "__main__":
 # --- --legend / --counts ---------------------------------------------------------
 # The two views every build hand-wrote a `python -c` walk for: the shared id universe a fan-out
 # needs, and "how big is this map?". One build produced the legend with a 25-line script in the
-# same turn as a contract telling its agents "use `coyodex dump`, don't hand-parse it".
+# same turn as a contract telling its agents "use `coyomap dump`, don't hand-parse it".
 
 
 def test_legend_covers_every_element_kind_with_its_parent_and_source():
-    from coyodex.dump import legend_of
+    from coyomap.dump import legend_of
     rows = legend_of(make_model())
     by_id = {r["id"]: r for r in rows}
     assert by_id["C1"] == {"id": "C1", "name": "Viewer", "kind": "component", "parent": "S1",
@@ -208,7 +208,7 @@ def test_legend_covers_every_element_kind_with_its_parent_and_source():
 def test_legend_emits_every_id_the_map_defines() -> None:
     """The legend is the shared id universe a fan-out is handed. A kind missing from it is a kind
     every sub-agent is blind to, and there is no second place to look mid-build."""
-    from coyodex.dump import legend_of
+    from coyomap.dump import legend_of
     m = make_model()
     rows = legend_of(m)
     ids = {r["id"] for r in rows}
@@ -219,7 +219,7 @@ def test_legend_emits_every_id_the_map_defines() -> None:
 
 
 def test_counts_covers_every_array_not_just_assembles_three():
-    from coyodex.dump import counts_of
+    from coyomap.dump import counts_of
     counts = counts_of(make_model())
     assert counts["components"] == 3 and counts["entities"] == 1 and counts["edges"] >= 1
     # The point of the slice: arrays `assemble`'s C/D/E summary never mentions.
@@ -252,7 +252,7 @@ def test_two_slice_flags_are_still_refused(capsys):
 
 
 def _model_with_a_flow() -> ProjectModel:
-    from coyodex.model import Flow, FlowStep, SubFlow
+    from coyomap.model import Flow, FlowStep, SubFlow
     return ProjectModel(
         use_cases=[UseCase(id="UC1", name="Sign in")],
         flows=[Flow(uc="UC1", title="Sign in", steps=[

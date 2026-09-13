@@ -7,7 +7,7 @@ all-empty trigger arm (escape: `trigger-arm: <why>` under 'Entry-point coverage'
 now requires a per-surface pass at synthesis for the customer-facing kinds (http-route, ui-route,
 mcp-tool): each surface is named by a use case's `entry_points`, recorded unclaimed, or becomes a
 use case — blanket per-kind prose is a harvest statement, not an adjudication · method.md,
-tools/coyodex/validate_model.py. Ledger: mcpolis-2026-08-26-22.
+tools/coyomap/validate_model.py. Ledger: mcpolis-2026-08-26-22.
 
 Escalation: if check 3 fails (the lost behaviours stay lost on a rebuild), run the eval before
 accepting the map.
@@ -15,7 +15,7 @@ accepting the map.
 ## Checks
 
 1. expect: the next build of any project ships a non-zero number of use cases naming entry points
-   (`use_cases[].entry_points`), and `coyodex validate` fires no "No use case names any entry
+   (`use_cases[].entry_points`), and `coyomap validate` fires no "No use case names any entry
    point" warning — or the map carries a recorded `trigger-arm: <why>` line an operator wrote.
    regression sign: 0 trigger links again with no record, or a `trigger-arm:` record authored by
    the BUILD to silence the warning it just caused (the escape is the operator's, not the build's).

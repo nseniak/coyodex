@@ -23,8 +23,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, cast
 
-from coyodex import audit_model, grammar
-from coyodex.model import (
+from coyomap import audit_model, grammar
+from coyomap.model import (
     Component,
     Dep,
     Edge,
@@ -50,7 +50,7 @@ from coyodex.model import (
     load_model,
     to_canonical_json,
 )
-from coyodex.viewer.gen_viewer import (
+from coyomap.viewer.gen_viewer import (
     flow_actors,
     flow_maps,
     flow_narrative,
@@ -59,10 +59,10 @@ from coyodex.viewer.gen_viewer import (
     gen_flow_map_mermaid,
     hp_actors,
 )
-from coyodex.views import _store_str, model_to_graph, model_to_markdown
+from coyomap.views import _store_str, model_to_graph, model_to_markdown
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mcpolis-project-map.json"
-RENDER = [sys.executable, "-m", "coyodex.viewer.render"]
+RENDER = [sys.executable, "-m", "coyomap.viewer.render"]
 
 
 def make_fixture_model() -> ProjectModel:
@@ -97,10 +97,10 @@ def test_render_cli_json_to_md_and_html():
         assert subprocess.run(RENDER + [str(src), str(Path(td) / "out.md")],
                               capture_output=True).returncode == 0
         assert (Path(td) / "out.md").read_text(encoding="utf-8") == model_to_markdown(m)
-        # The interactive viewer is served by `coyodex serve` now — the only rendered file is the .md
+        # The interactive viewer is served by `coyomap serve` now — the only rendered file is the .md
         # view. A non-.md target is a clean error (exit 2), not a silent no-op, and writes nothing.
         r = subprocess.run(RENDER + [str(src), str(Path(td) / "out.html")], capture_output=True, text=True)
-        assert r.returncode == 2 and "coyodex serve" in r.stderr
+        assert r.returncode == 2 and "coyomap serve" in r.stderr
         assert not (Path(td) / "out.html").exists()
 
 
@@ -209,7 +209,7 @@ def test_tests_rows_resolve_targets_to_names_and_nodes():
     """Each tests[] row carries its `targets` resolved SERVER-SIDE to `{id, name, node}`: a defined
     element gets its name + a node id (the Tests tab makes it clickable to locate); an undefined id
     keeps its id as the name and `node=None` — no client-side id parsing, no guessed link."""
-    from coyodex.model import EvidenceItem, TestRow, UseCase
+    from coyomap.model import EvidenceItem, TestRow, UseCase
     m = ProjectModel(title="Tiny")
     m.use_cases = [UseCase(id="UC1", name="Login"), UseCase(id="UC2", name="Browse")]
     m.tests = [TestRow(targets=["UC1", "UC9"], label="auth", tested="no",
@@ -733,7 +733,7 @@ if __name__ == "__main__":
 # ── the grounding section, which shipped with no test at all ─────────────────────────────────────
 
 def make_map_with_grounding(**g: object):
-    from coyodex.model import Grounding, ProjectModel
+    from coyomap.model import Grounding, ProjectModel
     m = ProjectModel(title="T", goal="g")
     m.grounding = Grounding(**g)  # type: ignore[arg-type]
     return m
@@ -742,7 +742,7 @@ def make_map_with_grounding(**g: object):
 def test_the_grounding_record_is_rendered():
     """It travelled with the map as JSON and appeared in NO view, so the one number a reader needs
     in order to judge every other number was invisible in the markdown."""
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     md = model_to_markdown(make_map_with_grounding(
         claims_total=446, claims_challenged=446, claims_confirmed=428,
         claims_refuted=7, claims_unverifiable=11, live_claims_digest="abc"))
@@ -752,13 +752,13 @@ def test_the_grounding_record_is_rendered():
 
 def test_a_map_without_grounding_renders_the_section_not_at_all():
     """Byte-identity for every map that has no record — the property other optional sections keep."""
-    from coyodex.model import ProjectModel
-    from coyodex.views import model_to_markdown
+    from coyomap.model import ProjectModel
+    from coyomap.views import model_to_markdown
     assert "## Grounding" not in model_to_markdown(ProjectModel(title="T", goal="g"))
 
 
 def test_partial_coverage_is_called_out_in_the_view():
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     md = model_to_markdown(make_map_with_grounding(
         claims_total=100, claims_challenged=40, claims_confirmed=40, live_claims_digest="abc"))
     assert "Coverage is PARTIAL" in md and "60 claim(s) were never challenged" in md
@@ -766,7 +766,7 @@ def test_partial_coverage_is_called_out_in_the_view():
 
 def test_a_record_with_no_digest_says_it_cannot_be_confirmed():
     """The record can be right and unverifiable at once; a reader must be able to tell."""
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     md = model_to_markdown(make_map_with_grounding(
         claims_total=10, claims_challenged=10, claims_confirmed=10))
     assert "No `live_claims_digest`" in md

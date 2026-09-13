@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex.balance_lib` — the diagram-balance advisories (fan-out bands, homogeneity
+"""Tests for `coyomap.balance_lib` — the diagram-balance advisories (fan-out bands, homogeneity
 exemption, single-child wrappers, the "Balance exceptions" extras escape hatch), the C→C graph
 machinery (modularity, quotient graph, signal check), and the deterministic greedy split.
 
@@ -9,7 +9,7 @@ Run either way (needs an editable install: `make deps`):
 """
 from __future__ import annotations
 
-from coyodex.balance_lib import (
+from coyomap.balance_lib import (
     _exceptions,
     balance_warnings,
     cc_pairs,
@@ -24,8 +24,8 @@ from coyodex.balance_lib import (
     subgraph_signal,
     subsystem_children,
 )
-from coyodex.model import Component, Edge, Entity, ExtraSection, Group, ProjectModel, Store
-from coyodex.validate_model import validate_model
+from coyomap.model import Component, Edge, Entity, ExtraSection, Group, ProjectModel, Store
+from coyomap.validate_model import validate_model
 
 
 # --- builders -------------------------------------------------------------------
@@ -412,7 +412,7 @@ def test_the_band_headline_and_the_verdict_cannot_contradict_each_other():
     — every diagram reads at target density." Both were true under their own rule: the band is a
     MEASUREMENT and the findings list is a POLICY that only treats sparse as an anti-pattern at the
     root. The reader had no way to see that, so the report now names the gap."""
-    from coyodex import balance
+    from coyomap import balance
     m = make_grouped_model({"S1": 5, "S2": 5, "S3": 2})   # S3 is thin, non-root → no finding
     text = balance._report(m)
     assert "No balance findings" in text
@@ -426,8 +426,8 @@ def test_the_report_and_the_eval_metric_share_one_band_definition():
     """They were computed twice and had drifted in two ways — the exempt test AND the denominator
     (the report counted childless subsystems, the profile skipped them). A shared boolean would
     have fixed only the first, so `fanout_band` returns the whole fraction."""
-    from coyodex import balance
-    from coyodex.balance_lib import fanout_band, fanout_summary
+    from coyomap import balance
+    from coyomap.balance_lib import fanout_band, fanout_summary
     m = make_grouped_model({"S1": 5, "S2": 5, "S3": 2})
     m.subsystems.append(Group(id="S9", name="empty on purpose"))
     in_band, total = fanout_band(m)
@@ -455,7 +455,7 @@ def test_the_out_of_band_line_uses_the_shared_predicate_not_a_second_one():
     the shared rule on a 2-child HOMOGENEOUS subsystem — which the band counts as in-band — so the
     report printed "4/4 diagrams in band" directly above "1 below the band". That is the same
     contradiction the shared measurement was introduced to remove, two lines apart."""
-    from coyodex import balance
+    from coyomap import balance
     m = make_subsystem_model({"S1": 5, "S2": 5, "S3": 2}, homogeneous={"S3"})
     text = balance._report(m)
     in_band, total = fanout_band(m)
@@ -466,7 +466,7 @@ def test_the_out_of_band_line_uses_the_shared_predicate_not_a_second_one():
 def test_a_real_finding_is_never_labelled_not_a_finding():
     """SINGLE-CHILD is in `flagged`. The hand-rolled predicate did not exclude flagged rows, so the
     header called a live finding "NOT a finding" while the per-diagram row showed it flagged."""
-    from coyodex import balance
+    from coyomap import balance
     m = make_subsystem_model({"S1": 5, "S2": 5, "S3": 1})
     text = balance._report(m)
     assert "SINGLE-CHILD" in text
@@ -476,7 +476,7 @@ def test_a_real_finding_is_never_labelled_not_a_finding():
 
 def test_an_empty_subsystem_is_described_as_empty_not_as_sparse():
     """"Below the band" misdescribes a diagram with no children at all."""
-    from coyodex import balance
+    from coyomap import balance
     m = make_subsystem_model({"S1": 5, "S2": 5, "S3": 4})
     m.subsystems.append(Group(id="S9", name="declared but never filled"))
     text = balance._report(m)
@@ -487,7 +487,7 @@ def test_an_empty_subsystem_is_described_as_empty_not_as_sparse():
 def test_the_seam_list_is_stable_across_processes():
     """The busiest-seam list sorted on weight alone, so equal-weight seams arrived in the iteration
     order of a SET of frozensets — and Python randomises string hashing per process. Five identical
-    runs of `coyodex balance` on one map printed three different top-6 lists.
+    runs of `coyomap balance` on one map printed three different top-6 lists.
 
     That makes a gate a build reads and quotes non-reproducible, and it puts spurious churn into
     every before/after map comparison, which is what the eval harness is for. Sorting on
@@ -497,10 +497,10 @@ def test_the_seam_list_is_stable_across_processes():
     loop cannot catch this class at all.
     """
     import subprocess, sys, json, tempfile, os
-    from coyodex import balance
+    from coyomap import balance
     m = make_subsystem_model({"S1": 4, "S2": 4, "S3": 4, "S4": 4})
     # Equal-weight cross-subsystem seams are what tie; build several by hand.
-    from coyodex.model import to_canonical_json
+    from coyomap.model import to_canonical_json
     members = {s.id: [c.id for c in m.components if c.subsystem == s.id] for s in m.subsystems}
     for a, b in (("S1", "S2"), ("S1", "S3"), ("S2", "S3"), ("S1", "S4"), ("S2", "S4"), ("S3", "S4")):
         m.edges.append(Edge(src=members[a][0], dst=members[b][0], verb="calls"))
@@ -512,7 +512,7 @@ def test_the_seam_list_is_stable_across_processes():
         for seed in ("0", "1", "2", "3", "4"):
             env = {**os.environ, "PYTHONHASHSEED": seed}
             out = subprocess.run([sys.executable, "-c",
-                                  "import sys;from coyodex.balance import main;sys.exit(main([sys.argv[1]]))",
+                                  "import sys;from coyomap.balance import main;sys.exit(main([sys.argv[1]]))",
                                   p], capture_output=True, text=True, env=env)
             seam = [l for l in out.stdout.splitlines() if "↔" in l]
             seen.add(tuple(seam))
@@ -520,12 +520,12 @@ def test_the_seam_list_is_stable_across_processes():
 
 
 def test_the_domain_forest_gets_its_own_fanout_table():
-    """`validate` advises on subdomain fan-out and ends the advisory with "(`coyodex balance`
+    """`validate` advises on subdomain fan-out and ends the advisory with "(`coyomap balance`
     proposes splits)". `balance` rendered only the subsystem forest, so that sentence pointed the
     reader at a tool that could not answer it — and on a live map the four dense domain diagrams
     (13, 23, 22 and 27 children) were filtered out of the build's view and never addressed."""
-    from coyodex import balance
-    from coyodex.model import Entity, Group
+    from coyomap import balance
+    from coyomap.model import Entity, Group
     m = make_subsystem_model({"S1": 5, "S2": 5})
     m.subdomains = [Group(id="SD1", name="Wide"), Group(id="SD2", name="Narrow")]
     # Spread across directories on purpose: a same-directory family is HOMOGENEOUS and the tool
@@ -545,7 +545,7 @@ def test_the_domain_forest_gets_its_own_fanout_table():
 
 def test_a_map_with_no_subdomains_gets_no_domain_table():
     """Silence, not an empty heading — most maps of small repos have no domain forest at all."""
-    from coyodex import balance
+    from coyomap import balance
     m = make_subsystem_model({"S1": 5, "S2": 5})
     m.subdomains = []
     assert "Per-subdomain fan-out" not in balance._report(m)
@@ -559,8 +559,8 @@ def test_map_is_accepted_as_a_named_flag_too():
     import tempfile as _tempfile
     from pathlib import Path as _Path
 
-    from coyodex.balance import main as _main
-    from coyodex.model import FORMAT as _FORMAT
+    from coyomap.balance import main as _main
+    from coyomap.model import FORMAT as _FORMAT
     with _tempfile.TemporaryDirectory() as td:
         p = _Path(td) / "m.json"
         p.write_text(_json.dumps({

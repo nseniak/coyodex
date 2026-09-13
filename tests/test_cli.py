@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the `coyodex` CLI dispatcher and the dependency firewall.
+"""Tests for the `coyomap` CLI dispatcher and the dependency firewall.
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_cli.py
@@ -17,18 +17,18 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import __version__, cli
+from coyomap import __version__, cli
 
 # The core gate — none of these may pull in tree-sitter, at import time or any other.
 CORE_MODULES = [
-    "coyodex.validate_analysis",
-    "coyodex.viewer.render",
-    "coyodex.viewer.build_graph",
-    "coyodex.viewer.gen_viewer",
-    "coyodex.viewer.filetree",
-    "coyodex.grammar",
-    "coyodex.balance_lib",
-    "coyodex.balance",
+    "coyomap.validate_analysis",
+    "coyomap.viewer.render",
+    "coyomap.viewer.build_graph",
+    "coyomap.viewer.gen_viewer",
+    "coyomap.viewer.filetree",
+    "coyomap.grammar",
+    "coyomap.balance_lib",
+    "coyomap.balance",
 ]
 CORE_SOURCES = ["validate_analysis.py", "grammar.py", "balance_lib.py", "balance.py",
                 "viewer/render.py", "viewer/build_graph.py", "viewer/gen_viewer.py", "viewer/filetree.py"]
@@ -61,7 +61,7 @@ def test_core_sources_have_no_tree_sitter_import() -> None:
 
 # --- dispatch -------------------------------------------------------------------
 def test_version_flag_prints_version() -> None:
-    r = subprocess.run([sys.executable, "-m", "coyodex.cli", "--version"],
+    r = subprocess.run([sys.executable, "-m", "coyomap.cli", "--version"],
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == __version__
@@ -80,7 +80,7 @@ def test_no_args_prints_usage() -> None:
     with contextlib.redirect_stdout(buf):
         rc = cli.main([])
     assert rc == 0
-    assert "usage: coyodex" in buf.getvalue()
+    assert "usage: coyomap" in buf.getvalue()
 
 
 def test_unknown_command_returns_2() -> None:
@@ -88,7 +88,7 @@ def test_unknown_command_returns_2() -> None:
 
 
 def test_validate_dispatch_propagates_not_found() -> None:
-    """`coyodex validate <missing>` routes to the validator, which returns 1 (file not found)."""
+    """`coyomap validate <missing>` routes to the validator, which returns 1 (file not found)."""
     with tempfile.TemporaryDirectory() as d:
         assert cli.main(["validate", str(Path(d) / "nope.json")]) == 1
 
@@ -103,7 +103,7 @@ def test_validate_and_audit_reject_a_markdown_file_like_any_other_bad_input() ->
 
 
 def test_balance_dispatch_propagates_not_found() -> None:
-    """`coyodex balance <missing>` routes to the balance report, which returns 1 (file not found)."""
+    """`coyomap balance <missing>` routes to the balance report, which returns 1 (file not found)."""
     with tempfile.TemporaryDirectory() as d:
         assert cli.main(["balance", str(Path(d) / "nope.json")]) == 1
 
@@ -116,7 +116,7 @@ def test_balance_help_exits_zero() -> None:
 
 
 def test_fix_dispatch_routes_to_the_module() -> None:
-    """`coyodex fix` routes to the fix module's second-level (verb) dispatch."""
+    """`coyomap fix` routes to the fix module's second-level (verb) dispatch."""
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         assert cli.main(["fix", "--help"]) == 0        # help routes and exits 0
@@ -125,7 +125,7 @@ def test_fix_dispatch_routes_to_the_module() -> None:
 
 
 def test_render_dispatch_propagates_usage_error() -> None:
-    """`coyodex render` with too few args routes to the renderer, which returns 2 (usage)."""
+    """`coyomap render` with too few args routes to the renderer, which returns 2 (usage)."""
     assert cli.main(["render"]) == 2
 
 

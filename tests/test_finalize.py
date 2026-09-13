@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex finalize` — the pre-commit read.
+"""`coyomap finalize` — the pre-commit read.
 
 The design point these pin: it is a CONVENIENCE WRAPPER, not an enforcement point. Nothing makes a
 build run it, and `finalize | grep …` returns grep's status, so the value is (a) running `compare`
@@ -16,8 +16,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import finalize
-from coyodex.model import FORMAT
+from coyomap import finalize
+from coyomap.model import FORMAT
 
 #: A genuinely minimal VALID map — no entities, because a domain card carries its own blocking
 #: requirements (meaning, fields, a real named type in its source) that have nothing to do with what
@@ -55,7 +55,7 @@ def make_repo(broken: bool = False, components: int = 0) -> tuple[Path, Path]:
     (root / "src").mkdir()
     (root / "src" / "a.py").write_text("def front():\n    return back()\n", encoding="utf-8")
     (root / "src" / "b.py").write_text("def back():\n    return 1\n", encoding="utf-8")
-    (root / ".coyodex").mkdir()
+    (root / ".coyomap").mkdir()
     doc = json.loads(json.dumps(MAP))
     if components:
         # An edgeless map of N components: the isolated-component advisory lists every id, so a
@@ -70,7 +70,7 @@ def make_repo(broken: bool = False, components: int = 0) -> tuple[Path, Path]:
                                    {"n": 3, "src": "C1", "dst": "R1", "phrase": "answers"}]}]
     if broken:
         doc["edges"][0]["dst"] = "C999"        # a dangling reference — a BLOCKING validate problem
-    p = root / ".coyodex" / "project-map.json"
+    p = root / ".coyomap" / "project-map.json"
     p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
     return root, p
 
@@ -79,8 +79,8 @@ def test_a_clean_map_exits_zero_and_writes_both_reports():
     root, p = make_repo()
     code = finalize.main([str(p), "--repo", str(root)])
     assert code == 0
-    assert (root / ".coyodex" / "finalize-report.json").is_file()
-    assert (root / ".coyodex" / "finalize-report.md").is_file()
+    assert (root / ".coyomap" / "finalize-report.json").is_file()
+    assert (root / ".coyomap" / "finalize-report.md").is_file()
 
 
 def test_a_blocking_problem_exits_one_and_is_recorded_as_blocking():
@@ -88,7 +88,7 @@ def test_a_blocking_problem_exits_one_and_is_recorded_as_blocking():
     root, p = make_repo(broken=True)
     code = finalize.main([str(p), "--repo", str(root)])
     assert code == 1
-    report = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
+    report = json.loads((root / ".coyomap" / "finalize-report.json").read_text(encoding="utf-8"))
     assert report["verdict"] == "BLOCKED"
     assert report["blocking_total"] >= 1
     assert any("C999" in b for leg in report["legs"] for b in leg["blocking"])
@@ -102,11 +102,11 @@ def test_a_leg_that_did_not_run_can_never_produce_a_verdict_of_clean():
     never ran. Worse than no report at all."""
     root, p = make_repo(broken=True)                 # a dangling reference: validate exits 1 on this
     code = finalize.main([str(p), "--repo", "/nonexistent-dir-for-this-test"])
-    r = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
+    r = json.loads((root / ".coyomap" / "finalize-report.json").read_text(encoding="utf-8"))
     assert r["verdict"] == "INCOMPLETE", r["verdict"]
     assert code != 0, "a run that does not know whether the map is clean must not exit 0"
     assert any(l["status"] == "failed" for l in r["legs"])
-    md = (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    md = (root / ".coyomap" / "finalize-report.md").read_text(encoding="utf-8")
     verdict_line = next(ln for ln in md.splitlines() if ln.startswith("**Verdict:"))
     assert "CLEAN" not in verdict_line, verdict_line
     assert "their silence is not a pass" in md
@@ -117,9 +117,9 @@ def test_the_report_is_byte_identical_across_identical_runs():
     noise, and a diff of the committed report becomes unreadable."""
     root, p = make_repo()
     finalize.main([str(p), "--repo", str(root)])
-    first = (root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8")
+    first = (root / ".coyomap" / "finalize-report.json").read_text(encoding="utf-8")
     finalize.main([str(p), "--repo", str(root)])
-    assert (root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8") == first
+    assert (root / ".coyomap" / "finalize-report.json").read_text(encoding="utf-8") == first
 
 
 def test_it_leaves_no_scratch_files_beside_the_map():
@@ -127,7 +127,7 @@ def test_it_leaves_no_scratch_files_beside_the_map():
     deleted it only on the success path. Nothing is materialised now; this holds that line."""
     root, p = make_git_repo()
     finalize.main([str(p), "--repo", str(root)])
-    strays = [f.name for f in (root / ".coyodex").iterdir()
+    strays = [f.name for f in (root / ".coyomap").iterdir()
               if f.name.startswith(f".{finalize.REPORT_STEM}")]
     assert strays == [], strays
 
@@ -135,20 +135,20 @@ def test_it_leaves_no_scratch_files_beside_the_map():
 def test_a_crash_mid_run_leaves_no_scratch_behind():
     """A malformed `--verdicts` file reaches the drift leg and raises. Nothing temporary may survive."""
     root, p = make_git_repo()
-    boom = root / ".coyodex" / "not-json.json"
+    boom = root / ".coyomap" / "not-json.json"
     boom.write_text("{{{ not json", encoding="utf-8")
     try:
         finalize.main([str(p), "--repo", str(root), "--verdicts", str(boom)])
     except Exception:
         pass
-    strays = [f.name for f in (root / ".coyodex").iterdir()
+    strays = [f.name for f in (root / ".coyomap").iterdir()
               if f.name.startswith(f".{finalize.REPORT_STEM}")]
     assert strays == [], strays
 
 
 def test_a_missing_map_and_a_missing_verdicts_file_fail_before_any_leg_runs():
     root, p = make_repo()
-    assert finalize.main([str(root / ".coyodex" / "nope.json")]) == 1
+    assert finalize.main([str(root / ".coyomap" / "nope.json")]) == 1
     assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(root / "nope.json")]) == 1
 
 
@@ -158,7 +158,7 @@ def test_the_report_carries_whole_lists_on_a_map_big_enough_to_truncate():
     isolated components, well past the 8-id inline limit, and asserts the ids are all present."""
     root, p = make_repo(components=30)
     finalize.main([str(p), "--repo", str(root)])
-    text = (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    text = (root / ".coyomap" / "finalize-report.md").read_text(encoding="utf-8")
     isolated = [ln for ln in text.splitlines() if "carry no backbone edge" in ln]
     assert isolated, "expected the isolated-component advisory on a 30-component edgeless map"
     assert "more" not in isolated[0], isolated[0]
@@ -168,7 +168,7 @@ def test_the_report_carries_whole_lists_on_a_map_big_enough_to_truncate():
 def test_the_help_says_it_is_not_an_enforcement_point():
     """If the docs ever start promising enforcement, the promise is false — the exit status is lost to
     any pipeline. Pinned so the claim cannot drift back."""
-    r = subprocess.run([sys.executable, "-m", "coyodex.cli", "finalize", "--help"],
+    r = subprocess.run([sys.executable, "-m", "coyomap.cli", "finalize", "--help"],
                        capture_output=True, text=True)
     assert r.returncode == 0
     assert "not an enforcement point" in r.stdout
@@ -189,16 +189,16 @@ def test_the_report_records_the_maps_hash_so_a_stale_one_is_detectable():
     import hashlib
     root, p = make_repo()
     finalize.main([str(p), "--repo", str(root)])
-    r = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
+    r = json.loads((root / ".coyomap" / "finalize-report.json").read_text(encoding="utf-8"))
     assert r["map_sha256"] == hashlib.sha256(p.read_bytes()).hexdigest()
-    assert r["map_sha256"] in (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    assert r["map_sha256"] in (root / ".coyomap" / "finalize-report.md").read_text(encoding="utf-8")
 
 
 def test_a_grounding_record_pinned_to_a_stale_worklist_is_flagged():
     """A live build shipped `418 of 418 challenged` on a map whose worklist held 415 and quoted the
     418 in its commit as fact. `validate` cannot see it — it blocks only `challenged > total`, and a
     stale pin is self-consistent."""
-    from coyodex.finalize import _stale_grounding_pin
+    from coyomap.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "m.json"
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g",
@@ -213,7 +213,7 @@ def test_a_grounding_record_pinned_to_a_stale_worklist_is_flagged():
 
 
 def test_a_map_with_no_grounding_record_is_not_flagged():
-    from coyodex.finalize import _stale_grounding_pin
+    from coyomap.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "m.json"
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g"}), encoding="utf-8")
@@ -270,8 +270,8 @@ def test_a_recorded_delta_makes_the_pin_advisory_go_quiet():
     raised this advisory, re-running against a fresh worklist was REFUSED, and explaining it in
     `note` changed nothing. `grounding write --map` records the delta and a digest of the live
     claim set, and that is what the gate now reads."""
-    from coyodex.finalize import _stale_grounding_pin
-    from coyodex.grounding import live_claims_digest
+    from coyomap.finalize import _stale_grounding_pin
+    from coyomap.grounding import live_claims_digest
     live = [f"claim {i}" for i in range(444)]
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "m.json"
@@ -286,8 +286,8 @@ def test_the_digest_catches_a_one_for_one_rewrite_that_the_counts_cannot():
     """The reason the gate is a digest and not arithmetic. Replace k claims with k others and every
     size-based check still closes — and a reconcile that rewrites a claim IS 1-for-1 by
     construction; 4 of 6 superseded claims on the build this came from were exactly that shape."""
-    from coyodex.finalize import _stale_grounding_pin
-    from coyodex.grounding import live_claims_digest
+    from coyomap.finalize import _stale_grounding_pin
+    from coyomap.grounding import live_claims_digest
     # claims_total EQUALS the live count on purpose: with 446-vs-444 the count check would fire
     # too, and the test would not distinguish the branches. Here only the digest can catch it.
     live = [f"claim {i}" for i in range(444)]
@@ -313,7 +313,7 @@ def make_verdicts_file(tmp: str, claims: list[str]) -> Path:
 
 
 def make_grounding_map(tmp: str, live: list[str], **grounding: object) -> Path:
-    from coyodex.grounding import live_claims_digest
+    from coyomap.grounding import live_claims_digest
     p = Path(tmp) / "m.json"
     rec = {"claims_total": len(live), "claims_challenged": len(live),
            "live_claims_digest": live_claims_digest(live)}
@@ -327,7 +327,7 @@ def test_a_fabricated_delta_count_is_caught_when_the_verdicts_are_present():
     """The digest proves the record describes THIS map. It says nothing about whether the two delta
     counts are true — a valid digest and two invented numbers coexist happily, which is a poor
     property for the fields whose only job is honesty."""
-    from coyodex.finalize import _stale_grounding_pin
+    from coyomap.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         live = ["kept", "added-since-the-pin"]
         pinned = ["kept", "reconciled-away"]
@@ -345,7 +345,7 @@ def test_a_fabricated_delta_count_is_caught_when_the_verdicts_are_present():
 
 
 def test_honest_delta_counts_pass_the_recomputation():
-    from coyodex.finalize import _stale_grounding_pin
+    from coyomap.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         live = ["kept", "added-since-the-pin"]
         p = make_grounding_map(tmp, live, claims_superseded=1, claims_added_since=1)
@@ -362,7 +362,7 @@ def test_no_value_of_claims_total_can_buy_silence():
     set T: `|P \\ L| <= |T \\ L|` and `|L \\ P| >= |L \\ T|`, so a superseded count BELOW what the
     verdicts already name, or an added count ABOVE what they leave room for, is provably wrong
     whatever subset was handed in."""
-    from coyodex.finalize import _stale_grounding_pin
+    from coyomap.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         live = ["kept", "added-since"]
         v = make_verdicts_file(tmp, ["kept", "reconciled-away"])
@@ -374,7 +374,7 @@ def test_no_value_of_claims_total_can_buy_silence():
             cheat.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {
                 "claims_total": total, "claims_challenged": 2, "claims_superseded": 0,
                 "claims_added_since": 0,
-                "live_claims_digest": __import__("coyodex.grounding", fromlist=["x"])
+                "live_claims_digest": __import__("coyomap.grounding", fromlist=["x"])
                 .live_claims_digest(live)}}), encoding="utf-8")
             assert _stale_grounding_pin(cheat, live, [v]), f"{label} total bought silence"
 
@@ -382,7 +382,7 @@ def test_no_value_of_claims_total_can_buy_silence():
 def test_a_partial_verdict_set_still_stays_silent():
     """The honest case the guard exists for: `finalize` handed fewer files than the record was
     written against must not accuse it."""
-    from coyodex.finalize import _stale_grounding_pin
+    from coyomap.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         live = ["kept", "added-since"]
         v = make_verdicts_file(tmp, ["kept"])          # 1 of the 2 pinned claims
@@ -396,8 +396,8 @@ def test_corrupting_claims_total_cannot_hide_a_wrong_digest():
     `claims_total`, so a record bought silence by corrupting that field: 0, -5 and the string "446"
     all skipped the comparison even when the digest was provably another map's. Corrupting a field
     must never be safer than filling it in — the third appearance of that shape in this file."""
-    from coyodex.finalize import _stale_grounding_pin
-    from coyodex.grounding import live_claims_digest
+    from coyomap.finalize import _stale_grounding_pin
+    from coyomap.grounding import live_claims_digest
     live = [f"claim {i}" for i in range(10)]
     other = [f"other {i}" for i in range(10)]          # same SIZE, different claims
     with tempfile.TemporaryDirectory() as tmp:
@@ -413,7 +413,7 @@ def test_corrupting_claims_total_cannot_hide_a_wrong_digest():
 def test_a_record_with_no_numbers_at_all_is_not_called_stale():
     """`validate` owns the malformed-record complaint. This command reports staleness, and a record
     with nothing in it is unfinished, not stale."""
-    from coyodex.finalize import _stale_grounding_pin
+    from coyomap.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "m.json"
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {}}),
@@ -461,12 +461,12 @@ def test_the_disposition_table_keys_an_audit_advisory_on_the_pair_not_the_family
     The first draft of the table reproduced the bug it reports on: reading every id under 'Audit
     exceptions' marked a `flow-title UC25` advisory "recorded" on the strength of an unrelated
     `actor-attribution UC25` line. A record adjudicates one (check, id) pair, never a family."""
-    from coyodex.finalize import advisory_disposition, FinalizeReport, Leg, RAN
+    from coyomap.finalize import advisory_disposition, FinalizeReport, Leg, RAN
     import json, tempfile, os
     # UC25 must be DEFINED: candidate ids are intersected with the map's real id universe, because
     # shape alone cannot tell subsystem `S3` from Amazon S3, and a false id can flip a genuine gap
     # to "recorded". A map that references an id it never declares is not a realistic input.
-    m = {"format": "coyodex-map", "title": "t", "goal": "g",
+    m = {"format": "coyomap-map", "title": "t", "goal": "g",
          "roles": [{"id": "R2", "name": "Admin", "kind": "human"}],
          "use_cases": [{"id": "UC25", "name": "Rebuild the graph", "actors": ["R2"],
                         "trigger_outcome": "an admin asks -> it rebuilds"}],
@@ -497,9 +497,9 @@ def test_the_table_never_says_recorded_without_naming_the_key_that_records_it():
     And a DISCLOSURE — an advisory that reports what a record silenced — is not an advisory asking
     to be recorded. Marking those `recorded` filed the whole "a recorded gap is still a gap" family
     under "handled", cancelling the disclosure that had just been added to raise it."""
-    from coyodex.finalize import advisory_disposition, FinalizeReport, Leg, RAN
+    from coyomap.finalize import advisory_disposition, FinalizeReport, Leg, RAN
     import json, tempfile, os
-    m = {"format": "coyodex-map", "title": "t", "goal": "g",
+    m = {"format": "coyomap-map", "title": "t", "goal": "g",
          "extras": [{"heading": "Balance exceptions", "body": "granularity: deliberate.\nUC2: fine."}]}
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "m.json")
@@ -526,7 +526,7 @@ def test_the_table_never_says_recorded_without_naming_the_key_that_records_it():
 
 
 def _with_verdicts_beside_the_map(root: Path) -> Path:
-    verify = root / ".coyodex" / "verify"
+    verify = root / ".coyomap" / "verify"
     verify.mkdir()
     for name in ("verdicts-a.json", "verdicts-b.json"):
         (verify / name).write_text(json.dumps({"grounding": []}), encoding="utf-8")
@@ -537,7 +537,7 @@ def test_verdict_files_beside_the_map_are_named_when_the_run_was_given_none():
     root, p = make_repo()
     _with_verdicts_beside_the_map(root)
     assert finalize.main([str(p), "--repo", str(root)]) == 0        # still not a gate
-    report = (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    report = (root / ".coyomap" / "finalize-report.md").read_text(encoding="utf-8")
     assert "NOT RUN" in report
     assert "2 verdict file(s)" in report
     assert "--emit-gate-block` combine in ONE invocation" in report
@@ -550,20 +550,20 @@ def test_the_nag_is_gone_once_the_verdicts_are_passed():
     for f in sorted(verify.glob("verdicts-*.json")):
         args += ["--verdicts", str(f)]
     assert finalize.main(args) == 0
-    report = (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    report = (root / ".coyomap" / "finalize-report.md").read_text(encoding="utf-8")
     assert "NOT RUN" not in report
 
 
 def test_a_map_with_no_verdicts_anywhere_says_nothing_about_them():
     root, p = make_repo()
     assert finalize.main([str(p), "--repo", str(root)]) == 0
-    assert "NOT RUN" not in (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    assert "NOT RUN" not in (root / ".coyomap" / "finalize-report.md").read_text(encoding="utf-8")
 
 
 def test_finalize_records_whether_balance_ran_and_does_not_gate_on_it():
     """Phase 3.5 left a trace, or it did not happen.
 
-    `method.md` puts a `coyodex balance` pass after the trace and says to reconcile each finding.
+    `method.md` puts a `coyomap balance` pass after the trace and says to reconcile each finding.
     Nothing observed it, so a skipped Phase 3.5 and a passed one read the same: one build ran
     `balance` three times and the next ran it ZERO times, and the only reason nobody noticed is
     that `validate` happened to emit no balance warning that run.
@@ -571,7 +571,7 @@ def test_finalize_records_whether_balance_ran_and_does_not_gate_on_it():
     The leg is INFORMATIONAL. `method.md` is explicit that "balance never gates and only ever
     re-groups", so its findings must not move this command's verdict.
     """
-    from coyodex.finalize import build_report
+    from coyomap.finalize import build_report
     repo, map_path = make_repo()
     report = build_report(map_path, repo, [])
     balance_legs = [l for l in report.legs if l.name.startswith("balance")]
@@ -588,7 +588,7 @@ def test_finalize_records_whether_balance_ran_and_does_not_gate_on_it():
 
 def make_verdicts(root: Path, name: str, rows: list[dict]) -> Path:
     """One skeptic's verdict file, where a build keeps them."""
-    d = root / ".coyodex" / "verify"
+    d = root / ".coyomap" / "verify"
     d.mkdir(parents=True, exist_ok=True)
     p = d / name
     p.write_text(json.dumps({"grounding": rows}), encoding="utf-8")
@@ -606,7 +606,7 @@ def test_a_refutation_the_map_still_carries_blocks_the_run():
                         "note": "src/a.py never reaches back()"}])
     code = finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)])
     assert code == 1
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    doc = json.loads((root / ".coyomap" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert len(leg["blocking"]) == 1 and "C1 calls C2" in leg["blocking"][0]
     assert doc["verdict"] == "BLOCKED"
@@ -641,7 +641,7 @@ def test_the_uncovered_element_finding_is_ONE_advisory_not_one_per_element():
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
     finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)])
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    doc = json.loads((root / ".coyomap" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert len(leg["advisory"]) == 1
     assert "never looked at by a skeptic" in leg["advisory"][0]
@@ -678,7 +678,7 @@ def test_an_ACCESS_rule_no_skeptic_EVER_voted_on_is_CALLED_OUT_but_does_not_bloc
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
     assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    doc = json.loads((root / ".coyomap" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert not leg["blocking"], leg["blocking"]
     assert "ACCESS rule(s) were never challenged" in leg["advisory"][0], leg["advisory"]
@@ -694,7 +694,7 @@ def test_the_access_call_out_does_not_read_the_label():
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
     assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    doc = json.loads((root / ".coyomap" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert "ACCESS rule(s) were never challenged" in leg["advisory"][0], leg["advisory"]
 
@@ -707,7 +707,7 @@ def test_a_NON_access_rule_nobody_voted_on_stays_advisory():
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
     assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    doc = json.loads((root / ".coyomap" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert not leg["blocking"]
     assert any("never looked at by a skeptic" in a for a in leg["advisory"])
@@ -719,7 +719,7 @@ def test_the_leg_is_absent_rather_than_silently_clean_when_no_verdicts_are_given
     command exists to stop."""
     root, p = make_repo()
     finalize.main([str(p), "--repo", str(root)])
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    doc = json.loads((root / ".coyomap" / "finalize-report.json").read_text())
     assert not [l for l in doc["legs"] if l["name"] == "grounding refutations"]
 
 
@@ -757,15 +757,15 @@ def test_a_second_bare_path_is_refused_rather_than_ignored():
 # commit message both called it unescapable.
 
 _POSTPIN = ("Grounding covers the PINNED worklist, not the shipped map: 1 of the shipped map's "
-            "376 claim(s) have NO verdict (375 do). Challenge them and re-run `coyodex grounding "
+            "376 claim(s) have NO verdict (375 do). Challenge them and re-run `coyomap grounding "
             "write`, or say in `grounding.note` which claims were minted after the pin and why "
             "they were not re-challenged.")
 
 
 def _disposition_for(note: str | None, advisory: str) -> tuple[str, str]:
-    from coyodex.finalize import advisory_disposition, FinalizeReport, Leg, RAN
+    from coyomap.finalize import advisory_disposition, FinalizeReport, Leg, RAN
     import json, tempfile, os
-    m: dict[str, object] = {"format": "coyodex-map", "title": "t", "goal": "g"}
+    m: dict[str, object] = {"format": "coyomap-map", "title": "t", "goal": "g"}
     if note is not None:
         m["grounding"] = {"claims_total": 3, "claims_challenged": 3, "claims_confirmed": 3,
                           "claims_refuted": 0, "claims_unverifiable": 0, "note": note}
@@ -821,7 +821,7 @@ def test_an_advisory_whose_wording_moves_out_from_under_its_pattern_fails_OPEN()
 def test_a_number_inside_a_path_or_a_filename_does_not_count_as_naming_it():
     """`read verdicts-21.json` names a file. Accepting it let a note satisfy a demand for 21 by
     citing an artifact rather than by stating the count."""
-    from coyodex.finalize import _note_names
+    from coyomap.finalize import _note_names
     assert not _note_names("read verdicts-21.json", 21)
     assert not _note_names("src/a.py:21", 21)
     assert _note_names("The 21 post-pin claims were read line by line.", 21)
@@ -831,7 +831,7 @@ def test_the_spelled_form_needs_word_boundaries():
     """As a bare substring `ten` is inside "written", `one` inside "someone"/"none"/"money", `eight`
     inside "weighted". Against one real 3400-character note, 13 of 18 counts probed matched by
     accident, which made this check close to inert for anything under twenty."""
-    from coyodex.finalize import _note_names
+    from coyomap.finalize import _note_names
     assert not _note_names("nothing was written down", 10)
     assert not _note_names("someone looked at it", 1)
     assert not _note_names("none of them", 1)
@@ -864,7 +864,7 @@ def test_an_advisory_naming_no_escape_at_all_is_still_carried():
 # --- the access baseline leg -------------------------------------------------------
 
 def _finalize_with_baseline(tmp: Path, before: dict, after: dict):
-    from coyodex.finalize import build_report
+    from coyomap.finalize import build_report
     base = tmp / "before.json"
     cur = tmp / "after.json"
     base.write_text(json.dumps(before), encoding="utf-8")
@@ -872,17 +872,17 @@ def _finalize_with_baseline(tmp: Path, before: dict, after: dict):
     return build_report(cur, tmp, [], base)
 
 
-_AUTH = {"format": "coyodex-map", "title": "t", "goal": "g",
+_AUTH = {"format": "coyomap-map", "title": "t", "goal": "g",
          "rules": [{"id": "BR21", "statement": "Only a proven upstream identity", "access": True,
                     "risk": "impersonation",
                     "sites": [{"where": "a/auth_google.py:67", "why": "verifies the signature"}]}]}
-_NO_AUTH = {"format": "coyodex-map", "title": "t", "goal": "g",
+_NO_AUTH = {"format": "coyomap-map", "title": "t", "goal": "g",
             "rules": [{"id": "BR7", "statement": "Owner scoping", "access": True, "risk": "leak",
                        "sites": [{"where": "b/store.py:18", "why": "scopes by owner"}]}]}
 
 
 def test_finalize_names_a_file_that_lost_its_access_claim():
-    """The signal existed only in `coyodex-eval compare`'s notes — a developer-only command that runs
+    """The signal existed only in `coyomap-eval compare`'s notes — a developer-only command that runs
     at retro time. Here it runs after the map is written, so reading the baseline cannot contaminate
     the rebuild, and before the commit, which is the last moment anybody looks."""
     import tempfile
@@ -921,7 +921,7 @@ def test_a_deliberate_drop_recorded_by_PATH_actually_silences_the_advisory():
     `test_an_excused_file_is_disclosed_not_erased`. The record answers the question "is this
     deliberate?"; it does not make the file covered."""
     import tempfile
-    from coyodex.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
+    from coyomap.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
     after = {**_NO_AUTH, "extras": [{"heading": ACCESS_BASELINE_EXCEPTIONS_HEADING,
                                      "body": "a/auth_google.py: the check moved into the gateway "
                                              "and is claimed by BR7 there."}]}
@@ -942,7 +942,7 @@ def test_an_excused_file_is_disclosed_not_erased():
     message. Every sibling escape in this toolchain discloses in the same breath as it forgives:
     `Unclaimed surfaces` prints "counted as CLAIMED because of it"."""
     import tempfile
-    from coyodex.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
+    from coyomap.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
     after = {**_NO_AUTH, "extras": [{"heading": ACCESS_BASELINE_EXCEPTIONS_HEADING,
                                      "body": "a/auth_google.py: the check moved into the gateway "
                                              "and is claimed by BR7 there."}]}
@@ -961,15 +961,15 @@ def test_the_advisory_names_the_heading_that_can_actually_carry_a_path():
     """The message is the operator's only instruction, so it must name a heading whose grammar
     accepts what it asks them to write. `Audit exceptions` cannot: its keys are ids."""
     import tempfile
-    from coyodex.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
-    from coyodex import records
+    from coyomap.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
+    from coyomap import records
     with tempfile.TemporaryDirectory() as td:
         report = _finalize_with_baseline(Path(td), _AUTH, _NO_AUTH)
     msg = next(l for l in report.legs if l.name == "access baseline").advisory[0]
     assert ACCESS_BASELINE_EXCEPTIONS_HEADING in msg
     assert "Audit exceptions" not in msg
     # and the heading it names really parses a PATH as a key
-    from coyodex.model import ExtraSection, ProjectModel
+    from coyomap.model import ExtraSection, ProjectModel
     m = ProjectModel(title="t", goal="g")
     m.extras = [ExtraSection(heading=ACCESS_BASELINE_EXCEPTIONS_HEADING,
                              body="a/auth_google.py: deliberate.")]
@@ -978,7 +978,7 @@ def test_the_advisory_names_the_heading_that_can_actually_carry_a_path():
 
 def test_the_leg_is_absent_when_no_baseline_is_given():
     """A build with no predecessor must not grow a leg that silently reports nothing."""
-    from coyodex.finalize import build_report
+    from coyomap.finalize import build_report
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         cur = Path(td) / "after.json"
@@ -989,7 +989,7 @@ def test_the_leg_is_absent_when_no_baseline_is_given():
 
 def test_an_unreadable_baseline_is_INCOMPLETE_not_a_pass():
     """A leg that could not run must never read as silence — that is the whole INCOMPLETE rule."""
-    from coyodex.finalize import build_report, FAILED
+    from coyomap.finalize import build_report, FAILED
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
@@ -1012,7 +1012,7 @@ def test_an_unreadable_baseline_is_INCOMPLETE_not_a_pass():
 # --- the warrant, and reading without writing (retro 2026-09-02, mcpolis N1 and 17) ---------------
 
 def _repo_with_warrant(tmp: Path) -> Path:
-    out = tmp / ".coyodex"
+    out = tmp / ".coyomap"
     (out / "verify").mkdir(parents=True)
     (out / "build-fragments").mkdir(parents=True)
     (out / "project-map.json").write_text("{}")
@@ -1028,7 +1028,7 @@ def _repo_with_warrant(tmp: Path) -> Path:
 def test_the_commit_line_names_the_maps_warrant(tmp_path, capsys):
     """`grounding.note` cites the verdict rows as the reason to believe the map. Ship the counts
     without the rows and a fresh clone has the conclusion and can check no part of it."""
-    from coyodex.finalize import _commit_hint
+    from coyomap.finalize import _commit_hint
     _commit_hint(_repo_with_warrant(tmp_path))
     out = capsys.readouterr().out
     assert "verify" in out and "build-fragments" in out, out
@@ -1036,8 +1036,8 @@ def test_the_commit_line_names_the_maps_warrant(tmp_path, capsys):
 
 
 def test_the_commit_line_omits_a_warrant_that_is_not_there(tmp_path, capsys):
-    from coyodex.finalize import _commit_hint
-    out_dir = tmp_path / ".coyodex"
+    from coyomap.finalize import _commit_hint
+    out_dir = tmp_path / ".coyomap"
     out_dir.mkdir()
     (out_dir / "project-map.json").write_text("{}")
     _commit_hint(out_dir / "project-map.json")
@@ -1058,8 +1058,8 @@ def test_the_method_names_the_file_the_prose_leg_looks_for():
 
 
 def test_the_prose_leg_is_silent_when_the_verdicts_are_there(tmp_path):
-    from coyodex.finalize import _undispatched_prose_leg
-    out = tmp_path / ".coyodex"
+    from coyomap.finalize import _undispatched_prose_leg
+    out = tmp_path / ".coyomap"
     (out / "verify").mkdir(parents=True)
     (out / "verify" / "prose-1.json").write_text("{}")
     assert _undispatched_prose_leg(out / "project-map.json") is not None
@@ -1071,10 +1071,10 @@ def test_no_write_does_not_point_at_the_file_it_left_alone(tmp_path, capsys):
     """It printed 'Full findings: finalize-report.md' — the stale one it deliberately did not
     overwrite — so a reader following the pointer read the previous build's disposition."""
     import io, contextlib
-    from coyodex import finalize
-    out = tmp_path / ".coyodex"
+    from coyomap import finalize
+    out = tmp_path / ".coyomap"
     (out / "build-fragments").mkdir(parents=True)
-    (out / "project-map.json").write_text('{"format": "coyodex/1", "title": "t", "goal": "g"}')
+    (out / "project-map.json").write_text('{"format": "coyomap/1", "title": "t", "goal": "g"}')
     (out / "finalize-report.md").write_text("OLD REPORT")
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
@@ -1108,8 +1108,8 @@ def make_two_tier_map(tmp: str) -> Path:
             {"n": 1, "src": "R1", "dst": "C1", "phrase": "send the token", "where": "src/g.py:1"},
             {"n": 2, "src": "C1", "dst": "C2", "phrase": "store the session", "where": "src/s.py:1"}]}],
     }
-    (root / ".coyodex").mkdir(exist_ok=True)
-    p = root / ".coyodex" / "project-map.json"
+    (root / ".coyomap").mkdir(exist_ok=True)
+    p = root / ".coyomap" / "project-map.json"
     p.write_text(json.dumps(doc), encoding="utf-8")
     return p
 
@@ -1117,7 +1117,7 @@ def make_two_tier_map(tmp: str) -> Path:
 def write_record(p: Path, live: set[str]) -> None:
     """The record `grounding write --map` leaves: pinned counts and the digest of the live surface
     it was computed at."""
-    from coyodex.grounding import live_claims_digest
+    from coyomap.grounding import live_claims_digest
     doc = json.loads(p.read_text(encoding="utf-8"))
     doc["grounding"] = {"claims_total": len(live), "claims_challenged": len(live),
                         "claims_confirmed": len(live), "live_claims_digest": live_claims_digest(live)}
@@ -1130,7 +1130,7 @@ def test_the_digest_is_checked_at_the_tier_the_record_was_written_at():
     the mismatch advisory on a record that described its map exactly — 1782 claims hashed against
     833 compared — under a gate block counting the smaller surface. The tier is read off the digest
     itself, the audit leg runs at that tier, and a wrong-tier read says so instead of "moved"."""
-    from coyodex.finalize import _audit_leg, _live_surfaces, _record_tier
+    from coyomap.finalize import _audit_leg, _live_surfaces, _record_tier
     with tempfile.TemporaryDirectory() as tmp:
         p = make_two_tier_map(tmp)
         surfaces = _live_surfaces(p)
@@ -1157,7 +1157,7 @@ def test_the_digest_is_checked_at_the_tier_the_record_was_written_at():
 
 def test_build_report_counts_one_surface_the_one_the_record_hashed():
     """The gate block is what a commit message quotes: one surface, counted and hashed alike."""
-    from coyodex.finalize import _live_surfaces
+    from coyomap.finalize import _live_surfaces
     with tempfile.TemporaryDirectory() as tmp:
         p = make_two_tier_map(tmp)
         surfaces = _live_surfaces(p)
@@ -1172,7 +1172,7 @@ def test_build_report_counts_one_surface_the_one_the_record_hashed():
 def test_the_drift_leg_counts_coverage_at_the_records_tier():
     """`challenged 817 of 833` sat under an audit line counting 1782 on the first behavioural build:
     the drift leg's denominator was the default tier always. It follows the record's tier now."""
-    from coyodex.finalize import _drift_leg, _live_surfaces
+    from coyomap.finalize import _drift_leg, _live_surfaces
     with tempfile.TemporaryDirectory() as tmp:
         p = make_two_tier_map(tmp)
         surfaces = _live_surfaces(p)
@@ -1191,7 +1191,7 @@ def test_the_gate_block_says_which_unvoted_claims_were_pinned_and_never_challeng
     """Under a partial pass most of the shipped map's unvoted claims were PINNED and simply not
     challenged. The 2026-09-08 build's gate block called all 965 "minted after the worklist was
     pinned" when 949 had been on the worklist from the start."""
-    from coyodex.finalize import _grounding_line
+    from coyomap.finalize import _grounding_line
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "m.json"
         rec = {"claims_total": 1791, "claims_challenged": 842, "claims_confirmed": 823,
@@ -1231,7 +1231,7 @@ def test_the_gate_block_carries_the_advisory_disposition_counts():
 # --- the component budgets summed against what shipped (retro 2026-09-08, row 28) ---------------
 
 def _with_budgets(root: Path, budgets: dict[str, int]) -> None:
-    verify = root / ".coyodex" / "verify"
+    verify = root / ".coyomap" / "verify"
     verify.mkdir(parents=True, exist_ok=True)
     (verify / "budgets.json").write_text(json.dumps({"harvest": budgets}), encoding="utf-8")
 
@@ -1266,7 +1266,7 @@ def test_no_recorded_budgets_means_no_budget_leg():
 
 
 def _budget_verdict(root: Path, p: Path, text: str) -> tuple[finalize.Leg | None, str]:
-    verify = root / ".coyodex" / "verify"
+    verify = root / ".coyomap" / "verify"
     verify.mkdir(parents=True, exist_ok=True)
     (verify / "budgets.json").write_text(text, encoding="utf-8")
     report = finalize.build_report(p, root, [])

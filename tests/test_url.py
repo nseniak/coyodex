@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex url`: the address of one element, and the record of the running server it reads.
+"""`coyomap url`: the address of one element, and the record of the running server it reads.
 
 The grammar half is asserted here as TEXT (which words a fragment carries) and in
 `tests/test_viewer_browser.py` as a SCREEN (which element ends up selected). Both, because the text
@@ -21,17 +21,17 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl
 
-from coyodex import grammar
-from coyodex.model import ProjectModel, load_model
-from coyodex.viewer import url as url_cmd
-from coyodex.viewer.recents import RecentsStore
-from coyodex.viewer.running import forget_running, note_running, running_servers
-from coyodex.viewer.serve import Handler, build_projects
-from coyodex.viewer.url import link_for
+from coyomap import grammar
+from coyomap.model import ProjectModel, load_model
+from coyomap.viewer import url as url_cmd
+from coyomap.viewer.recents import RecentsStore
+from coyomap.viewer.running import forget_running, note_running, running_servers
+from coyomap.viewer.serve import Handler, build_projects
+from coyomap.viewer.url import link_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 _FIXTURE_MAP = REPO_ROOT / "tests" / "fixtures" / "mcpolis-project-map.json"
-VIEWER_JS = REPO_ROOT / "tools" / "coyodex" / "viewer" / "viewer.js"
+VIEWER_JS = REPO_ROOT / "tools" / "coyomap" / "viewer" / "viewer.js"
 
 
 def make_every_kind_map() -> dict:
@@ -62,8 +62,8 @@ def make_model() -> ProjectModel:
 def make_project(td: Path, name: str = "alpha") -> Path:
     """`td/name` holding the every-kind map, the way a mapped repo holds one."""
     folder = td / name
-    (folder / ".coyodex").mkdir(parents=True)
-    (folder / ".coyodex" / "project-map.json").write_text(json.dumps(make_every_kind_map()),
+    (folder / ".coyomap").mkdir(parents=True)
+    (folder / ".coyomap" / "project-map.json").write_text(json.dumps(make_every_kind_map()),
                                                           encoding="utf-8")
     return folder
 
@@ -233,15 +233,15 @@ def test_with_a_running_server_the_address_is_whole_and_the_path_is_the_servers(
             note_running(port, os.getpid(), running)
             code, out, err = run_url(["UC1", "--repo", str(folder)], running)
             assert code == 0, err
-            assert out.strip() == f"http://127.0.0.1:{port}/coyodex/alpha/#v=usecase&uc=UC1"
+            assert out.strip() == f"http://127.0.0.1:{port}/coyomap/alpha/#v=usecase&uc=UC1"
             assert "note:" not in err
             code, out, err = run_url(["CAP1", "--repo", str(folder), "--context", "--json"], running)
             assert code == 0, err
             got = json.loads(out)
             assert got == {"id": "CAP1", "kind": "capability", "name": "Organizations & teams",
                            "view": "features", "fragment": "v=features&sel=sfeat%3ACAP1",
-                           "path": "/coyodex/alpha/",
-                           "url": f"http://127.0.0.1:{port}/coyodex/alpha/#v=features&sel=sfeat%3ACAP1",
+                           "path": "/coyomap/alpha/",
+                           "url": f"http://127.0.0.1:{port}/coyomap/alpha/#v=features&sel=sfeat%3ACAP1",
                            "server": {"port": port, "pid": os.getpid()}}
         finally:
             httpd.shutdown()
@@ -254,11 +254,11 @@ def test_without_a_server_the_path_and_fragment_still_come_with_a_note() -> None
         running = Path(td) / "running.json"  # never written: no server ever ran
         code, out, err = run_url(["HP1", "--repo", str(folder)], running)
         assert code == 0
-        assert out.strip() == "/coyodex/alpha/#v=hp&sel=hpstep%3AHP1"
-        assert "no coyodex server is running" in err and "make start" in err
+        assert out.strip() == "/coyomap/alpha/#v=hp&sel=hpstep%3AHP1"
+        assert "no coyomap server is running" in err and "make start" in err
         code, out, _err = run_url(["HP1", "--repo", str(folder), "--json"], running)
         got = json.loads(out)
-        assert got["url"] is None and got["server"] is None and got["path"] == "/coyodex/alpha/"
+        assert got["url"] is None and got["server"] is None and got["path"] == "/coyomap/alpha/"
 
 
 def test_a_server_that_does_not_list_the_project_is_named_in_the_note() -> None:
@@ -273,7 +273,7 @@ def test_a_server_that_does_not_list_the_project_is_named_in_the_note() -> None:
             note_running(port, os.getpid(), running)
             code, out, err = run_url(["UC1", "--repo", str(mine)], running)
             assert code == 0
-            assert out.strip() == "/coyodex/mine/#v=usecase&uc=UC1"
+            assert out.strip() == "/coyomap/mine/#v=usecase&uc=UC1"
             assert f"port {port}" in err and str(mine) in err
         finally:
             httpd.shutdown()
@@ -286,8 +286,8 @@ def test_a_dead_record_is_skipped_not_dialled() -> None:
         running = Path(td) / "running.json"
         note_running(1, make_dead_pid(), running)          # port 1: nothing would answer anyway
         code, out, err = run_url(["UC1", "--repo", str(folder)], running)
-        assert code == 0 and out.strip() == "/coyodex/alpha/#v=usecase&uc=UC1"
-        assert "no coyodex server is running" in err
+        assert code == 0 and out.strip() == "/coyomap/alpha/#v=usecase&uc=UC1"
+        assert "no coyomap server is running" in err
 
 
 def test_bad_input_fails_loudly_and_never_with_exit_0() -> None:
@@ -305,4 +305,4 @@ def test_bad_input_fails_loudly_and_never_with_exit_0() -> None:
         code, _out, err = run_url(["UC1", "--repo", str(Path(td) / "nowhere")], running)
         assert code == 1 and "not found" in err
         code, out, _err = run_url(["--help"], running)
-        assert code == 0 and "usage: coyodex url" in out
+        assert code == 0 and "usage: coyomap url" in out

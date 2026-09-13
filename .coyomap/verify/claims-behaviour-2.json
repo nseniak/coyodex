@@ -1,0 +1,228 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "behaviour",
+ "claims": [
+  {
+   "claim": "UC8 step 9: C27 → I8 [in] — read the commit the code now stands at",
+   "anchor": "tools/coyomap/provenance.py:217",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 10: C131 → I4 [out] — ask whether to commit the code first, or pin the map as dirty",
+   "anchor": "method/change-impact.md:129",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 11: I4 → R1 — put the two choices in front of the person",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 12: R1 → I4 — commit the code, then say to go on",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 13: I4 → C131 [in] — carry the answer back to the accept steps",
+   "anchor": "skill/coyomap/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 14: C27 → I6 [out] — write the build stamp beside the map",
+   "anchor": "tools/coyomap/provenance.py:232",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 15: C131 → C45 — rebuild the code survey at the new pin",
+   "anchor": "method/change-impact.md:133",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 16: C45 → I8 [in] — list the project's tracked and untracked files",
+   "anchor": "tools/coyomap/preindex_lib.py:190",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 17: C45 → I6 [out] — write the code survey beside the map",
+   "anchor": "tools/coyomap/preindex.py:604",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 19: C131 → I6 [out] — commit the map, its readable view, the code survey and the report together",
+   "anchor": "method/change-impact.md:138",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 20: C131 → I4 [out] — hand back the address that opens this project's map",
+   "anchor": "method/change-impact.md:140",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 21: I4 → R1 — give the person the address of the re-pinned map",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 1: R1 → I7 — write one ignore pattern per line beside the map",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 2: I7 → C46 [in] — hand over the pattern lines in the order they were written",
+   "anchor": "tools/coyomap/ignorefile.py:195",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 3: R1 → I1 — ask for the briefing that says what will be read",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 4: I1 → C26 [in] — carry the request to describe the tree, and nothing else",
+   "anchor": "tools/coyomap/scope.py:172",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 5: C26 → C45 — walk the project's files, the same walk the survey and the checks use",
+   "anchor": "tools/coyomap/scope.py:74",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 6: C45 → C46 — ask which rule decides each file the walk found",
+   "anchor": "tools/coyomap/preindex_lib.py:242",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 7: C45 → E50 [out] — record which files stayed and how many each rule took out",
+   "anchor": "tools/coyomap/preindex_lib.py:249",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 8: C26 → C46 — ask what each pattern took out, for the briefing",
+   "anchor": "tools/coyomap/scope.py:131",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 9: C26 → I1 [out] — print the file count and every pattern beside what it took out",
+   "anchor": "tools/coyomap/scope.py:132",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 10: I1 → R1 — show the narrowed tree before any code is read",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 11: C45 → I6 [out] — write the per-pattern counts into the code survey beside the map",
+   "anchor": "tools/coyomap/preindex.py:604",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 12: R1 → I1 — ask for the map's own checks to run",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 13: I1 → C6 [in] — carry the check request, whether the cheap pass or the full one",
+   "anchor": "tools/coyomap/cli.py:156",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 14: C6 → C45 — walk the tree again instead of trusting the code survey",
+   "anchor": "tools/coyomap/validate_analysis.py:324",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 15: C6 → C46 — ask what each pattern decided on that second walk",
+   "anchor": "tools/coyomap/validate_analysis.py:328",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 16: C6 → I1 [out] — name every pattern that decided nothing on this tree",
+   "anchor": "tools/coyomap/validate_analysis.py:337",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC3 step 17: I1 → R1 — show what the map was told to leave out, on every check run",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 1: R1 → I4 — ask in plain language to move, split or rename part of the map",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 2: I4 → C134 [in] — point the agent at the clone and at the one document that decides the mode",
+   "anchor": "skill/coyomap/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 4: R1 → I1 — run the map commands the method names",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 5: I1 → C24 [in] — carry the request to read one element's stored record",
+   "anchor": "tools/coyomap/dump.py:322",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 6: C24 → E1 [in] — read the stored record of the element the person named",
+   "anchor": "tools/coyomap/dump.py:138",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 7: I1 → C48 [in] — carry the request for a proposed split of one crowded screen",
+   "anchor": "tools/coyomap/cli.py:183",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 8: C48 → I1 [out] — print a proposed grouping for a screen that holds too many boxes",
+   "anchor": "tools/coyomap/balance.py:281",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC9 step 9: I1 → R1 — show the split as a starting point, never as ready to apply",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  }
+ ]
+}

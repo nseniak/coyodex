@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex timings` — the measured answer to "which slice is longest?".
+"""Tests for `coyomap timings` — the measured answer to "which slice is longest?".
 
 The method tells the lead to dispatch the longest slice first, then hands it folklore to decide
 "longest" with. A measured build got the order wrong three times in six fan-outs and paid up to 7.7
@@ -19,12 +19,12 @@ from pathlib import Path
 
 import pytest
 
-from coyodex.timings import PHASES, VERSION, Run, latest_by_slice, load_runs, main, record_path
+from coyomap.timings import PHASES, VERSION, Run, latest_by_slice, load_runs, main, record_path
 
 
 def make_repo(tmp: str) -> str:
     """An analyzed repo with no timings record — what every first build looks like."""
-    Path(tmp, ".coyodex").mkdir(parents=True, exist_ok=True)
+    Path(tmp, ".coyomap").mkdir(parents=True, exist_ok=True)
     return tmp
 
 
@@ -131,7 +131,7 @@ def test_one_call_naming_a_slice_twice_is_refused(capsys) -> None:
 
 
 def test_a_batch_with_one_bad_row_writes_nothing(capsys) -> None:
-    """The same guarantee `coyodex record` gives: a bad line in a batch of twenty leaves the file
+    """The same guarantee `coyomap record` gives: a bad line in a batch of twenty leaves the file
     untouched rather than holding half a batch."""
     with tempfile.TemporaryDirectory() as tmp:
         make_record(tmp, [{"phase": "harvest", "slice": "deps", "minutes": 3.2}])
@@ -191,7 +191,7 @@ def test_the_record_lives_beside_the_map_and_never_inside_it() -> None:
         main(["record", "--repo", make_repo(tmp), "--phase", "harvest",
               "--slice", "deps", "--minutes", "3.2"])
         assert record_path(tmp).name == "fanout-timings.json"
-        assert not Path(tmp, ".coyodex", "project-map.json").exists()
+        assert not Path(tmp, ".coyomap", "project-map.json").exists()
 
 
 def test_an_unknown_verb_is_refused_with_the_usage(capsys) -> None:
@@ -212,7 +212,7 @@ if __name__ == "__main__":
 # created — so the next build's `timings order` had nothing to order by.
 
 def _record_lines(tmp: Path, text: str, phase: str = "harvest") -> int:
-    from coyodex.timings import main
+    from coyomap.timings import main
     src = tmp / "t.txt"
     src.write_text(text, encoding="utf-8")
     return main(["record", "--repo", str(tmp), "--phase", phase, "--lines-from", str(src)])
@@ -220,7 +220,7 @@ def _record_lines(tmp: Path, text: str, phase: str = "harvest") -> int:
 
 def test_lines_from_records_a_whole_fan_out_in_one_call():
     import tempfile
-    from coyodex.timings import latest_by_slice, load_runs, record_path
+    from coyomap.timings import latest_by_slice, load_runs, record_path
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         assert _record_lines(tmp, "h11 t5-domain-model 15.6\nh12 deps 11.9\nh4 auth 5.5\n") == 0
@@ -231,7 +231,7 @@ def test_lines_from_records_a_whole_fan_out_in_one_call():
 
 def test_lines_from_skips_blanks_and_comments():
     import tempfile
-    from coyodex.timings import latest_by_slice, load_runs, record_path
+    from coyomap.timings import latest_by_slice, load_runs, record_path
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         _record_lines(tmp, "# what the barrier took\n\nh1 domain 9.0\n\n")
@@ -241,7 +241,7 @@ def test_lines_from_skips_blanks_and_comments():
 
 def test_lines_from_carries_an_item_count_when_one_is_given():
     import tempfile
-    from coyodex.timings import latest_by_slice, load_runs, record_path
+    from coyomap.timings import latest_by_slice, load_runs, record_path
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         _record_lines(tmp, "h1 domain 9.0 12\n")
@@ -251,7 +251,7 @@ def test_lines_from_carries_an_item_count_when_one_is_given():
 
 def test_a_line_that_is_not_a_pair_is_refused_and_nothing_is_written():
     import tempfile
-    from coyodex.timings import record_path
+    from coyomap.timings import record_path
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         rc = _record_lines(tmp, "h1 domain 9.0\njustaname\n")
@@ -287,23 +287,23 @@ def test_a_real_typo_is_still_refused(capsys) -> None:
         assert "unknown phase" in capsys.readouterr().err
 
 
-def test_an_omitted_repo_is_refused_from_inside_the_coyodex_clone(monkeypatch, capsys) -> None:
-    """`timings` writes to `<repo>/.coyodex/`, and a build runs the CLI by absolute path while its
+def test_an_omitted_repo_is_refused_from_inside_the_coyomap_clone(monkeypatch, capsys) -> None:
+    """`timings` writes to `<repo>/.coyomap/`, and a build runs the CLI by absolute path while its
     shell folder drifts. On the 2026-09-01 argus build 9 harvest slices were filed in the clone
     instead of the mapped project, and nothing downstream can see that: both files are well-formed,
     and the loss looks exactly like a phase nobody measured."""
-    from coyodex.timings import COYODEX_HOME
-    monkeypatch.chdir(COYODEX_HOME)
+    from coyomap.timings import COYOMAP_HOME
+    monkeypatch.chdir(COYOMAP_HOME)
     assert main(["record", "--phase", "harvest", "--slice", "s", "--minutes", "1.0"]) != 0
     assert "--repo is required here" in capsys.readouterr().err
 
 
-def test_an_explicit_repo_is_always_honoured_so_coyodex_stays_self_mappable(monkeypatch) -> None:
+def test_an_explicit_repo_is_always_honoured_so_coyomap_stays_self_mappable(monkeypatch) -> None:
     """`--repo .` from the clone is a deliberate statement; `.` by default is not."""
-    from coyodex.timings import COYODEX_HOME
+    from coyomap.timings import COYOMAP_HOME
     with tempfile.TemporaryDirectory() as tmp:
         make_repo(tmp)
-        monkeypatch.chdir(COYODEX_HOME)
+        monkeypatch.chdir(COYOMAP_HOME)
         assert main(["record", "--repo", tmp, "--phase", "harvest",
                      "--slice", "s", "--minutes", "1.0"]) == 0
         assert read_record(tmp)[0]["slice"] == "s"

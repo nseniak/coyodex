@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the component-granularity expectation E — the leaf anchor.
 
-Covers the shared computation in `coyodex.preindex_lib` (stop rule, flat-oversized rule,
+Covers the shared computation in `coyomap.preindex_lib` (stop rule, flat-oversized rule,
 exclusions, per-slice, determinism), the pre-index surfacing (`granularity` block in
 preindex.json), the validate advisory (`granularity_advisory` — fires far outside E, silent
 within band), and the docs (method.md carries the leaf rule; the harvest-prompt template
@@ -18,8 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import preindex
-from coyodex.preindex_lib import (
+from coyomap import preindex
+from coyomap.preindex_lib import (
     GRANULARITY_BAND_PCT,
     GRANULARITY_FILE_CAP,
     GRANULARITY_LOC_CAP,
@@ -27,7 +27,7 @@ from coyodex.preindex_lib import (
     granularity_band,
     slice_expectations,
 )
-from coyodex.validate_analysis import granularity_advisory
+from coyomap.validate_analysis import granularity_advisory
 
 METHOD_MD = Path(__file__).resolve().parent.parent / "method.md"
 
@@ -37,7 +37,7 @@ METHOD_MD = Path(__file__).resolve().parent.parent / "method.md"
 def make_tree(files: dict[str, int]) -> Path:
     """Write a throwaway source tree: {repo-relative path: LOC}. Not a git repo — the walk
     falls back to os.walk with the same exclude rules, which is what these tests exercise."""
-    root = Path(tempfile.mkdtemp(prefix="coyodex_granularity_"))
+    root = Path(tempfile.mkdtemp(prefix="coyomap_granularity_"))
     for rel, loc in files.items():
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -159,7 +159,7 @@ def test_band_is_generous_both_directions() -> None:
 
 def test_preindex_json_carries_granularity_block() -> None:
     root = make_plugin_tree(6)
-    out = root / ".coyodex" / "preindex.json"
+    out = root / ".coyomap" / "preindex.json"
     rc = preindex.main(["--root", str(root), "--out", str(out)])
     assert rc == 0
     doc = json.loads(out.read_text())
@@ -203,8 +203,8 @@ def test_advisory_ignores_poisoned_preindex_json_gr4() -> None:
     checker re-computes E from the tree, never reads the generated artifact."""
     root = make_plugin_tree(9)
     before = granularity_advisory(2, root)
-    (root / ".coyodex").mkdir(exist_ok=True)
-    (root / ".coyodex" / "preindex.json").write_text(
+    (root / ".coyomap").mkdir(exist_ok=True)
+    (root / ".coyomap" / "preindex.json").write_text(
         json.dumps({"granularity": {"expected_components": 2, "LIE": "2 is fine"}}))
     after = granularity_advisory(2, root)
     assert before == after and after, (before, after)

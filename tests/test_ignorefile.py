@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `.coyodex/.ignore` — the analysis ignore file (coyodex.ignorefile).
+"""Tests for `.coyomap/.ignore` — the analysis ignore file (coyomap.ignorefile).
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_ignorefile.py
@@ -19,11 +19,11 @@ import textwrap
 from pathlib import Path
 from typing import cast
 
-from coyodex import ignorefile as ignorefile_mod, validate_analysis
-from coyodex.ignorefile import IGNORE_REL, ignore_report, load_ignore, parse_ignore
-from coyodex.preindex_lib import expected_components, iter_source_files
-from coyodex.viewer.build_graph import GraphDict
-from coyodex.viewer.filetree import build_file_tree
+from coyomap import ignorefile as ignorefile_mod, validate_analysis
+from coyomap.ignorefile import IGNORE_REL, ignore_report, load_ignore, parse_ignore
+from coyomap.preindex_lib import expected_components, iter_source_files
+from coyomap.viewer.build_graph import GraphDict
+from coyomap.viewer.filetree import build_file_tree
 
 
 # --- builders -------------------------------------------------------------------
@@ -128,12 +128,12 @@ def make_documented_ignore_examples() -> list[tuple[str, str]]:
         for i, block in enumerate(re.findall(r"```\n(.*?)```", text, re.S)):
             # An `.ignore` example is a fenced block naming the file, or one made only of patterns
             # and comments where at least one line ends in `/` or carries a glob.
-            if ".coyodex/.ignore" in block or "!generated/hand_written.py" in block:
+            if ".coyomap/.ignore" in block or "!generated/hand_written.py" in block:
                 out.append((f"{rel} block {i}", block))
-    # The docstring's example is the contiguous indented block starting at its `.coyodex/.ignore`
+    # The docstring's example is the contiguous indented block starting at its `.coyomap/.ignore`
     # banner — NOT every indented line, which would sweep in wrapped prose from the bullets below it.
     doc = (ignorefile_mod.__doc__ or "").splitlines()
-    start = next((i for i, ln in enumerate(doc) if ln.strip().startswith("# .coyodex/.ignore")), None)
+    start = next((i for i, ln in enumerate(doc) if ln.strip().startswith("# .coyomap/.ignore")), None)
     if start is not None:
         # A different name from the fenced-block `block` above, which is a str: one name for both
         # made the whole function read as if a fenced block were a list of lines.
@@ -237,7 +237,7 @@ def test_validate_discloses_the_ignore_file_and_names_its_patterns():
         root = make_repo(Path(td), ignore="trapdoor/\n")
         out = validate_analysis.ignore_disclosure(root)
         assert len(out) == 1
-        assert ".coyodex/.ignore" in out[0] and "trapdoor/" in out[0]
+        assert ".coyomap/.ignore" in out[0] and "trapdoor/" in out[0]
         assert "7 file(s)" in out[0]
 
 

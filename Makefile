@@ -1,6 +1,6 @@
 REPO := $(CURDIR)
 
-# Repo-local virtualenv that coyodex owns. Deps install HERE, never into the user's
+# Repo-local virtualenv that coyomap owns. Deps install HERE, never into the user's
 # active/system Python — no pollution, no PEP-668 "externally-managed" block. The CLI is
 # installed editable, so the repo stays the source of truth (docs/tools evolve without reinstall).
 VENV := $(REPO)/.venv
@@ -27,14 +27,14 @@ PORT ?= 8765
 # declare requires-python >=3.10); fail fast with a clear message instead of a cryptic error.
 venv:
 	@command -v python3 >/dev/null 2>&1 || { \
-		echo "ERROR: python3 not found. coyodex requires Python $(MIN_PY)+ (see README 'Requirements')."; exit 1; }
+		echo "ERROR: python3 not found. coyomap requires Python $(MIN_PY)+ (see README 'Requirements')."; exit 1; }
 	@python3 -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 10) else 1)' || { \
 		echo "ERROR: Python $(MIN_PY)+ required; found $$(python3 --version 2>&1). See README 'Requirements'."; exit 1; }
 	@test -d "$(VENV)" || python3 -m venv "$(VENV)"
 
-# Install the coyodex CLI editable into the venv, WITH the pre-index extra (tree-sitter for
+# Install the coyomap CLI editable into the venv, WITH the pre-index extra (tree-sitter for
 # polyglot symbol/import extraction). The core gate (validate + render) stays dependency-free;
-# tree-sitter is a scoped exception confined to `coyodex preindex` (see internal/docs/design-notes.md).
+# tree-sitter is a scoped exception confined to `coyomap preindex` (see internal/docs/design-notes.md).
 # Run `make deps` alone to refresh after editing pyproject deps.
 deps: venv
 	$(PY) -m pip install -e '$(REPO)[preindex]'
@@ -55,7 +55,7 @@ dev: venv
 gates:
 	@$(PY) -m pytest -q; t=$$?; \
 	echo ""; \
-	$(PY) -m pyright tools/coyodex; p=$$?; \
+	$(PY) -m pyright tools/coyomap; p=$$?; \
 	echo ""; \
 	if [ $$t -ne 0 ] || [ $$p -ne 0 ]; then echo "GATES FAILED (pytest=$$t pyright=$$p)"; exit 1; fi; \
 	echo "GATES PASSED"
@@ -67,79 +67,79 @@ gates:
 land:
 	python3 tools/land.py
 
-# Install the coyodex skill globally for all agents (macOS/Linux). Also builds the venv and
+# Install the coyomap skill globally for all agents (macOS/Linux). Also builds the venv and
 # installs the CLI (via `deps`) so a one-time `make install` covers everything.
 # Copies SKILL.md into each skills home with this repo's absolute path baked in
-# (replacing __COYODEX_HOME__), so the skill points straight here with no runtime
+# (replacing __COYOMAP_HOME__), so the skill points straight here with no runtime
 # lookup. The method docs and tools are still read live from this repo, so they
 # keep evolving without reinstalling. Re-run install only if you move the repo or
 # edit SKILL.md itself.
 install: deps
 	@for dir in $(SKILLS_DIRS); do \
-		rm -rf "$$dir/coyodex"; \
-		mkdir -p "$$dir/coyodex"; \
-		sed 's|__COYODEX_HOME__|$(REPO)|g' skill/coyodex/SKILL.md > "$$dir/coyodex/SKILL.md"; \
-		echo "Installed coyodex skill -> $$dir/coyodex (home: $(REPO))"; \
+		rm -rf "$$dir/coyomap"; \
+		mkdir -p "$$dir/coyomap"; \
+		sed 's|__COYOMAP_HOME__|$(REPO)|g' skill/coyomap/SKILL.md > "$$dir/coyomap/SKILL.md"; \
+		echo "Installed coyomap skill -> $$dir/coyomap (home: $(REPO))"; \
 	done
 
-# Install the coyodex-eval skill globally — SEPARATE from `install`, since the eval (method-quality
-# regression) is opt-in. Same COYODEX_HOME substitution, so the skill points back at this clone for the
+# Install the coyomap-eval skill globally — SEPARATE from `install`, since the eval (method-quality
+# regression) is opt-in. Same COYOMAP_HOME substitution, so the skill points back at this clone for the
 # eval bundle under eval/ (method.md, thresholds.json, rubric.md) and the CLI. Depends on `deps`
 # so the venv/CLI exist.
 install-eval: deps
 	@for dir in $(SKILLS_DIRS); do \
-		rm -rf "$$dir/coyodex-eval"; \
-		mkdir -p "$$dir/coyodex-eval"; \
-		sed 's|__COYODEX_HOME__|$(REPO)|g' eval/SKILL.md > "$$dir/coyodex-eval/SKILL.md"; \
-		echo "Installed coyodex-eval skill -> $$dir/coyodex-eval (home: $(REPO))"; \
+		rm -rf "$$dir/coyomap-eval"; \
+		mkdir -p "$$dir/coyomap-eval"; \
+		sed 's|__COYOMAP_HOME__|$(REPO)|g' eval/SKILL.md > "$$dir/coyomap-eval/SKILL.md"; \
+		echo "Installed coyomap-eval skill -> $$dir/coyomap-eval (home: $(REPO))"; \
 	done
 
-# Install the coyodex-retro skill globally — SEPARATE again, and opt-in. The retro reviews a build
+# Install the coyomap-retro skill globally — SEPARATE again, and opt-in. The retro reviews a build
 # that has ALREADY finished (its map + its chat transcript) and reports bugs / friction / method
-# gaps; it builds nothing and changes nothing. Same COYODEX_HOME substitution so it reads its recipe
+# gaps; it builds nothing and changes nothing. Same COYOMAP_HOME substitution so it reads its recipe
 # (eval/retro/method.md) and the method it audits from this clone.
 install-retro: deps
 	@for dir in $(SKILLS_DIRS); do \
-		rm -rf "$$dir/coyodex-retro"; \
-		mkdir -p "$$dir/coyodex-retro"; \
-		sed 's|__COYODEX_HOME__|$(REPO)|g' eval/retro/SKILL.md > "$$dir/coyodex-retro/SKILL.md"; \
-		echo "Installed coyodex-retro skill -> $$dir/coyodex-retro (home: $(REPO))"; \
+		rm -rf "$$dir/coyomap-retro"; \
+		mkdir -p "$$dir/coyomap-retro"; \
+		sed 's|__COYOMAP_HOME__|$(REPO)|g' eval/retro/SKILL.md > "$$dir/coyomap-retro/SKILL.md"; \
+		echo "Installed coyomap-retro skill -> $$dir/coyomap-retro (home: $(REPO))"; \
 	done
 
 # Both DEVELOPER skills at once. They are opt-in and always wanted together: eval answers "did my
 # change make the maps worse?" and retro answers "what did that run reveal?" — two halves of the
-# same feedback loop, and neither is meant for a user of coyodex. `install` (the user skill) is
+# same feedback loop, and neither is meant for a user of coyomap. `install` (the user skill) is
 # deliberately NOT included: installing the developer surface should never be a side effect of
 # setting up the tool.
 install-dev: install-eval install-retro
-	@echo "Installed the developer skills (coyodex-eval + coyodex-retro). The user skill is \`make install\`."
+	@echo "Installed the developer skills (coyomap-eval + coyomap-retro). The user skill is \`make install\`."
 
 uninstall-dev: uninstall-eval uninstall-retro
 	@echo "Uninstalled the developer skills."
 
 uninstall:
 	@for dir in $(SKILLS_DIRS); do \
-		rm -rf "$$dir/coyodex"; \
-		echo "Uninstalled coyodex skill from $$dir/coyodex"; \
+		rm -rf "$$dir/coyomap"; \
+		echo "Uninstalled coyomap skill from $$dir/coyomap"; \
 	done
 
 uninstall-retro:
 	@for dir in $(SKILLS_DIRS); do \
-		rm -rf "$$dir/coyodex-retro"; \
-		echo "Uninstalled coyodex-retro skill from $$dir/coyodex-retro"; \
+		rm -rf "$$dir/coyomap-retro"; \
+		echo "Uninstalled coyomap-retro skill from $$dir/coyomap-retro"; \
 	done
 
 uninstall-eval:
 	@for dir in $(SKILLS_DIRS); do \
-		rm -rf "$$dir/coyodex-eval"; \
-		echo "Uninstalled coyodex-eval skill from $$dir/coyodex-eval"; \
+		rm -rf "$$dir/coyomap-eval"; \
+		echo "Uninstalled coyomap-eval skill from $$dir/coyomap-eval"; \
 	done
 
 # Start the local map server so the viewer's file browser + code viewer work (files read from git
 # at each map's commit). Opens the landing page — add a project by browsing to its folder, or open a
-# recent one. No disk scan; choices are remembered in ~/.coyodex/serve-recents.json. Ctrl-C to stop.
+# recent one. No disk scan; choices are remembered in ~/.coyomap/serve-recents.json. Ctrl-C to stop.
 start: deps
-	$(VENV)/bin/coyodex serve --port $(PORT) --open
+	$(VENV)/bin/coyomap serve --port $(PORT) --open
 
 # Same server, for someone working ON the viewer: an edit reaches the screen with nothing pressed.
 # Two halves, and both are needed. `--dev` gives the map page a live reload, which covers

@@ -9,7 +9,7 @@ Run either way (needs an editable install: `make deps`):
 in memory (`make_deploy_model()` and friends) and assert what a function returns. That is the
 right shape for logic, and it leaves three holes this file closes:
 
-  1. `coyodex preindex --report` had ZERO tests among the 894 — not one invocation. The
+  1. `coyomap preindex --report` had ZERO tests among the 894 — not one invocation. The
      `--root`-is-ignored defect lived there undisturbed.
   2. No test fed an "E is stored in D" claim into `anchor-drift`. That claim shape is exactly
      where the store false-positive lived: on one live map 9 of 13 drift findings were it, and
@@ -36,13 +36,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import anchor_drift as ad
-from coyodex import preindex
-from coyodex.audit_model import l2_worklist_model
-from coyodex.model import ProjectModel, load_model
-from coyodex.preindex_lib import expected_components, iter_source_files
-from coyodex.validate_model import validate_model
-from coyodex.views import model_to_graph
+from coyomap import anchor_drift as ad
+from coyomap import preindex
+from coyomap.audit_model import l2_worklist_model
+from coyomap.model import ProjectModel, load_model
+from coyomap.preindex_lib import expected_components, iter_source_files
+from coyomap.validate_model import validate_model
+from coyomap.views import model_to_graph
 
 from trapdoor import FIXTURE, GOLDEN_MAP, fixture_text, fixture_tracked_paths, line_of, trap
 
@@ -50,7 +50,7 @@ from trapdoor import FIXTURE, GOLDEN_MAP, fixture_text, fixture_tracked_paths, l
 # --- builders -------------------------------------------------------------------------
 
 def make_golden_model() -> ProjectModel:
-    """The frozen golden map — a real `coyodex assemble` output over the real fixture tree."""
+    """The frozen golden map — a real `coyomap assemble` output over the real fixture tree."""
     return load_model(GOLDEN_MAP.read_text(encoding="utf-8"))
 
 
@@ -182,7 +182,7 @@ def test_preindex_report_rejects_a_non_integer_depth():
 
 def test_preindex_report_honours_root_over_the_cwd_repo():
     """THE DEFECT, now fixed and pinned the other way round. `--report` used to read only `--in`
-    (default `.coyodex/preindex.json`, resolved against the CWD) and never look at `--root`, so
+    (default `.coyomap/preindex.json`, resolved against the CWD) and never look at `--root`, so
     pointing it at another repo silently reported the CURRENT one under the other repo's name.
 
     The hard case is exactly this one: a CWD that HAS its own pre-index, so the wrong answer
@@ -190,14 +190,14 @@ def test_preindex_report_honours_root_over_the_cwd_repo():
     test_method_contract.py states the same thing as a contract."""
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        other = tmp / "other-repo" / ".coyodex"
+        other = tmp / "other-repo" / ".coyomap"
         other.mkdir(parents=True)
         (other / "preindex.json").write_text(json.dumps({
             "root": "/other-repo", "weight": {"path": ".", "loc": 1, "file_count": 1, "churn": 0,
                                               "lang": "python", "children": []},
             "granularity": {"expected_components": 999, "band": [1, 2], "per_dir": {}},
             "coverage": {}, "symbols": {}}))
-        cwd = tmp / "cwd-repo" / ".coyodex"
+        cwd = tmp / "cwd-repo" / ".coyomap"
         cwd.mkdir(parents=True)
         (cwd / "preindex.json").write_text(json.dumps({
             "root": "/cwd-repo", "weight": {"path": ".", "loc": 2, "file_count": 2, "churn": 0,
@@ -229,11 +229,11 @@ def test_preindex_report_names_the_ignore_patterns_when_a_tree_was_narrowed():
         (repo / "junk").mkdir(parents=True)
         (repo / "src" / "a.py").write_text("def a():\n    return 1\n")
         (repo / "junk" / "b.py").write_text("def b():\n    return 2\n")
-        (repo / ".coyodex").mkdir()
-        (repo / ".coyodex" / ".ignore").write_text("junk/\n")
+        (repo / ".coyomap").mkdir()
+        (repo / ".coyomap" / ".ignore").write_text("junk/\n")
         artifact = make_preindex(tmp, root=repo)
         out = _capture(lambda: preindex.main(["--report", "--in", str(artifact)]))
-    assert "IGNORED BY .coyodex/.ignore" in out and "junk/" in out
+    assert "IGNORED BY .coyomap/.ignore" in out and "junk/" in out
 
 
 # --- A: anchors ------------------------------------------------------------------------

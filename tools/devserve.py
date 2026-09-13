@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dev supervisor for `coyodex serve --dev`: FOR SOMEONE WORKING ON THE VIEWER, not for users.
+"""Dev supervisor for `coyomap serve --dev`: FOR SOMEONE WORKING ON THE VIEWER, not for users.
 
 Run it with `make dev-start`. Together with `--dev` it closes the edit → screen loop, so a change
 to the viewer shows up with nothing pressed:
@@ -51,9 +51,9 @@ def sources_stamp(watch_root: Path) -> int:
 
 def spawn(repo: Path, port: str) -> subprocess.Popen[bytes]:
     """Start the server in its own process group, so `stop` can take down anything it spawned."""
-    print(f"devserve: starting coyodex serve --dev on :{port}", flush=True)
+    print(f"devserve: starting coyomap serve --dev on :{port}", flush=True)
     return subprocess.Popen(
-        [str(repo / ".venv" / "bin" / "coyodex"), "serve", str(repo), "--port", port, "--dev"],
+        [str(repo / ".venv" / "bin" / "coyomap"), "serve", str(repo), "--port", port, "--dev"],
         cwd=str(repo), start_new_session=True,
     )
 
@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     repo = Path(args[0]).resolve()
     port = args[1] if len(args) > 1 else "8765"
-    watch_root = repo / "tools" / "coyodex"
+    watch_root = repo / "tools" / "coyomap"
     proc = spawn(repo, port)
     last = sources_stamp(watch_root)
     try:

@@ -7,7 +7,7 @@ a DOOR is exempt, being a human action with no product end. `validate` drops the
 exemption, so EVERY interface owes a use case. The method gains the operator-actor rules and the
 sweep back from the interfaces table to the use case list. Four operator use cases were written into
 the two live maps, and argus's paid page-reading service got the step it always owed ·
-method.md, method/model.md, tools/coyodex/, the three maps.
+method.md, method/model.md, tools/coyomap/, the three maps.
 
 Escalation: if check 1 fails on a rebuild, an agent is not filling `direction` and the advisory is
 not enough — say so and propose promoting it to blocking, rather than hand-filling the field, which
@@ -79,12 +79,12 @@ anchored at the real call site.
 2. **`direction` is advisory, not blocking, when missing.** Deliberate: a gate on a brand-new
    required field walls off every rebuild before one build has shown an agent filling it. Check 1
    is what decides whether it gets promoted.
-3. **Coyodex's own map is the real cost, and the headline numbers hide it.** Every measurement
+3. **Coyomap's own map is the real cost, and the headline numbers hide it.** Every measurement
    above is from argus and mcpolis. The third map on disk draws no doors, so all 11 of its surfaces
    had no flow step: it lost 15 authored sentences and every one of its 11 direction answers, and
    states nothing in their place until its walks get doors. It is stale and not rebuilt, which is
    why this was accepted rather than fixed — but "5 of 28 surfaces had no step" is the two-map
-   number, not the whole truth, and the next rebuild of coyodex's own map is where the bill lands.
+   number, not the whole truth, and the next rebuild of coyomap's own map is where the bill lands.
 4. **One outside service still wears two names.** argus carries the same company as dependency
    "Scrapfly" and interface "Paid reading service", and no screen joins them. A viewer defect, not
    a map defect. Nitsan chose not to log it.

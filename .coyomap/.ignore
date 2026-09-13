@@ -1,0 +1,7 @@
+# The trapdoor fixture — a synthetic repo committed only so coyomap's own tests
+# and evals have something to map. It is not part of the coyomap product, and it
+# carries two project maps (expected/, golden/) that must never be read as source.
+eval/fixtures/trapdoor/
+# The repo's own-map test fixture: a project map committed for the viewer and assembly tests,
+# which `coyomap scope` warned would be read as SOURCE and inflate every count.
+tests/fixtures/own-map/

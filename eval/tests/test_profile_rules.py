@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coyodex.model import (
+from coyomap.model import (
     BusinessRule,
     Component,
     Dep,
@@ -31,8 +31,8 @@ from coyodex.model import (
     UseCase,
     load_model,
 )
-from coyodex_eval.compare import DEFAULT_BANDS
-from coyodex_eval.profile import MapProfile, build_profile_from_model
+from coyomap_eval.compare import DEFAULT_BANDS
+from coyomap_eval.profile import MapProfile, build_profile_from_model
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -83,7 +83,7 @@ def test_the_auth_surface_set_reads_both_storages_on_every_committed_map() -> No
     """The union is what let the fold happen without the hard gate ever seeing a transition. On a
     LEGACY map (the two fixtures, which are not migrated — they are rebuilt) it is the security
     rows; on the folded map it is the `access` rules; on a half-migrated map it would be both."""
-    for rel in (".coyodex/project-map", "tests/fixtures/mcpolis-project-map",
+    for rel in (".coyomap/project-map", "tests/fixtures/mcpolis-project-map",
                 "eval/fixtures/trapdoor/golden/project-map"):
         m = load_model((REPO / f"{rel}.json").read_text(encoding="utf-8"))
         expected: list[str] = []
@@ -95,7 +95,7 @@ def test_the_auth_surface_set_reads_both_storages_on_every_committed_map() -> No
 
 
 # A test here used to assert that THIS repo's live map carries exactly 14 access rules and 14 auth
-# surfaces. It is gone. It read `.coyodex/project-map.json`, which a build rewrites, so a rebuild in
+# surfaces. It is gone. It read `.coyomap/project-map.json`, which a build rewrites, so a rebuild in
 # progress turned it red while this code had not moved — and the question it asked is already asked
 # properly by `compare`'s `auth-surfaces-no-drop` hard gate, against the accepted map rather than
 # against a literal 14. The code path it covered — an access rule joining the auth-surface set —

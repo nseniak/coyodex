@@ -1,4 +1,4 @@
-"""`coyodex grounding write` — the record `validate` blocks on, derived instead of hand-tallied."""
+"""`coyomap grounding write` — the record `validate` blocks on, derived instead of hand-tallied."""
 from __future__ import annotations
 
 import json
@@ -9,8 +9,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from coyodex import grounding as G  # noqa: E402
-from coyodex.grounding import build_record, main  # noqa: E402
+from coyomap import grounding as G  # noqa: E402
+from coyomap.grounding import build_record, main  # noqa: E402
 
 
 def make_worklist(*claims: str) -> list[str]:
@@ -218,7 +218,7 @@ def test_report_names_the_claims_that_were_never_challenged():
 def test_two_skeptics_agreeing_are_not_reported_as_a_duplicate_row():
     """The method PRESCRIBES a double read of the security claims, and the note used to tell the
     build to "drop one" for doing exactly what it was asked to do."""
-    from coyodex.anchor_drift import load_verdicts
+    from coyomap.anchor_drift import load_verdicts
     with tempfile.TemporaryDirectory() as tmp:
         rows = [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1"}]
         a, b = Path(tmp) / "v-a.json", Path(tmp) / "v-b.json"
@@ -229,7 +229,7 @@ def test_two_skeptics_agreeing_are_not_reported_as_a_duplicate_row():
 
 
 def test_the_same_skeptic_id_in_two_files_is_still_reported():
-    from coyodex.anchor_drift import load_verdicts
+    from coyomap.anchor_drift import load_verdicts
     with tempfile.TemporaryDirectory() as tmp:
         row = {"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1", "skeptic": "sec-a"}
         a, b = Path(tmp) / "v-a.json", Path(tmp) / "agg.json"
@@ -242,7 +242,7 @@ def test_the_same_skeptic_id_in_two_files_is_still_reported():
 def test_the_record_states_the_delta_when_given_the_live_map():
     """Without `--map` the record cannot say how the shipped map differs from the pinned worklist,
     and a build had no legal answer to the staleness advisory."""
-    from coyodex.grounding import build_record, live_claims_digest
+    from coyomap.grounding import build_record, live_claims_digest
     pinned = ["a", "b", "c"]
     rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
     live = ["a", "b", "d"]                       # c was reconciled away; d was authored since
@@ -256,7 +256,7 @@ def test_the_record_states_the_delta_when_given_the_live_map():
 def test_without_the_live_map_the_record_is_exactly_as_before():
     """`--map` is optional: a build that never reconciles a count-changing refutation needs none of
     this, and its record must not grow fields it cannot fill honestly."""
-    from coyodex.grounding import build_record
+    from coyomap.grounding import build_record
     pinned = ["a", "b"]
     rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
     rec, errors = build_record(pinned, rows)
@@ -271,7 +271,7 @@ def make_reworded_pass() -> dict:
 
     Three claims pinned and all three voted; the build then rewords `c` into `c-narrowed`, so the
     shipped map carries a claim no skeptic saw while every pinned count stays true."""
-    from coyodex.grounding import build_record
+    from coyomap.grounding import build_record
     pinned = ["a", "b", "c"]
     rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
     rec, errors = build_record(pinned, rows, live_claims=["a", "b", "c-narrowed"])
@@ -293,7 +293,7 @@ def test_live_challenged_is_measured_not_derived_from_the_pinned_counts():
     """`claims_total - claims_superseded` is the tempting derivation, and it is wrong under
     `--partial`: there the unvoted and the superseded claims overlap by an amount no pinned count
     records. `c` is both superseded and unvoted; `b` is live and unvoted."""
-    from coyodex.grounding import build_record
+    from coyomap.grounding import build_record
     pinned = ["a", "b", "c"]
     rows = [{"claim": "a", "grounded": True, "evidence": "f.py:1"}]
     rec, errors = build_record(pinned, rows, live_claims=["a", "b"], partial=True,
@@ -307,7 +307,7 @@ def test_live_challenged_is_measured_not_derived_from_the_pinned_counts():
 
 def test_a_complete_pass_over_an_unchanged_map_reports_full_live_coverage():
     """It must not cry wolf on the ordinary case, which is every build that rewords nothing."""
-    from coyodex.grounding import build_record
+    from coyomap.grounding import build_record
     pinned = ["a", "b"]
     rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
     rec, errors = build_record(pinned, rows, live_claims=["a", "b"])
@@ -318,7 +318,7 @@ def test_a_complete_pass_over_an_unchanged_map_reports_full_live_coverage():
 def test_the_digest_ignores_order_and_duplication():
     """Both sides are counted over the de-duplicated claim SET — two sides counted by different
     rules measure the rule instead of the map."""
-    from coyodex.grounding import live_claims_digest
+    from coyomap.grounding import live_claims_digest
     assert live_claims_digest(["b", "a"]) == live_claims_digest(["a", "b"])
     assert live_claims_digest(["a", "a", "b"]) == live_claims_digest(["a", "b"])
     assert live_claims_digest(["a", "b"]) != live_claims_digest(["a", "c"])
@@ -328,7 +328,7 @@ def test_the_pinned_split_is_never_recomputed_against_the_live_map():
     """The `refuted 0` trap, pinned as a test. The claims a reconcile deletes are exactly the
     REFUTED ones, so a split measured against the live worklist reports that nothing was ever found
     wrong. The split must stay pinned no matter what `--map` says."""
-    from coyodex.grounding import build_record
+    from coyomap.grounding import build_record
     pinned = ["kept", "refuted-and-rewritten"]
     rows = [{"claim": "kept", "grounded": True, "evidence": "f.py:1"},
             {"claim": "refuted-and-rewritten", "grounded": False, "note": "wrong"}]
@@ -341,7 +341,7 @@ def test_the_digest_is_not_ambiguous_about_where_a_claim_ends():
     """A separator that can appear inside a claim makes the digest ambiguous: newline-joined,
     `["a\\nb"]` hashed identically to `["a", "b"]`. No claim carries a newline today, which is why
     it was worth removing before one does."""
-    from coyodex.grounding import live_claims_digest
+    from coyomap.grounding import live_claims_digest
     assert live_claims_digest(["a\nb"]) != live_claims_digest(["a", "b"])
 
 
@@ -353,7 +353,7 @@ def test_report_lists_which_claims_were_superseded():
     import json as _json
     import tempfile
     from pathlib import Path
-    from coyodex import grounding
+    from coyomap import grounding
     with tempfile.TemporaryDirectory() as tmp:
         wl = Path(tmp) / "wl.json"
         wl.write_text(_json.dumps({"worklist": [{"claim": c} for c in
@@ -364,7 +364,7 @@ def test_report_lists_which_claims_were_superseded():
             {"claim": "reconciled-away", "grounded": False, "note": "wrong"},
             {"claim": "confirmed-then-cut", "grounded": True, "evidence": "g.py:2"}]}))
         m = Path(tmp) / "m.json"
-        m.write_text(_json.dumps({"format": "coyodex-map", "title": "T", "goal": "g",
+        m.write_text(_json.dumps({"format": "coyomap-map", "title": "T", "goal": "g",
                                   "components": [{"id": "C1", "name": "A", "source": "f.py:1"}]}))
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -379,7 +379,7 @@ def test_report_lists_which_claims_were_superseded():
 
 
 def make_report(pinned: list[str], rows: list[dict], live: list[str] | None) -> str:
-    from coyodex.grounding import format_report
+    from coyomap.grounding import format_report
     return format_report(pinned, rows, live_claims=live)
 
 
@@ -505,7 +505,7 @@ def test_keep_note_and_note_file_together_are_refused(capsys):
 
 
 def test_a_worklist_given_as_a_bare_list_is_read_not_crashed_on():
-    """`coyodex audit --json | jq .worklist` yields a BARE LIST, which is the obvious way to hand
+    """`coyomap audit --json | jq .worklist` yields a BARE LIST, which is the obvious way to hand
     this command its input — and it crashed with an AttributeError traceback.
 
     The list case was already intended: the `isinstance` test existed. It sat inside the default
@@ -513,7 +513,7 @@ def test_a_worklist_given_as_a_bare_list_is_read_not_crashed_on():
     raised. A guard in an unreachable position is not a guard, and the one input shape it was
     written for was the one that failed."""
     import json, tempfile, os
-    from coyodex.grounding import _worklist_claims
+    from coyomap.grounding import _worklist_claims
     from pathlib import Path
     rows = [{"claim": "C1 calls C2", "anchor": "a.py:1"}, {"claim": "C2 writes E1"}]
     with tempfile.TemporaryDirectory() as d:
@@ -541,7 +541,7 @@ def test_lint_catches_the_quoted_boolean_at_the_skeptic_not_a_hundred_turns_late
     "true" and paid four turns of hand-repair on the critical path. The skeptic's own self-check
     could not have caught it: printing str(value) renders 'true' for a string and a boolean alike."""
     import tempfile
-    from coyodex.grounding import lint_verdicts
+    from coyomap.grounding import lint_verdicts
     with tempfile.TemporaryDirectory() as d:
         bad = _write(d, "v.json", {"grounding": [
             {"claim": "c", "grounded": "true", "evidence": "a.py:1", "skeptic": "s", "note": "n"}]})
@@ -560,7 +560,7 @@ def test_lint_catches_a_note_claiming_a_read_the_agent_never_made():
     nothing in the toolchain could see them. The agent's own transcript can."""
     import tempfile, json
     from pathlib import Path
-    from coyodex.grounding import lint_verdicts
+    from coyomap.grounding import lint_verdicts
     with tempfile.TemporaryDirectory() as d:
         agents = Path(d) / "agents"
         agents.mkdir()
@@ -594,7 +594,7 @@ def _verdict_file(tmp: Path, name: str, claim: str) -> Path:
 
 
 def test_verdicts_accepts_several_paths_after_one_flag():
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         a = _verdict_file(tmp, "a.json", "claim one")
@@ -605,7 +605,7 @@ def test_verdicts_accepts_several_paths_after_one_flag():
 
 
 def test_the_repeated_flag_form_still_works():
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         a = _verdict_file(tmp, "a.json", "claim one")
@@ -615,7 +615,7 @@ def test_the_repeated_flag_form_still_works():
 
 def test_a_flag_after_the_paths_is_still_a_flag():
     """The swallow stops at the next `-`, or `--verdicts a.json --json` would eat the `--json`."""
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         a = _verdict_file(tmp, "a.json", "claim one")
@@ -633,7 +633,7 @@ def test_the_evidence_check_tests_a_row_that_cites_its_anchor_only_in_evidence(c
     describe the reading in words. `evidence` is a bare `path:line` on every row, and citing a file
     you never opened is exactly the shape this exists to catch — the fabricating pass put a
     real-looking anchor on all forty of its rows."""
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         p = tmp / "v.json"
@@ -659,7 +659,7 @@ def test_a_SYMBOL_anchor_is_not_read_as_a_missing_file(capsys):
     """`evidence` also carries symbol references — `ServiceTokenService.mint` — which are
     `Word.word` and match any "token dot token" rule. Reading eleven of those as unopened files was
     the first thing the widening did on a real pass."""
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         p = tmp / "v.json"
@@ -681,7 +681,7 @@ def test_a_file_only_PRINTED_by_a_grep_is_a_note_and_does_not_fail_the_lint(caps
     absent from both is a problem, present only as text is a NOTE, because a skeptic may read a
     range through a shell verb this cannot see and a signal that fails the lint teaches the next
     agent to route around it."""
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         p = tmp / "v.json"
@@ -702,7 +702,7 @@ def test_a_file_only_PRINTED_by_a_grep_is_a_note_and_does_not_fail_the_lint(caps
 def test_lint_says_how_much_of_the_pass_the_evidence_check_could_test(capsys):
     """It printed the same line with and without `--agent-transcripts`, so a run that tested 16 of
     949 rows and a run that tested none were indistinguishable."""
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         p = tmp / "v.json"
@@ -774,7 +774,7 @@ def test_write_prints_the_numbers_a_note_will_cite(tmp_path: Path):
     mp = tmp_path / "map.json"
     # The shipped map no longer carries "C1 calls C2" -> superseded, and it was CONFIRMED.
     mp.write_text(json.dumps({
-        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
         "components": [{"id": "C3", "name": "C3", "purpose": "p"}],
         "entities": [{"id": "E1", "name": "E1", "meaning": "m"}],
         "edges": [{"src": "C3", "verb": "reads", "dst": "E1", "why": "w", "where": "b.py:2"}],
@@ -844,7 +844,7 @@ def _agent_dir(tmp: Path, name: str, filename: str, body: str) -> Path:
 
 
 def _lint_with(agent_dir: Path, tmp: Path) -> tuple[int, str]:
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     import io, contextlib
     p = tmp / "v.json"
     p.write_text(json.dumps({"grounding": [
@@ -942,7 +942,7 @@ def test_background_bash_stdout_does_not_vouch_for_a_file_no_agent_opened():
 
 def _write_with_note(note: str, rows: list[dict], claims: list[str],
                      live: list[str] | None = None):
-    from coyodex.grounding import _note_contradictions, build_record
+    from coyomap.grounding import _note_contradictions, build_record
     record, _errors = build_record(claims, rows, note, live_claims=live)
     return _note_contradictions(note, rows, record, live)
 
@@ -978,7 +978,7 @@ def _write_note_cli(note: str, extra: list[str] | None = None,
 
     `anchors` is one `evidence` per voter, so a test can make the three readers agree or disagree."""
     import contextlib, io
-    from coyodex.grounding import main
+    from coyomap.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         v = tmp / "v.json"
@@ -1041,7 +1041,7 @@ def _voted(claim: str, votes: list[tuple[object, str]]) -> list[dict]:
 
 
 def test_multi_vote_agreement_counts_verdict_and_anchor_disagreements_apart():
-    from coyodex.grounding import multi_vote_agreement
+    from coyomap.grounding import multi_vote_agreement
     rows = (_voted("agree", [(True, "a.py:1"), (True, "a.py:1"), (True, "a.py:1")])
             + _voted("split-verdict", [(True, "b.py:2"), (False, "b.py:2")])
             + _voted("split-anchor", [(True, "c.py:3"), (True, "c.py:9")])
@@ -1052,13 +1052,13 @@ def test_multi_vote_agreement_counts_verdict_and_anchor_disagreements_apart():
 def test_a_missing_anchor_is_not_counted_as_agreement():
     """An absent citation is not a matching one — counting it as agreement is how a pass with two
     silent voters reads as unanimous."""
-    from coyodex.grounding import multi_vote_agreement
+    from coyomap.grounding import multi_vote_agreement
     rows = _voted("c1", [(True, "a.py:1"), (True, "")])
     assert multi_vote_agreement(rows) == (1, 0, 0)
 
 
 def _agreement(note: str, rows: list[dict]):
-    from coyodex.grounding import _agreement_contradictions
+    from coyomap.grounding import _agreement_contradictions
     return _agreement_contradictions(note, rows)
 
 
@@ -1091,7 +1091,7 @@ def test_the_agreement_claim_WARNS_and_never_refuses():
 def test_a_single_skeptics_RE_VOTE_is_not_a_multi_voted_claim():
     """Voters are read off the rows, so `len(rows) < 2 and len(voters) < 2` reduced to "fewer than
     two rows" — counting one reader disagreeing with itself as a disagreement between readers."""
-    from coyodex.grounding import multi_vote_agreement
+    from coyomap.grounding import multi_vote_agreement
     rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "s1"},
             {"claim": "c1", "grounded": True, "evidence": "a.py:9", "skeptic": "s1"}]
     assert multi_vote_agreement(rows) == (0, 0, 0)
@@ -1099,7 +1099,7 @@ def test_a_single_skeptics_RE_VOTE_is_not_a_multi_voted_claim():
 
 
 def test_rows_with_no_skeptic_field_are_not_multi_voted():
-    from coyodex.grounding import multi_vote_agreement
+    from coyomap.grounding import multi_vote_agreement
     rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1"},
             {"claim": "c1", "grounded": True, "evidence": "a.py:9"}]
     assert multi_vote_agreement(rows) == (0, 0, 0)

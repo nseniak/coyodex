@@ -1,0 +1,3698 @@
+{
+  "components": [],
+  "entry_points": [],
+  "deps": [],
+  "observability": [],
+  "config": [],
+  "deployment": [],
+  "run_commands": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Project map",
+      "meaning": "Everything the map knows about one project, kept in one committed file.",
+      "source": "tools/coyomap/model.py:761",
+      "store": {
+        "container": "project-map.json",
+        "mode": "collection",
+        "notes": "written in a fixed key order so the same map always produces the same bytes",
+        "dep": "D91"
+      },
+      "fields": [
+        {
+          "name": "format",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "goal",
+          "type": "string"
+        },
+        {
+          "name": "commit",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "roles",
+          "type": "E2",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "glossary",
+          "type": "E4",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "capabilities",
+          "type": "E9",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "subsystems",
+          "type": "E9",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "subdomains",
+          "type": "E9",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "blocks",
+          "type": "E9",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "use_cases",
+          "type": "E5",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "happy_path",
+          "type": "E6",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "components",
+          "type": "E12",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "deps",
+          "type": "E13",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "interfaces",
+          "type": "E11",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "run_commands",
+          "type": "E14",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "entry_points",
+          "type": "E15",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "entities",
+          "type": "E22",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "non_entity_types",
+          "type": "E23",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "flows",
+          "type": "E25",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "subflows",
+          "type": "E26",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "edges",
+          "type": "E27",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "messaging",
+          "type": "E18",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "deployment",
+          "type": "E29",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "environments",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "observability",
+          "type": "E30",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "security",
+          "type": "E31",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "config",
+          "type": "E32",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "tests",
+          "type": "E33",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "rules",
+          "type": "E35",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "extras",
+          "type": "E36",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "grounding",
+          "type": "E37",
+          "markers": [
+            "?"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E4",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E5",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E6",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E9",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E11",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E12",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E13",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E14",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E15",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E18",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E22",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E23",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E25",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E26",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E27",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E29",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E30",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E31",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E32",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E33",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E35",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E36",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E37",
+          "src_card": "1",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "Actor",
+      "meaning": "A person or program the product recognizes, with what they want from it.",
+      "source": "tools/coyomap/model.py:68",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        },
+        {
+          "name": "audience",
+          "type": "string"
+        },
+        {
+          "name": "wants",
+          "type": "string"
+        },
+        {
+          "name": "drives",
+          "type": "string"
+        },
+        {
+          "name": "relations",
+          "type": "E3",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E3",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E3",
+      "name": "Actor link",
+      "meaning": "One stated tie between two actors, such as one becoming another.",
+      "source": "tools/coyomap/model.py:43",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "kind",
+          "type": "string"
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "markers": [
+            "FK→E2"
+          ]
+        },
+        {
+          "name": "at",
+          "type": "string",
+          "markers": [
+            "FK→E5",
+            "?"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "changesAt",
+          "target": "E5",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E4",
+      "name": "Glossary term",
+      "meaning": "One product word and its plain meaning, with the place in the code it names.",
+      "source": "tools/coyomap/model.py:92",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "term",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "meaning",
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "aliases",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "no_autolink",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "id": "E5",
+      "name": "Use case",
+      "meaning": "One goal an actor comes to the product for, with what starts it and what results.",
+      "source": "tools/coyomap/model.py:109",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "actors",
+          "type": "string",
+          "markers": [
+            "FK→E2",
+            "[]"
+          ]
+        },
+        {
+          "name": "trigger_outcome",
+          "type": "string"
+        },
+        {
+          "name": "capability",
+          "type": "string",
+          "markers": [
+            "FK→E9",
+            "?"
+          ]
+        },
+        {
+          "name": "entry_points",
+          "type": "string",
+          "markers": [
+            "FK→E15",
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "drivenBy",
+          "target": "E2",
+          "src_card": "*",
+          "dst_card": "*"
+        },
+        {
+          "verb": "groupedBy",
+          "target": "E9",
+          "src_card": "*",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "startsAt",
+          "target": "E15",
+          "src_card": "*",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E6",
+      "name": "Happy path step",
+      "meaning": "One position in the product's single successful run, naming the use case it plays.",
+      "source": "tools/coyomap/model.py:130",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "uc",
+          "type": "string",
+          "markers": [
+            "FK→E5",
+            "?"
+          ]
+        },
+        {
+          "name": "why",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "realizes",
+          "target": "E5",
+          "src_card": "*",
+          "dst_card": "1"
+        }
+      ]
+    },
+    {
+      "id": "E7",
+      "name": "Stake",
+      "meaning": "What one actor comes to a feature to do, in a short phrase.",
+      "source": "tools/coyomap/model.py:139",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "actor",
+          "type": "string",
+          "markers": [
+            "FK→E2"
+          ]
+        },
+        {
+          "name": "stake",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "heldBy",
+          "target": "E2",
+          "src_card": "*",
+          "dst_card": "1"
+        }
+      ]
+    },
+    {
+      "id": "E8",
+      "name": "Story anchor",
+      "meaning": "Where a feature the successful run never reaches sits beside the features it does.",
+      "source": "tools/coyomap/model.py:149",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "place",
+          "type": "string"
+        },
+        {
+          "name": "feature",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E9",
+      "name": "Group",
+      "meaning": "One box grouping other elements: a feature, a subsystem, a data area or a decision area.",
+      "source": "tools/coyomap/model.py:166",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "purpose",
+          "type": "string"
+        },
+        {
+          "name": "parent",
+          "type": "string",
+          "markers": [
+            "FK→E9",
+            "?"
+          ]
+        },
+        {
+          "name": "happy_path",
+          "type": "string"
+        },
+        {
+          "name": "stakes",
+          "type": "E7",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "story",
+          "type": "E8",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "owners",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "confidence",
+          "type": "string"
+        },
+        {
+          "name": "tech",
+          "type": "string"
+        },
+        {
+          "name": "tech_source",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "has",
+          "target": "E9",
+          "src_card": "0..1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E7",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E8",
+          "src_card": "1",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E10",
+      "name": "Evidence",
+      "meaning": "One citation backing a claim the map makes, with the line to re-read.",
+      "source": "tools/coyomap/model.py:213",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "file",
+          "type": "string"
+        },
+        {
+          "name": "why",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E11",
+      "name": "Interface",
+      "meaning": "One place the product meets something outside itself.",
+      "source": "tools/coyomap/model.py:221",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "what",
+          "type": "string"
+        },
+        {
+          "name": "side",
+          "type": "string"
+        },
+        {
+          "name": "facing",
+          "type": "string"
+        },
+        {
+          "name": "kind",
+          "type": "E67"
+        },
+        {
+          "name": "ways_in",
+          "type": "string",
+          "markers": [
+            "FK→E15",
+            "[]"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "name": "confidence",
+          "type": "string"
+        },
+        {
+          "name": "evidence",
+          "type": "E10",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E10",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "madeOf",
+          "target": "E15",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "has",
+          "target": "E67",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E12",
+      "name": "Component",
+      "meaning": "One module-sized piece of the product, with the files it owns.",
+      "source": "tools/coyomap/model.py:262",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "purpose",
+          "type": "string"
+        },
+        {
+          "name": "subsystem",
+          "type": "string",
+          "markers": [
+            "FK→E9",
+            "?"
+          ]
+        },
+        {
+          "name": "entry_point",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "confidence",
+          "type": "string"
+        },
+        {
+          "name": "files",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "runs_in",
+          "type": "string",
+          "markers": [
+            "FK→E29",
+            "[]"
+          ]
+        },
+        {
+          "name": "evidence",
+          "type": "E10",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "states",
+          "type": "E20",
+          "markers": [
+            "?"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E10",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E20",
+          "src_card": "1",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "groupedBy",
+          "target": "E9",
+          "src_card": "*",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "runsIn",
+          "target": "E29",
+          "src_card": "*",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E13",
+      "name": "Dependency",
+      "meaning": "One outside system or library the product uses.",
+      "source": "tools/coyomap/model.py:287",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "type",
+          "type": "string"
+        },
+        {
+          "name": "used_for",
+          "type": "string"
+        },
+        {
+          "name": "bucket",
+          "type": "string"
+        },
+        {
+          "name": "where_configured",
+          "type": "string"
+        },
+        {
+          "name": "deployment_linked",
+          "type": "bool"
+        },
+        {
+          "name": "package",
+          "type": "string"
+        },
+        {
+          "name": "alternative",
+          "type": "string"
+        },
+        {
+          "name": "interfaces",
+          "type": "string",
+          "markers": [
+            "FK→E11",
+            "[]"
+          ]
+        },
+        {
+          "name": "not_an_interface",
+          "type": "string"
+        },
+        {
+          "name": "evidence",
+          "type": "E10",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E10",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "standsOn",
+          "target": "E11",
+          "src_card": "*",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E14",
+      "name": "Run command",
+      "meaning": "One command a person types to work on the product.",
+      "source": "tools/coyomap/model.py:318",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "command",
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E15",
+      "name": "Way in",
+      "meaning": "One address, command or tool that starts work inside the product.",
+      "source": "tools/coyomap/model.py:326",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "kind",
+          "type": "E68"
+        },
+        {
+          "name": "trigger",
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "name": "component",
+          "type": "string",
+          "markers": [
+            "FK→E12"
+          ]
+        },
+        {
+          "name": "activation",
+          "type": "string"
+        },
+        {
+          "name": "runs_in",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "cadence",
+          "type": "string"
+        },
+        {
+          "name": "cadence_source",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "ownedBy",
+          "target": "E12",
+          "src_card": "*",
+          "dst_card": "1"
+        },
+        {
+          "verb": "has",
+          "target": "E68",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E16",
+      "name": "Record field",
+      "meaning": "One attribute of a saved record, with its type and its key markers.",
+      "source": "tools/coyomap/model.py:356",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "type",
+          "type": "string"
+        },
+        {
+          "name": "markers",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E17",
+      "name": "Record relation",
+      "meaning": "One typed link from a saved record to another, with how many sit at each end.",
+      "source": "tools/coyomap/model.py:363",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "verb",
+          "type": "string"
+        },
+        {
+          "name": "target",
+          "type": "string"
+        },
+        {
+          "name": "src_card",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "dst_card",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "display",
+          "type": "string"
+        },
+        {
+          "name": "how",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "keyed_by",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E18",
+      "name": "Channel",
+      "meaning": "One queue or topic the product sends messages on, with who puts and who takes.",
+      "source": "tools/coyomap/model.py:379",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        },
+        {
+          "name": "broker",
+          "type": "string",
+          "markers": [
+            "FK→E13"
+          ]
+        },
+        {
+          "name": "publishers",
+          "type": "string",
+          "markers": [
+            "FK→E12",
+            "[]"
+          ]
+        },
+        {
+          "name": "consumers",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "payload",
+          "type": "string",
+          "markers": [
+            "FK→E22"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "carriedBy",
+          "target": "E13",
+          "src_card": "*",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "carries",
+          "target": "E22",
+          "src_card": "*",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "movedBy",
+          "target": "E12",
+          "src_card": "*",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E19",
+      "name": "State change",
+      "meaning": "One move from one state to another, with the trigger that causes the move.",
+      "source": "tools/coyomap/model.py:395",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "dst",
+          "type": "string"
+        },
+        {
+          "name": "on",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E20",
+      "name": "Lifecycle",
+      "meaning": "The states a record or a component moves through, and the moves between them.",
+      "source": "tools/coyomap/model.py:402",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "states",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "transitions",
+          "type": "E19",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E19",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E21",
+      "name": "Store",
+      "meaning": "Where a record physically lives: which store, which compartment, and how it sits there.",
+      "source": "tools/coyomap/model.py:415",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "dep",
+          "type": "string",
+          "markers": [
+            "FK→E13",
+            "?"
+          ]
+        },
+        {
+          "name": "container",
+          "type": "string"
+        },
+        {
+          "name": "mode",
+          "type": "E66"
+        },
+        {
+          "name": "notes",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "heldBy",
+          "target": "E13",
+          "src_card": "*",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "has",
+          "target": "E66",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E22",
+      "name": "Record",
+      "meaning": "One named thing the product works with, and what the product keeps of it.",
+      "source": "tools/coyomap/model.py:431",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "meaning",
+          "type": "string"
+        },
+        {
+          "name": "subdomain",
+          "type": "string",
+          "markers": [
+            "FK→E9",
+            "?"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "store",
+          "type": "E21",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "fields",
+          "type": "E16",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "relations",
+          "type": "E17",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "states",
+          "type": "E20",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "owners",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E16",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E17",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E21",
+          "src_card": "1",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "contains",
+          "target": "E20",
+          "src_card": "1",
+          "dst_card": "0..1"
+        },
+        {
+          "verb": "groupedBy",
+          "target": "E9",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E23",
+      "name": "Skipped type",
+      "meaning": "A named type in the product left out of the record model on purpose.",
+      "source": "tools/coyomap/model.py:453",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "why",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E24",
+      "name": "Flow step",
+      "meaning": "One step of a use case, saying who acts on what, and which way data moves.",
+      "source": "tools/coyomap/model.py:463",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "n",
+          "type": "int"
+        },
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "dst",
+          "type": "string"
+        },
+        {
+          "name": "phrase",
+          "type": "string"
+        },
+        {
+          "name": "note",
+          "type": "string"
+        },
+        {
+          "name": "where",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "no_call_site",
+          "type": "bool"
+        },
+        {
+          "name": "direction",
+          "type": "E69"
+        },
+        {
+          "name": "subflow",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "has",
+          "target": "E69",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E25",
+      "name": "Flow",
+      "meaning": "The numbered steps of one use case, in the order they happen.",
+      "source": "tools/coyomap/model.py:507",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "uc",
+          "type": "string",
+          "markers": [
+            "FK→E5"
+          ]
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "steps",
+          "type": "E24",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E24",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "realizes",
+          "target": "E5",
+          "src_card": "1",
+          "dst_card": "1"
+        }
+      ]
+    },
+    {
+      "id": "E26",
+      "name": "Shared sub-flow",
+      "meaning": "A run of steps several use cases share, written once.",
+      "source": "tools/coyomap/model.py:514",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "steps",
+          "type": "E24",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E24",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E27",
+      "name": "Edge",
+      "meaning": "One relation between two boxes on the map, with the line where it happens.",
+      "source": "tools/coyomap/model.py:527",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "verb",
+          "type": "string"
+        },
+        {
+          "name": "dst",
+          "type": "string"
+        },
+        {
+          "name": "why",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "where",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "no_call_site",
+          "type": "bool"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "links",
+          "target": "E12",
+          "src_card": "*",
+          "dst_card": "*",
+          "how": "each end names a component, a dependency or a record by its id, so no single field points at one kind"
+        }
+      ]
+    },
+    {
+      "id": "E28",
+      "name": "Environment tag",
+      "meaning": "One environment a deployment unit runs in, with the manifest line placing it.",
+      "source": "tools/coyomap/model.py:539",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "env",
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E29",
+      "name": "Deployment unit",
+      "meaning": "One process or container the product ships as, and what it runs on.",
+      "source": "tools/coyomap/model.py:552",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "unit",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "runs_on",
+          "type": "string"
+        },
+        {
+          "name": "exposed_as",
+          "type": "string"
+        },
+        {
+          "name": "config_source",
+          "type": "string"
+        },
+        {
+          "name": "variants",
+          "type": "E28",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E28",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E30",
+      "name": "Signal",
+      "meaning": "One thing the product reports about itself, where it goes and who watches.",
+      "source": "tools/coyomap/model.py:567",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "signal",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "where_emitted",
+          "type": "string"
+        },
+        {
+          "name": "where_viewed",
+          "type": "string"
+        },
+        {
+          "name": "alerts",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E31",
+      "name": "Security surface",
+      "meaning": "One guarded place, who may reach it, and what is at stake. Kept only for older maps.",
+      "source": "tools/coyomap/model.py:575",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded",
+        "notes": "older maps only; a new map states the same fact as a business rule marked as an access decision"
+      },
+      "fields": [
+        {
+          "name": "surface",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "who",
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "name": "risk",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E32",
+      "name": "Setting",
+      "meaning": "One setting the product reads, what it is for, and its default.",
+      "source": "tools/coyomap/model.py:584",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "key",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "purpose",
+          "type": "string"
+        },
+        {
+          "name": "default",
+          "type": "string"
+        },
+        {
+          "name": "per_env",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E33",
+      "name": "Test row",
+      "meaning": "How well one part of the product is tested, and what the gap is.",
+      "source": "tools/coyomap/model.py:592",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "targets",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "tested",
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "tests",
+          "type": "E10",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "gap",
+          "type": "string"
+        },
+        {
+          "name": "confidence",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E10",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "assesses",
+          "target": "E12",
+          "src_card": "*",
+          "dst_card": "*",
+          "how": "the assessed list holds ids of any kind, so no single field points at one kind"
+        }
+      ]
+    },
+    {
+      "id": "E34",
+      "name": "Rule site",
+      "meaning": "One line where a business rule is actually enforced.",
+      "source": "tools/coyomap/model.py:605",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "where",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "why",
+          "type": "string"
+        },
+        {
+          "name": "no_call_site",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "id": "E35",
+      "name": "Business rule",
+      "meaning": "One decision the product makes, in product words, with every place it is enforced.",
+      "source": "tools/coyomap/model.py:623",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "statement",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "block",
+          "type": "string",
+          "markers": [
+            "FK→E9",
+            "?"
+          ]
+        },
+        {
+          "name": "sites",
+          "type": "E34",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "access",
+          "type": "bool"
+        },
+        {
+          "name": "risk",
+          "type": "string"
+        },
+        {
+          "name": "confidence",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E34",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "groupedBy",
+          "target": "E9",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E36",
+      "name": "Extra section",
+      "meaning": "One authored section of notes kept with the map, under its own heading.",
+      "source": "tools/coyomap/model.py:673",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "heading",
+          "type": "string",
+          "markers": [
+            "PK",
+            "FK→E54"
+          ]
+        },
+        {
+          "name": "body",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "matches",
+          "target": "E54",
+          "src_card": "*",
+          "dst_card": "0..1"
+        }
+      ]
+    },
+    {
+      "id": "E37",
+      "name": "Grounding record",
+      "meaning": "How much of the map's claim surface skeptics challenged, and how the votes fell.",
+      "source": "tools/coyomap/model.py:680",
+      "store": {
+        "container": "project-map.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "claims_total",
+          "type": "int"
+        },
+        {
+          "name": "claims_challenged",
+          "type": "int"
+        },
+        {
+          "name": "claims_confirmed",
+          "type": "int"
+        },
+        {
+          "name": "claims_refuted",
+          "type": "int"
+        },
+        {
+          "name": "claims_unverifiable",
+          "type": "int"
+        },
+        {
+          "name": "claims_superseded",
+          "type": "int"
+        },
+        {
+          "name": "claims_added_since",
+          "type": "int"
+        },
+        {
+          "name": "live_claims_digest",
+          "type": "string"
+        },
+        {
+          "name": "claims_live_challenged",
+          "type": "int"
+        },
+        {
+          "name": "note",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E38",
+      "name": "Use case reach",
+      "meaning": "The interfaces one use case reaches, worked out from its steps.",
+      "source": "tools/coyomap/model.py:864",
+      "store": {
+        "container": "worked out from the flows on demand",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "interfaces",
+          "type": "E11",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "via_subflow_only",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "names",
+          "target": "E11",
+          "src_card": "*",
+          "dst_card": "*"
+        },
+        {
+          "verb": "answersFor",
+          "target": "E5",
+          "src_card": "*",
+          "dst_card": "1",
+          "keyed_by": [
+            "uc"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E39",
+      "name": "Graph",
+      "meaning": "Everything the viewer needs to draw one map, built fresh on every request.",
+      "source": "tools/coyomap/viewer/build_graph.py:116",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "nodes",
+          "type": "E40",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "edges",
+          "type": "E41",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "happy_path",
+          "type": "E42",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "flows",
+          "type": "E48",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "tests",
+          "type": "E44",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "extras",
+          "type": "E45",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "data_view",
+          "type": "json"
+        },
+        {
+          "name": "rules_view",
+          "type": "json"
+        },
+        {
+          "name": "record_parents",
+          "type": "json"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E40",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E41",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E42",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E44",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E45",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E48",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "builtFrom",
+          "target": "E1",
+          "src_card": "1",
+          "dst_card": "1",
+          "how": "built in full from the whole map each time the viewer asks, and never saved"
+        }
+      ]
+    },
+    {
+      "id": "E40",
+      "name": "Graph box",
+      "meaning": "One thing drawn on a view, with its name, its code link and its tags.",
+      "source": "tools/coyomap/viewer/build_graph.py:29",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "line",
+          "type": "int",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "fields",
+          "type": "json"
+        },
+        {
+          "name": "parent",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "attrs",
+          "type": "json",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "files",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "store",
+          "type": "json",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "states_lines",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E41",
+      "name": "Graph arrow",
+      "meaning": "One arrow drawn between two boxes, with its label and how many sit at each end.",
+      "source": "tools/coyomap/viewer/build_graph.py:73",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "verb",
+          "type": "string"
+        },
+        {
+          "name": "dst",
+          "type": "string"
+        },
+        {
+          "name": "why",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "where",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "src_card",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "dst_card",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "how",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "fk_fields",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "keyed_by",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E42",
+      "name": "Graph walk step",
+      "meaning": "One position in the successful run as the viewer receives it.",
+      "source": "tools/coyomap/viewer/build_graph.py:92",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "uc",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "why",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E43",
+      "name": "Test target",
+      "meaning": "One element a test row assesses, resolved to a name the reader sees.",
+      "source": "tools/coyomap/viewer/build_graph.py:101",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "node",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E44",
+      "name": "Test row view",
+      "meaning": "One coverage row as the viewer receives it, with its assessed elements resolved.",
+      "source": "tools/coyomap/viewer/build_graph.py:107",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "targets",
+          "type": "E43",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "tested",
+          "type": "string"
+        },
+        {
+          "name": "tests",
+          "type": "json",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "gap",
+          "type": "string"
+        },
+        {
+          "name": "confidence",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E43",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E45",
+      "name": "Extra section view",
+      "meaning": "One authored section as the viewer receives it, with the elements it names resolved.",
+      "source": "tools/coyomap/viewer/build_graph.py:182",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "heading",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "body",
+          "type": "string"
+        },
+        {
+          "name": "maintenance",
+          "type": "bool"
+        },
+        {
+          "name": "refs",
+          "type": "E43"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "has",
+          "target": "E43",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E46",
+      "name": "Change impact report",
+      "meaning": "What a code change does to the map, read back from the written report.",
+      "source": "tools/coyomap/viewer/build_graph.py:198",
+      "store": {
+        "container": "read back from the written report",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "base",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "new",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "changes",
+          "type": "E47",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "new_edges",
+          "type": "json",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E47",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E47",
+      "name": "Change impact entry",
+      "meaning": "One element the change touched, and what happened to it.",
+      "source": "tools/coyomap/viewer/build_graph.py:190",
+      "store": {
+        "container": "read back from the written report",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "change",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "note",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E48",
+      "name": "Viewer flow",
+      "meaning": "One use case's steps as the viewer receives them.",
+      "source": "tools/coyomap/grammar.py:860",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "uc",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "steps",
+          "type": "E49",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "line_no",
+          "type": "int"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E49",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E49",
+      "name": "Viewer flow step",
+      "meaning": "One step as the viewer receives it, with each end marked as an element or a person.",
+      "source": "tools/coyomap/grammar.py:846",
+      "store": {
+        "container": "built for the browser on request",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "n",
+          "type": "int"
+        },
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "dst",
+          "type": "string"
+        },
+        {
+          "name": "src_is_id",
+          "type": "bool"
+        },
+        {
+          "name": "dst_is_id",
+          "type": "bool"
+        },
+        {
+          "name": "phrase",
+          "type": "string"
+        },
+        {
+          "name": "note",
+          "type": "string"
+        },
+        {
+          "name": "where",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "subflow",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "ok",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "id": "E50",
+      "name": "File walk result",
+      "meaning": "The source files a scan counted, and what it skipped and why.",
+      "source": "tools/coyomap/preindex_lib.py:156",
+      "store": {
+        "container": "one scan of the project",
+        "mode": "transient"
+      },
+      "fields": [
+        {
+          "name": "files",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "root",
+          "type": "string"
+        },
+        {
+          "name": "used_git",
+          "type": "bool"
+        },
+        {
+          "name": "skipped_excluded",
+          "type": "int"
+        },
+        {
+          "name": "skipped_ignored",
+          "type": "int"
+        },
+        {
+          "name": "ignore_hits",
+          "type": "int",
+          "markers": [
+            "[]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E51",
+      "name": "Code symbol",
+      "meaning": "One class or function found in the source, with where it is defined.",
+      "source": "tools/coyomap/preindex_lib.py:312",
+      "store": {
+        "container": "one scan of the project",
+        "mode": "transient",
+        "notes": "copied into the scan's own output file as plain rows, never kept as this shape"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        },
+        {
+          "name": "file",
+          "type": "string"
+        },
+        {
+          "name": "line",
+          "type": "int"
+        },
+        {
+          "name": "end",
+          "type": "int",
+          "markers": [
+            "?"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E52",
+      "name": "Import reference",
+      "meaning": "One import line found in the source, naming what it pulls in.",
+      "source": "tools/coyomap/preindex_lib.py:321",
+      "store": {
+        "container": "one scan of the project",
+        "mode": "transient",
+        "notes": "copied into the scan's own output file as plain rows, never kept as this shape"
+      },
+      "fields": [
+        {
+          "name": "file",
+          "type": "string"
+        },
+        {
+          "name": "line",
+          "type": "int"
+        },
+        {
+          "name": "module",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E53",
+      "name": "Directory expectation",
+      "meaning": "How many components one folder should hold, given its size.",
+      "source": "tools/coyomap/preindex_lib.py:533",
+      "store": {
+        "container": "one scan of the project",
+        "mode": "transient"
+      },
+      "fields": [
+        {
+          "name": "path",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "files",
+          "type": "int"
+        },
+        {
+          "name": "loc",
+          "type": "int"
+        },
+        {
+          "name": "expected",
+          "type": "int"
+        },
+        {
+          "name": "children",
+          "type": "E53",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E53",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E54",
+      "name": "Notes heading spec",
+      "meaning": "One recognized notes heading, and how the lines under it are read.",
+      "source": "tools/coyomap/records.py:99",
+      "store": {
+        "container": "a fixed list written in the source",
+        "mode": "in-code"
+      },
+      "fields": [
+        {
+          "name": "heading",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "maintenance",
+          "type": "bool"
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "seps",
+          "type": "string"
+        },
+        {
+          "name": "lead",
+          "type": "string"
+        },
+        {
+          "name": "strict_multi",
+          "type": "string"
+        },
+        {
+          "name": "merged_form",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E55",
+      "name": "Map profile",
+      "meaning": "The measurable quality signals of one built map, kept so two maps can be compared.",
+      "source": "eval/tools/coyomap_eval/profile.py:39",
+      "store": {
+        "container": "profile.json",
+        "mode": "collection",
+        "notes": "written beside the map being scored, in a folder git never tracks",
+        "dep": "D91"
+      },
+      "fields": [
+        {
+          "name": "use_cases",
+          "type": "int"
+        },
+        {
+          "name": "components",
+          "type": "int"
+        },
+        {
+          "name": "entities",
+          "type": "int"
+        },
+        {
+          "name": "edges",
+          "type": "int"
+        },
+        {
+          "name": "validate_problems",
+          "type": "int"
+        },
+        {
+          "name": "validate_warnings",
+          "type": "int"
+        },
+        {
+          "name": "contradictions",
+          "type": "int"
+        },
+        {
+          "name": "interfaces",
+          "type": "int",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "rules",
+          "type": "int",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "auth_surfaces",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "use_case_names",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "entity_names",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "commit",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "scores",
+          "target": "E1",
+          "src_card": "1",
+          "dst_card": "1",
+          "how": "measured from one built map at score time, and the map itself carries no pointer back"
+        }
+      ]
+    },
+    {
+      "id": "E56",
+      "name": "Reconcile file",
+      "meaning": "The decisions a build records so the next rebuild does not lose them.",
+      "source": "tools/coyomap/reconcile.py:215",
+      "store": {
+        "container": "reconcile.json",
+        "mode": "collection",
+        "notes": "committed beside the map, and replayed on every rebuild",
+        "dep": "D91"
+      },
+      "fields": [
+        {
+          "name": "sets",
+          "type": "E57",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "drop_edges",
+          "type": "E58",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "keep_edges",
+          "type": "E59",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "set_anchors",
+          "type": "E60",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "drop_relations",
+          "type": "E61",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E57",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E58",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E59",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E60",
+          "src_card": "1",
+          "dst_card": "*"
+        },
+        {
+          "verb": "contains",
+          "target": "E61",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E57",
+      "name": "Set directive",
+      "meaning": "An instruction filling in one field on the elements it names.",
+      "source": "tools/coyomap/reconcile.py:126",
+      "store": {
+        "container": "reconcile.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "ids",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "subsystem",
+          "type": "string",
+          "markers": [
+            "FK→E9",
+            "?"
+          ]
+        },
+        {
+          "name": "subdomain",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "capability",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "block",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "owners",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "ways_in",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "interfaces",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "entry_point_witness",
+          "type": "json"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "assignsTo",
+          "target": "E9",
+          "src_card": "*",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E58",
+      "name": "Drop-edge directive",
+      "meaning": "An instruction removing one relation between two boxes.",
+      "source": "tools/coyomap/reconcile.py:157",
+      "store": {
+        "container": "reconcile.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "verb",
+          "type": "string"
+        },
+        {
+          "name": "dst",
+          "type": "string"
+        },
+        {
+          "name": "drop_steps",
+          "type": "bool"
+        },
+        {
+          "name": "repoint",
+          "type": "string",
+          "markers": [
+            "?"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "removes",
+          "target": "E27",
+          "src_card": "*",
+          "dst_card": "1",
+          "how": "names the relation by its two ends and its word, because a relation carries no id of its own"
+        }
+      ]
+    },
+    {
+      "id": "E59",
+      "name": "Keep-edge directive",
+      "meaning": "An instruction saying which line survives when one relation is declared twice.",
+      "source": "tools/coyomap/reconcile.py:166",
+      "store": {
+        "container": "reconcile.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "verb",
+          "type": "string"
+        },
+        {
+          "name": "dst",
+          "type": "string"
+        },
+        {
+          "name": "where",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "keeps",
+          "target": "E27",
+          "src_card": "*",
+          "dst_card": "1",
+          "how": "names the relation by its two ends and its word, because a relation carries no id of its own"
+        }
+      ]
+    },
+    {
+      "id": "E60",
+      "name": "Anchor directive",
+      "meaning": "A corrected code link, kept so every rebuild re-applies the correction.",
+      "source": "tools/coyomap/reconcile.py:182",
+      "store": {
+        "container": "reconcile.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "claim",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "corrected",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "E61",
+      "name": "Drop-relation directive",
+      "meaning": "An instruction removing one link declared on a record.",
+      "source": "tools/coyomap/reconcile.py:196",
+      "store": {
+        "container": "reconcile.json",
+        "mode": "embedded"
+      },
+      "fields": [
+        {
+          "name": "entity",
+          "type": "string"
+        },
+        {
+          "name": "verb",
+          "type": "string"
+        },
+        {
+          "name": "target",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "removes",
+          "target": "E17",
+          "src_card": "*",
+          "dst_card": "1",
+          "how": "names the record card, the word and the far record, because a link carries no id of its own"
+        }
+      ]
+    },
+    {
+      "id": "E62",
+      "name": "Element check",
+      "meaning": "One element beside what the skeptics did to the claims it makes.",
+      "source": "tools/coyomap/grounding.py:677",
+      "store": {
+        "container": "worked out again whenever it is asked for",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "element_id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "stated",
+          "type": "string"
+        },
+        {
+          "name": "confirmed",
+          "type": "int"
+        },
+        {
+          "name": "refuted",
+          "type": "int"
+        },
+        {
+          "name": "unverifiable",
+          "type": "int"
+        },
+        {
+          "name": "unvoted",
+          "type": "int"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "expands",
+          "target": "E37",
+          "src_card": "*",
+          "dst_card": "1",
+          "how": "worked out again from the pinned claim list and the saved votes, so it can never drift from them"
+        }
+      ]
+    },
+    {
+      "id": "E63",
+      "name": "Surviving refutation",
+      "meaning": "A claim skeptics refuted that the shipped map still makes, word for word.",
+      "source": "tools/coyomap/grounding.py:899",
+      "store": {
+        "container": "worked out again whenever it is asked for",
+        "mode": "projection"
+      },
+      "fields": [
+        {
+          "name": "claim",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "element_id",
+          "type": "string"
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "refuted_by",
+          "type": "int"
+        },
+        {
+          "name": "note",
+          "type": "string"
+        }
+      ],
+      "relations": [
+        {
+          "verb": "survivesIn",
+          "target": "E1",
+          "src_card": "*",
+          "dst_card": "1",
+          "how": "found by matching the saved votes against the shipped map, which stores no pointer back"
+        }
+      ]
+    },
+    {
+      "id": "E64",
+      "name": "Verdict lint result",
+      "meaning": "What a shape check of the skeptics' saved votes found.",
+      "source": "tools/coyomap/grounding.py:1075",
+      "store": {
+        "container": "one check run",
+        "mode": "transient"
+      },
+      "fields": [
+        {
+          "name": "problems",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "notes",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E65",
+      "name": "Fragment load",
+      "meaning": "What reading a set of harvest files produced, including the files that failed.",
+      "source": "tools/coyomap/assemble.py:226",
+      "store": {
+        "container": "one assembly run",
+        "mode": "transient"
+      },
+      "fields": [
+        {
+          "name": "parts",
+          "type": "E1",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "notes",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "errors",
+          "type": "string",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "carries",
+          "target": "E1",
+          "src_card": "1",
+          "dst_card": "*"
+        }
+      ]
+    },
+    {
+      "id": "E66",
+      "name": "Store mode",
+      "meaning": "The closed list of ways a record can relate to the place that holds it.",
+      "source": "tools/coyomap/grammar.py:517",
+      "store": {
+        "container": "a fixed list of seven words",
+        "mode": "enum"
+      },
+      "fields": [
+        {
+          "name": "value",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E67",
+      "name": "Interface kind",
+      "meaning": "The closed list of words saying what kind of thing an interface is.",
+      "source": "tools/coyomap/grammar.py:391",
+      "store": {
+        "container": "a fixed list of eleven words",
+        "mode": "enum",
+        "notes": "new words may be minted for one project, so the list is a seed rather than a wall"
+      },
+      "fields": [
+        {
+          "name": "value",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E68",
+      "name": "Way-in kind",
+      "meaning": "The closed list of words saying by what mechanism a way in is reached.",
+      "source": "tools/coyomap/grammar.py:547",
+      "store": {
+        "container": "a fixed list of eleven words",
+        "mode": "enum",
+        "notes": "new words may be minted for one project, so the list is a seed rather than a wall"
+      },
+      "fields": [
+        {
+          "name": "value",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E69",
+      "name": "Step direction",
+      "meaning": "The three words saying which way data moves in one step.",
+      "source": "tools/coyomap/grammar.py:318",
+      "store": {
+        "container": "a fixed list of three words",
+        "mode": "enum"
+      },
+      "fields": [
+        {
+          "name": "value",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        }
+      ]
+    }
+  ],
+  "non_entity_types": [
+    {
+      "name": "ModelError",
+      "source": "tools/coyomap/model.py:36",
+      "why": "An error raised when a map file has the wrong shape. It carries no product data."
+    },
+    {
+      "name": "WrongMapError",
+      "source": "tools/coyomap/model.py:1385",
+      "why": "An error raised when the tool is pointed at its own map instead of the project's. Not product data."
+    },
+    {
+      "name": "ReconcileError",
+      "source": "tools/coyomap/reconcile.py:53",
+      "why": "An error raised when a recorded decision cannot be applied. It carries no product data."
+    },
+    {
+      "name": "IgnoreSpec",
+      "source": "tools/coyomap/ignorefile.py:63",
+      "why": "The patterns saying which files a scan skips. Build input, not something the map keeps."
+    },
+    {
+      "name": "Extents",
+      "source": "tools/coyomap/impact_git.py:200",
+      "why": "A shorthand name for plain lists of line ranges. There is no named record behind it."
+    }
+  ]
+}

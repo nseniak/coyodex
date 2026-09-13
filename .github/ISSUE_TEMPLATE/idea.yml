@@ -5,12 +5,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        Ideas and feedback shape coyodex while it's young. No idea is too small.
+        Ideas and feedback shape coyomap while it's young. No idea is too small.
   - type: textarea
     id: problem
     attributes:
       label: The problem or friction
-      description: What were you trying to do, and where did coyodex get in the way or fall short?
+      description: What were you trying to do, and where did coyomap get in the way or fall short?
       placeholder: When I have a large repo, the map is hard to navigate because…
     validations:
       required: true

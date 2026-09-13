@@ -1,0 +1,24 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "persistence",
+ "claims": [
+  {
+   "claim": "E1 (Project map) is stored in D91 container 'project-map.json' (collection)",
+   "anchor": "tools/coyomap/model.py:761",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E55 (Map profile) is stored in D91 container 'profile.json' (collection)",
+   "anchor": "eval/tools/coyomap_eval/profile.py:39",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E56 (Reconcile file) is stored in D91 container 'reconcile.json' (collection)",
+   "anchor": "tools/coyomap/reconcile.py:215",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  }
+ ]
+}

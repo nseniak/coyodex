@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex.json_schema` — the generated (documentation-only) JSON Schema.
+"""Tests for `coyomap.json_schema` — the generated (documentation-only) JSON Schema.
 
 Run either way (needs an editable install: `make deps`):
     python3 tests/test_json_schema.py
@@ -11,20 +11,20 @@ import json
 import re
 from pathlib import Path
 
-from coyodex.json_schema import generate_schema
-from coyodex.model import ID_ARRAYS
+from coyomap.json_schema import generate_schema
+from coyomap.model import ID_ARRAYS
 
 REPO = Path(__file__).resolve().parent.parent
 COMMITTED = REPO / "method" / "project-map.schema.json"
 
 
 def test_committed_schema_is_not_stale():
-    """`method/project-map.schema.json` is generated, never hand-edited — this is its 'coyodex
+    """`method/project-map.schema.json` is generated, never hand-edited — this is its 'coyomap
     validate would warn about a stale view' equivalent."""
     current = json.dumps(generate_schema(), indent=2) + "\n"
     assert COMMITTED.read_text(encoding="utf-8") == current, (
         "method/project-map.schema.json is stale — regenerate with "
-        "`python -m coyodex.json_schema > method/project-map.schema.json`")
+        "`python -m coyomap.json_schema > method/project-map.schema.json`")
 
 
 def test_every_ref_resolves_to_a_def():

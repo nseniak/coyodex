@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex record` — the one writer for a recorded exception.
+"""Tests for `coyomap record` — the one writer for a recorded exception.
 
 Every advisory family names an extras heading an operator may write a `<id>: <why>` line under, and
 there was no command to write one. A live build hand-appended into one fragment's extras SIX times,
@@ -17,8 +17,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.model import ExtraSection, ProjectModel
-from coyodex.record import KNOWN_HEADINGS, append_line, main
+from coyomap.model import ExtraSection, ProjectModel
+from coyomap.record import KNOWN_HEADINGS, append_line, main
 
 
 def make_fragment(tmp: str, extras: list[dict] | None = None) -> Path:
@@ -193,7 +193,7 @@ def test_a_failed_record_leaves_no_stray_seeded_fragment_behind():
 
 
 def test_remove_deletes_the_line_that_starts_with_the_prefix():
-    from coyodex.record import remove_line
+    from coyomap.record import remove_line
     m = ProjectModel(extras=[ExtraSection(heading="Sweep debt",
                                           body="a.py:1: one\nb.py:2: two\n")])
     changed, message = remove_line(m, "Sweep debt", "a.py:1")
@@ -203,7 +203,7 @@ def test_remove_deletes_the_line_that_starts_with_the_prefix():
 
 def test_removing_the_last_line_takes_the_heading_with_it():
     """An empty heading still reads as 'an exception was recorded here'."""
-    from coyodex.record import remove_line
+    from coyomap.record import remove_line
     m = ProjectModel(extras=[ExtraSection(heading="Sweep debt", body="a.py:1: one\n")])
     changed, message = remove_line(m, "Sweep debt", "a.py:1")
     assert changed and "the heading is gone too" in message
@@ -211,7 +211,7 @@ def test_removing_the_last_line_takes_the_heading_with_it():
 
 
 def test_removing_something_that_is_not_there_changes_nothing():
-    from coyodex.record import remove_line
+    from coyomap.record import remove_line
     m = ProjectModel(extras=[ExtraSection(heading="Sweep debt", body="a.py:1: one\n")])
     changed, message = remove_line(m, "Sweep debt", "zzz")
     assert not changed and "nothing removed" in message
@@ -219,7 +219,7 @@ def test_removing_something_that_is_not_there_changes_nothing():
 
 
 def test_remove_refuses_to_combine_with_a_write():
-    from coyodex.record import main
+    from coyomap.record import main
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "extras.json"
         p.write_text('{"extras": []}', encoding="utf-8")
@@ -259,8 +259,8 @@ def test_record_refuses_a_line_that_keys_to_nothing(tmp_path):
 # followed the advice under `Sweep debt`, silenced 0 of 5 anchors, and spent two rounds finding out.
 
 def test_headings_listing_separates_list_families_from_free_text_ones(capsys):
-    from coyodex.record import main
-    from coyodex import records
+    from coyomap.record import main
+    from coyomap import records
     assert main(["--headings"]) == 0
     out = capsys.readouterr().out
     listed, free = out.split("FREE TEXT")
@@ -273,13 +273,13 @@ def test_headings_listing_separates_list_families_from_free_text_ones(capsys):
 
 def test_sweep_debt_is_named_as_a_free_text_family(capsys):
     """The one a live build merged onto two lines, silencing 0 of the 5 anchors they named."""
-    from coyodex.record import main
+    from coyomap.record import main
     assert main(["--headings"]) == 0
     out = capsys.readouterr().out
     assert "Sweep debt" in out.split("FREE TEXT")[1]
 
 
 def test_the_help_no_longer_recommends_the_merged_form_unconditionally():
-    from coyodex.record import USAGE
+    from coyomap.record import USAGE
     assert "ONLY WHERE THE HEADING HAS A KEY GRAMMAR" in USAGE
-    assert "coyodex record --headings" in USAGE
+    assert "coyomap record --headings" in USAGE

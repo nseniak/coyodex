@@ -27,8 +27,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex_eval import process_scorecard as P
-from coyodex_eval.transcript import ToolCall, Turn, read_turns
+from coyomap_eval import process_scorecard as P
+from coyomap_eval.transcript import ToolCall, Turn, read_turns
 
 
 # --- builders -------------------------------------------------------------------------
@@ -38,7 +38,7 @@ def make_turn(index: int, *calls: ToolCall, results: tuple[tuple, ...] = ()) -> 
     carried on the same Turn for brevity — the assertions read them through
     `results_by_tool_use_id` / `errored_tool_use_ids`, neither of which cares which turn a result
     arrived on."""
-    from coyodex_eval.transcript import ToolResult
+    from coyomap_eval.transcript import ToolResult
     return Turn(index=index, role="assistant", tool_calls=calls,
                 tool_results=tuple(ToolResult(tool_use_id=r[0], content=r[1],
                                               is_error=bool(r[2]) if len(r) > 2 else False)
@@ -144,11 +144,11 @@ def test_reader_omits_sidechain_turns_by_default():
     sub-agent's Bash calls must not count as the lead running a command."""
     lead = make_record("assistant", message_id="m1",
                        blocks=[{"type": "tool_use", "id": "a", "name": "Bash",
-                                "input": {"command": "coyodex validate"}}])
+                                "input": {"command": "coyomap validate"}}])
     sub = json.dumps({"type": "assistant", "isSidechain": True,
                       "message": {"id": "m2", "content": [
                           {"type": "tool_use", "id": "b", "name": "Bash",
-                           "input": {"command": "coyodex validate"}}]}})
+                           "input": {"command": "coyomap validate"}}]}})
     with tempfile.TemporaryDirectory() as td:
         p = make_transcript_file(Path(td), [lead, sub])
         assert len(read_turns(p)) == 1
@@ -161,7 +161,7 @@ def test_grouping_consistency_flags_a_reused_message_id():
     a = make_record("assistant", message_id="m1", usage={"output_tokens": 1}, blocks=[])
     b = make_record("assistant", message_id="m1", usage={"output_tokens": 999}, blocks=[])
     with tempfile.TemporaryDirectory() as td:
-        from coyodex_eval.transcript import grouping_is_consistent
+        from coyomap_eval.transcript import grouping_is_consistent
         assert grouping_is_consistent(make_transcript_file(Path(td), [a, a])) is True
         assert grouping_is_consistent(make_transcript_file(Path(td), [a, b])) is False
 
@@ -169,38 +169,38 @@ def test_grouping_consistency_flags_a_reused_message_id():
 # --- invocation detection (shared by six assertions) ----------------------------------
 
 def test_invokes_ignores_a_command_that_is_only_mentioned():
-    """`grep 'coyodex anchor-drift' method.md` mentions the command; it does not run it. Counting
+    """`grep 'coyomap anchor-drift' method.md` mentions the command; it does not run it. Counting
     mentions over-reported shape-only anchor-drift runs across the real corpus."""
-    assert not P._invokes("grep -n 'coyodex anchor-drift' method.md", "anchor-drift")
-    assert not P._invokes("echo 'run coyodex validate next'", "validate")
-    assert P._invokes(".venv/bin/coyodex anchor-drift --map m.json", "anchor-drift")
+    assert not P._invokes("grep -n 'coyomap anchor-drift' method.md", "anchor-drift")
+    assert not P._invokes("echo 'run coyomap validate next'", "validate")
+    assert P._invokes(".venv/bin/coyomap anchor-drift --map m.json", "anchor-drift")
 
 
 def test_invokes_ignores_heredoc_and_multiline_string_bodies():
     """A python heredoc that PRINTS the command name is data, not shell."""
-    heredoc = "python3 - <<'PY'\n# coyodex anchor-drift is what we are emulating\nprint(1)\nPY"
+    heredoc = "python3 - <<'PY'\n# coyomap anchor-drift is what we are emulating\nprint(1)\nPY"
     assert not P._invokes(heredoc, "anchor-drift")
-    inline = 'python3 -c "\nimport json\n# coyodex validate output\nprint(1)\n"'
+    inline = 'python3 -c "\nimport json\n# coyomap validate output\nprint(1)\n"'
     assert not P._invokes(inline, "validate")
 
 
 def test_invokes_accepts_the_binary_behind_a_shell_variable():
     """Every measured build aliases the binary. Requiring the literal token hid every `audit` call
     one build made."""
-    assert P._invokes("C=/path/coyodex; $C audit --json", "audit")
-    assert P._invokes('CX=/path/coyodex\n"$CX" validate map.json', "validate")
+    assert P._invokes("C=/path/coyomap; $C audit --json", "audit")
+    assert P._invokes('CX=/path/coyomap\n"$CX" validate map.json', "validate")
     assert not P._invokes("$PY somethingelse --json", "audit")
 
 
 def test_invokes_finds_the_command_after_a_pipe_or_conjunction():
-    assert P._invokes("cd /repo && /x/coyodex assemble a.json --out .coyodex", "assemble")
-    assert P._invokes("echo hi | /x/coyodex validate m.json", "validate")
+    assert P._invokes("cd /repo && /x/coyomap assemble a.json --out .coyomap", "assemble")
+    assert P._invokes("echo hi | /x/coyomap validate m.json", "validate")
 
 
 # --- assertion 1 / 2: the pre-index hand-off ------------------------------------------
 
 def test_a1_counts_only_a_real_report_invocation():
-    good = score(make_turn(0, make_bash(".venv/bin/coyodex preindex --report --depth 3")))[1]
+    good = score(make_turn(0, make_bash(".venv/bin/coyomap preindex --report --depth 3")))[1]
     assert (good.observed, good.of, good.score) == (1, 1, 1.0)
     bad = score(make_turn(0, make_bash("grep -n 'preindex --report' method.md")))[1]
     assert (bad.observed, bad.score) == (0, 0.0)
@@ -208,16 +208,16 @@ def test_a1_counts_only_a_real_report_invocation():
 
 def test_a2_hand_parsing_the_artifact_is_the_defect_and_report_is_not():
     hand = score(make_turn(0, make_bash(
-        "python3 -c \"import json; d=json.load(open('.coyodex/preindex.json')); print(d)\"")))[2]
+        "python3 -c \"import json; d=json.load(open('.coyomap/preindex.json')); print(d)\"")))[2]
     assert (hand.observed, hand.of) == (0, 1)
-    tool = score(make_turn(0, make_bash("coyodex preindex --report --in .coyodex/preindex.json")))[2]
+    tool = score(make_turn(0, make_bash("coyomap preindex --report --in .coyomap/preindex.json")))[2]
     assert (tool.observed, tool.of) == (1, 1)
 
 
 def test_a2_does_not_count_housekeeping_that_merely_names_the_file():
     """`git add …/preindex.json` moves the artifact without parsing a byte of it. Counting it was a
     real false positive against the corpus."""
-    a = score(make_turn(0, make_bash("git add .coyodex/project-map.json .coyodex/preindex.json")))[2]
+    a = score(make_turn(0, make_bash("git add .coyomap/project-map.json .coyomap/preindex.json")))[2]
     assert (a.observed, a.of) == (1, 1)
 
 
@@ -225,7 +225,7 @@ def test_a2_catches_a_hand_parse_inside_a_heredoc():
     """Unlike `_invokes`, this assertion MUST look inside the heredoc — that is where the
     hand-parsing lives."""
     a = score(make_turn(0, make_bash(
-        "python3 - <<'PY'\nimport json\nd = json.load(open('.coyodex/preindex.json'))\nPY")))[2]
+        "python3 - <<'PY'\nimport json\nd = json.load(open('.coyomap/preindex.json'))\nPY")))[2]
     assert (a.observed, a.of) == (0, 1)
 
 
@@ -262,7 +262,7 @@ def test_a3_is_not_applicable_when_the_run_held_no_fanout():
 def test_a3_is_not_applicable_when_nothing_fanned_out():
     """A serial build launched no agents. That is `n/a`, NOT 0.0 — the opportunity never existed,
     and averaging it in with a build that missed the opportunity would hide the difference."""
-    a = score(make_turn(0, make_bash("coyodex validate m.json")))[3]
+    a = score(make_turn(0, make_bash("coyomap validate m.json")))[3]
     assert (a.observed, a.of, a.score) == (0, 0, None)
 
 
@@ -274,22 +274,22 @@ def test_a3_accepts_the_older_task_tool_spelling():
 # --- assertions 4-8 -------------------------------------------------------------------
 
 def test_a4_wants_the_shape_only_pass_not_the_verdicts_one():
-    shape = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json | head -40")))[4]
+    shape = score(make_turn(0, make_bash("coyomap anchor-drift --map m.json | head -40")))[4]
     assert (shape.observed, shape.score) == (1, 1.0)
-    verdicts = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json --verdicts v.json")))[4]
+    verdicts = score(make_turn(0, make_bash("coyomap anchor-drift --map m.json --verdicts v.json")))[4]
     assert (verdicts.observed, verdicts.score) == (0, 0.0)
 
 
 def test_a4_counts_the_pass_finalize_runs_for_you():
-    """`coyodex finalize` RUNS the shape-only pass itself. Counting only a bare `anchor-drift`
+    """`coyomap finalize` RUNS the shape-only pass itself. Counting only a bare `anchor-drift`
     scored 0 on two builds whose finalize reports both read `## anchor-drift (shape-only)`."""
-    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt", "u1")))[4]
+    a = score(make_turn(0, make_bash("coyomap finalize m.json --repo . > /tmp/f.txt", "u1")))[4]
     assert (a.observed, a.score) == (1, 1.0), a
     assert "finalize" in a.note
 
 
 def test_a4_counts_a_bare_shape_only_anchor_drift():
-    a = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json | head -40", "u1")))[4]
+    a = score(make_turn(0, make_bash("coyomap anchor-drift --map m.json | head -40", "u1")))[4]
     assert (a.observed, a.score) == (1, 1.0), a
 
 
@@ -298,9 +298,9 @@ def test_a4_does_not_count_a_help_lookup_on_EITHER_branch():
     and left the other counting a bare invocation, on the stated premise that `anchor-drift` "has
     nothing else to do" — false: `--help` prints usage and returns, as do five more early exits.
     A previous test asserted that false premise and pinned the defect in place."""
-    for cmd in ("coyodex finalize --help 2>&1 | head -40",
-                "coyodex anchor-drift --help",
-                "coyodex anchor-drift -h"):
+    for cmd in ("coyomap finalize --help 2>&1 | head -40",
+                "coyomap anchor-drift --help",
+                "coyomap anchor-drift -h"):
         a = score(make_turn(0, make_bash(cmd, "u1")))[4]
         assert (a.observed, a.score) == (0, 0.0), (cmd, a)
         assert "not a run" in a.note
@@ -310,9 +310,9 @@ def test_a4_does_not_count_an_invocation_that_exited_non_zero():
     """Six of finalize's seven early returns exit non-zero (unknown flag, missing map, missing
     verdicts file, a flag with no value). Exit status settles all of them at once, which reading
     stdout could not."""
-    for cmd in ("coyodex finalize /nope/project-map.json",
-                "coyodex finalize --bogus",
-                "coyodex anchor-drift --map /nope.json"):
+    for cmd in ("coyomap finalize /nope/project-map.json",
+                "coyomap finalize --bogus",
+                "coyomap anchor-drift --map /nope.json"):
         a = score(make_turn(0, make_bash(cmd, "u1"), results=(("u1", "ERROR: ...", True),)))[4]
         assert (a.observed, a.score) == (0, 0.0), (cmd, a)
 
@@ -321,7 +321,7 @@ def test_a4_counts_a_finalize_whose_output_is_read_in_a_later_turn():
     """Requiring the call's OWN stdout to prove the leg ran scored 0 on the shape `finalize --help`
     itself recommends — redirect to the report file, read it after — and the note then said the
     output was "never read" when it had been."""
-    turns = (make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt 2>&1", "u1"),
+    turns = (make_turn(0, make_bash("coyomap finalize m.json --repo . > /tmp/f.txt 2>&1", "u1"),
                        results=(("u1", ""),)),
              make_turn(1, make_bash("tail -6 /tmp/f.txt", "u2"),
                        results=(("u2", "finalize: ADVISORIES — 0 blocking, 11 advisory"),)))
@@ -348,7 +348,7 @@ def test_a5_scores_a_batched_skeptic_fanout_and_zero_when_none_launched():
 
 
 def test_a6_counts_only_a_write_not_a_prompt_that_discusses_grounding():
-    written = score(make_turn(0, make_write("/r/.coyodex/build-fragments/header.json",
+    written = score(make_turn(0, make_write("/r/.coyomap/build-fragments/header.json",
                                             '{"grounding": {"claims_total": 42, '
                                             '"claims_grounded": 42}}')))[6]
     assert (written.observed, written.score) == (1, 1.0)
@@ -357,10 +357,10 @@ def test_a6_counts_only_a_write_not_a_prompt_that_discusses_grounding():
 
 
 def test_a7_separates_the_command_from_a_hand_written_reconcile_file():
-    by_tool = score(make_turn(0, make_bash("coyodex reconcile --rules r.json --out "
-                                           ".coyodex/reconcile.json")))[7]
+    by_tool = score(make_turn(0, make_bash("coyomap reconcile --rules r.json --out "
+                                           ".coyomap/reconcile.json")))[7]
     assert (by_tool.observed, by_tool.of, by_tool.score) == (1, 1, 1.0)
-    by_hand = score(make_turn(0, make_write("/r/.coyodex/reconcile.json", '{"set": []}')))[7]
+    by_hand = score(make_turn(0, make_write("/r/.coyomap/reconcile.json", '{"set": []}')))[7]
     assert (by_hand.observed, by_hand.of, by_hand.score) == (0, 1, 0.0)
     assert "hand-written" in str(by_hand.evidence[0].detail["how"])
 
@@ -370,36 +370,36 @@ def test_a7_sees_a_reconcile_file_produced_by_a_generator_script():
     A detector that only understood `>` reported that the largest build produced none at all."""
     a = score(make_turn(0, make_write("/tmp/synth.py",
                                       "import json\n"
-                                      "json.dump(out, open('.coyodex/reconcile.json', 'w'))\n")))[7]
+                                      "json.dump(out, open('.coyomap/reconcile.json', 'w'))\n")))[7]
     assert (a.observed, a.of) == (0, 1)
 
 
 def test_a7_is_not_applicable_when_no_reconcile_file_was_produced():
-    a = score(make_turn(0, make_bash("coyodex validate m.json")))[7]
+    a = score(make_turn(0, make_bash("coyomap validate m.json")))[7]
     assert (a.observed, a.of, a.score) == (0, 0, None)
 
 
 #: An audit read whose captured output REACHED the L2 worklist. Assertion 8's banner governs that
 #: section only, so this is the shape it may judge.
 _AUDIT_L2 = ("L1 self-contradiction findings (0):\n\nL2 grounding worklist (12 claims to disprove):\n"
-             "  (batching these? read `coyodex audit --json` — never parse this text)\n"
+             "  (batching these? read `coyomap audit --json` — never parse this text)\n"
              "  1. Rule 'X' is enforced at a.py:3\n  2. Rule 'Y' is enforced at b.py:9")
 #: An audit read that stopped inside the L1 findings block — the human-facing half, with no `--json`
 #: consumer. Nine such reads were penalised on one build for a rule that does not reach them.
 _AUDIT_L1 = "L1 self-contradiction findings (3):\n\n[1] ADVISORY — dependency-phrasing"
 #: The heading and its banner, with no claim row — a window that stopped at the top of the worklist.
 _AUDIT_HEADING_ONLY = ("L1 self-contradiction findings (0):\n\nL2 grounding worklist (12 claims):\n"
-                       "  (batching these? read `coyodex audit --json` — never parse this text)")
+                       "  (batching these? read `coyomap audit --json` — never parse this text)")
 
 
 def test_a8_wants_json_and_penalises_paging_the_human_report():
-    good = score(make_turn(0, make_bash("coyodex audit m.json --json > claims.json", uid="g"),
+    good = score(make_turn(0, make_bash("coyomap audit m.json --json > claims.json", uid="g"),
                            results=(("g", _AUDIT_L2),)))[8]
     assert (good.observed, good.of, good.score) == (1, 1, 1.0)
-    paged = score(make_turn(0, make_bash("coyodex audit m.json --json | head -40", uid="p"),
+    paged = score(make_turn(0, make_bash("coyomap audit m.json --json | head -40", uid="p"),
                             results=(("p", _AUDIT_L2),)))[8]
     assert (paged.observed, paged.of) == (0, 1)
-    human = score(make_turn(0, make_bash("coyodex audit m.json | sed -n '1,50p'", uid="h"),
+    human = score(make_turn(0, make_bash("coyomap audit m.json | sed -n '1,50p'", uid="h"),
                             results=(("h", _AUDIT_L2),)))[8]
     assert (human.observed, human.of) == (0, 1)
 
@@ -409,9 +409,9 @@ def test_8_does_not_judge_a_read_that_never_reached_the_worklist():
     human-facing half, which has no machine-readable form to prefer — and a build reconciling
     advisories one at a time has to page it. All nine reads this assertion penalised on the
     2026-08-20 argus build were of that block."""
-    turns = (make_turn(0, make_bash("coyodex audit m.json | head -40", uid="a"),
+    turns = (make_turn(0, make_bash("coyomap audit m.json | head -40", uid="a"),
                        results=(("a", _AUDIT_L1),)),
-             make_turn(2, make_bash("coyodex audit m.json | sed -n '1,20p'", uid="b"),
+             make_turn(2, make_bash("coyomap audit m.json | sed -n '1,20p'", uid="b"),
                        results=(("b", _AUDIT_L1),)))
     a = P.assert_8_audit_read_as_json(turns)
     assert (a.observed, a.of) == (0, 0), a
@@ -423,7 +423,7 @@ def test_8_does_not_judge_a_window_that_stopped_at_the_worklist_heading():
     SEEING the banner, not a reader parsing the worklist. Matching the heading alone over-counted
     this build by half."""
     a = P.assert_8_audit_read_as_json(
-        (make_turn(0, make_bash("coyodex audit m.json | head -12", uid="x"),
+        (make_turn(0, make_bash("coyomap audit m.json | head -12", uid="x"),
                    results=(("x", _AUDIT_HEADING_ONLY),)),))
     assert (a.observed, a.of) == (0, 0), a
 
@@ -431,7 +431,7 @@ def test_8_does_not_judge_a_window_that_stopped_at_the_worklist_heading():
 def test_8_does_not_judge_a_read_whose_output_was_not_captured():
     """An unmeasurable read is not a violation. Guessing which half a window covered, from the
     window arithmetic alone, is how this assertion got it wrong in the other direction."""
-    a = P.assert_8_audit_read_as_json((make_turn(0, make_bash("coyodex audit m.json | head -40")),))
+    a = P.assert_8_audit_read_as_json((make_turn(0, make_bash("coyomap audit m.json | head -40")),))
     assert (a.observed, a.of) == (0, 0), a
 
 
@@ -444,7 +444,7 @@ _PLAIN = "SF60 step 7: a sub-flow's step may not reference a sub-flow (one level
 
 def make_validate_turn(index: int, uid: str, lines: tuple[str, ...]) -> Turn:
     body = "VALIDATION WARNINGS (non-blocking):\n" + "\n".join(f"  - {ln}" for ln in lines)
-    return make_turn(index, make_bash("coyodex validate m.json --check-sources", uid),
+    return make_turn(index, make_bash("coyomap validate m.json --check-sources", uid),
                      results=((uid, body),))
 
 
@@ -474,33 +474,33 @@ def test_a9_says_so_when_the_final_view_was_narrowed():
 
 
 def test_a9_is_not_applicable_without_captured_validate_output():
-    a = score(make_turn(0, make_bash("coyodex validate m.json > /dev/null", "v1")))[9]
+    a = score(make_turn(0, make_bash("coyomap validate m.json > /dev/null", "v1")))[9]
     assert (a.observed, a.of, a.score) == (0, 0, None)
 
 
 # --- assertion 10 ---------------------------------------------------------------------
 
 def test_a10_counts_fanouts_that_stayed_under_the_poll_threshold():
-    polls = tuple(make_turn(n, make_bash("ls .coyodex/build-fragments/"))
+    polls = tuple(make_turn(n, make_bash("ls .coyomap/build-fragments/"))
                   for n in range(1, P.POLL_THRESHOLD + 2))
     a = score(make_turn(0, make_agent(), make_agent()), *polls)[10]
     assert (a.observed, a.of, a.score) == (0, 1, 0.0)
     quiet = score(make_turn(0, make_agent(), make_agent()),
-                  make_turn(1, make_bash("ls .coyodex/build-fragments/")))[10]
+                  make_turn(1, make_bash("ls .coyomap/build-fragments/")))[10]
     assert (quiet.observed, quiet.of, quiet.score) == (1, 1, 1.0)
 
 
 def test_a10_attributes_each_poll_to_the_fanout_it_followed():
     a = score(make_turn(0, make_agent()),
-              make_turn(1, make_bash("ls .coyodex/build-fragments/")),
+              make_turn(1, make_bash("ls .coyomap/build-fragments/")),
               make_turn(2, make_agent()),
-              make_turn(3, make_bash("find .coyodex/build-fragments -name '*.json'")))[10]
+              make_turn(3, make_bash("find .coyomap/build-fragments -name '*.json'")))[10]
     assert (a.observed, a.of) == (2, 2)
     assert [e.detail["after_fanout"] for e in a.evidence] == [0, 2]
 
 
 def test_a10_is_not_applicable_without_a_fanout():
-    a = score(make_turn(0, make_bash("ls .coyodex/build-fragments/")))[10]
+    a = score(make_turn(0, make_bash("ls .coyomap/build-fragments/")))[10]
     assert (a.observed, a.of, a.score) == (0, 0, None)
 
 
@@ -529,7 +529,7 @@ def test_loading_a_foreign_json_is_refused():
 
 
 def test_the_diff_reports_direction_relative_to_the_previous_run():
-    """Relative like `coyodex-eval`'s gates: which way each number moved. No threshold, no verdict."""
+    """Relative like `coyomap-eval`'s gates: which way each number moved. No threshold, no verdict."""
     # `before` must be a SERIALISED fan-out (two adjacent one-agent turns), not a lone dispatch:
     # a single agent for a single job is n/a on this line, not a zero.
     before = P.score_turns((make_turn(0, make_agent()), make_turn(1, make_agent())), label="before")
@@ -574,14 +574,14 @@ def test_the_cli_diff_mode_exits_zero_and_the_missing_file_case_does_not():
         assert P.main([str(Path(td) / "nope.jsonl")]) == 2
 
 
-# --- the transcript slice command (what /coyodex-retro reads with) --------------------
+# --- the transcript slice command (what /coyomap-retro reads with) --------------------
 
 def make_slice_transcript(tmp: Path) -> Path:
     """A transcript with a fan-out, a Bash call and its result — enough to exercise every mode."""
     records = [
         make_record("assistant", message_id="m1", blocks=[
             {"type": "tool_use", "id": "t0", "name": "Bash",
-             "input": {"command": "coyodex preindex --report"}}]),
+             "input": {"command": "coyomap preindex --report"}}]),
         make_record("user", blocks=[
             {"type": "tool_result", "tool_use_id": "t0", "content": "WEIGHT TREE\n  src loc=10"}]),
         make_record("assistant", message_id="m2", blocks=[
@@ -597,13 +597,13 @@ def make_slice_transcript(tmp: Path) -> Path:
 def test_the_transcript_index_gives_one_line_per_tool_call_with_its_turn():
     """The index is what a lead reads to choose a range. One line per call, turn number first —
     a 3 MB JSONL is not readable any other way."""
-    from coyodex_eval import transcript as T
+    from coyomap_eval import transcript as T
     with tempfile.TemporaryDirectory() as td:
         src = make_slice_transcript(Path(td))
         out = _capture_stdout(lambda: T.main([str(src)]))
     lines = [ln for ln in out.splitlines() if ln.strip()]
     assert len(lines) == 3
-    assert "Bash" in lines[0] and "coyodex preindex --report" in lines[0]
+    assert "Bash" in lines[0] and "coyomap preindex --report" in lines[0]
     assert lines[0].startswith("[   0]")
     assert "Harvest deps" in lines[1] and "Harvest entry points" in lines[2]
 
@@ -611,7 +611,7 @@ def test_the_transcript_index_gives_one_line_per_tool_call_with_its_turn():
 def test_the_full_mode_includes_what_the_command_printed():
     """A sub-agent judging a phase needs the OUTPUT, not just the call — that is where a tool bug
     shows itself."""
-    from coyodex_eval import transcript as T
+    from coyomap_eval import transcript as T
     with tempfile.TemporaryDirectory() as td:
         src = make_slice_transcript(Path(td))
         out = _capture_stdout(lambda: T.main([str(src), "--full"]))
@@ -619,7 +619,7 @@ def test_the_full_mode_includes_what_the_command_printed():
 
 
 def test_the_slice_filters_by_range_tool_and_pattern():
-    from coyodex_eval import transcript as T
+    from coyomap_eval import transcript as T
     with tempfile.TemporaryDirectory() as td:
         src = make_slice_transcript(Path(td))
         by_tool = _capture_stdout(lambda: T.main([str(src), "--tool", "Agent"]))
@@ -632,7 +632,7 @@ def test_the_slice_filters_by_range_tool_and_pattern():
 
 def test_the_stats_mode_lists_tool_counts_and_fanout_sizes():
     """The fan-out map is how the retro cuts the transcript into phases."""
-    from coyodex_eval import transcript as T
+    from coyomap_eval import transcript as T
     with tempfile.TemporaryDirectory() as td:
         src = make_slice_transcript(Path(td))
         out = _capture_stdout(lambda: T.main([str(src), "--stats"]))
@@ -641,7 +641,7 @@ def test_the_stats_mode_lists_tool_counts_and_fanout_sizes():
 
 
 def test_the_transcript_command_reports_a_missing_file():
-    from coyodex_eval import transcript as T
+    from coyomap_eval import transcript as T
     with tempfile.TemporaryDirectory() as td:
         assert T.main([str(Path(td) / "nope.jsonl")]) == 2
 
@@ -660,7 +660,7 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # --to-reconcile` run that recorded no directive (the flag used to be a silent no-op).
     # 26-31 came from the SECOND retrospective (the 2026-08-02 mcpolis rebuild): a gate read as a
     # bare count, a hand script that clobbered a confirmed claim, an extras write that bypassed
-    # `coyodex record`, a from-scratch rebuild reading the map it replaced, `grounding write` run
+    # `coyomap record`, a from-scratch rebuild reading the map it replaced, `grounding write` run
     # before the drift fix it had to be measured after, and harvest briefs that cite no behavioral
     # id (the load-bearing version of 22's ordering proxy).
     # 32 and 33 came from the merged 2026-08-13 retrospective of the first two builds to exercise
@@ -670,7 +670,7 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # and the scorecard is given exactly one.
     # 34 and 35 came from the 2026-08-14 argus retrospective, and both watch a command that
     # SUCCEEDS against the wrong thing rather than one that fails: a safety guard defeated by
-    # reassembling the blocked literal from pieces, and a `cd` into the coyodex clone leaking into a
+    # reassembling the blocked literal from pieces, and a `cd` into the coyomap clone leaking into a
     # trailing relative path so a script read the TOOL's own map and reported its ids as the mapped
     # project's. Nothing else here can see either — both runs look entirely healthy.
     # 36-39 came from the 2026-08-13 coworker retrospective. Three watch a READ that discards what
@@ -706,7 +706,7 @@ if __name__ == "__main__":
 
 def make_grounded_map(tmp: Path, grounding: dict | None) -> Path:
     p = tmp / "project-map.json"
-    doc: dict = {"format": "coyodex-map", "title": "T", "goal": "g"}
+    doc: dict = {"format": "coyomap-map", "title": "T", "goal": "g"}
     if grounding is not None:
         doc["grounding"] = grounding
     p.write_text(json.dumps(doc), encoding="utf-8")
@@ -730,13 +730,13 @@ def test_assertion_6_scores_zero_when_the_map_carries_no_grounding():
 
 
 def test_assertion_6_counts_the_command_not_only_a_hand_written_record():
-    """The inversion: `coyodex grounding write` never puts `claims_total` in its own command text,
+    """The inversion: `coyomap grounding write` never puts `claims_total` in its own command text,
     so the CORRECT path scored 0 while a python heredoc that hand-tallied the record scored 1."""
     by_command = (make_turn(0, make_bash(
-        "coyodex grounding write --worklist wl.json --verdicts v.json --out g.json")),)
+        "coyomap grounding write --worklist wl.json --verdicts v.json --out g.json")),)
     a = P.assert_6_grounding_recorded(by_command)
     assert (a.observed, a.of) == (1, 1)
-    assert a.evidence[0].detail["how"] == "coyodex grounding write"
+    assert a.evidence[0].detail["how"] == "coyomap grounding write"
 
 
 def test_assertion_10_counts_a_no_op_turn_not_only_a_fragment_dir_poll():
@@ -751,7 +751,7 @@ def test_assertion_10_counts_a_no_op_turn_not_only_a_fragment_dir_poll():
 
 def test_assertion_10_still_counts_the_original_fragment_dir_poll():
     turns = [make_turn(0, make_agent())]
-    turns += [make_turn(i, make_bash("ls .coyodex/build-fragments/*.json | wc -l"))
+    turns += [make_turn(i, make_bash("ls .coyomap/build-fragments/*.json | wc -l"))
               for i in range(1, 6)]
     a = P.score_turns(tuple(turns)).by_id()[10]
     assert (a.observed, a.of) == (0, 1)
@@ -761,7 +761,7 @@ def test_assertion_10_still_counts_the_original_fragment_dir_poll():
 def test_assertion_10_leaves_real_work_alone():
     turns = (make_turn(0, make_agent()),
              make_turn(1, make_bash("echo hello > out.txt")),      # a redirect is not a no-op
-             make_turn(2, make_bash("coyodex validate map.json")))
+             make_turn(2, make_bash("coyomap validate map.json")))
     a = P.score_turns(turns).by_id()[10]
     assert (a.observed, a.of) == (1, 1) and a.evidence == ()
 
@@ -780,38 +780,38 @@ def test_a_noop_wait_recognises_the_shapes_a_build_actually_used():
 
 
 def test_13_flags_a_grounding_record_written_before_the_reconcile_edits():
-    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --out g.json")),
-             make_turn(1, make_bash("python3 - <<'PY'\njson.dump(d, open('.coyodex/build-fragments/x.json','w'))\nPY")))
+    turns = (make_turn(0, make_bash("coyomap grounding write --worklist wl.json --out g.json")),
+             make_turn(1, make_bash("python3 - <<'PY'\njson.dump(d, open('.coyomap/build-fragments/x.json','w'))\nPY")))
     a = P.score_turns(turns).by_id()[13]
     assert (a.observed, a.of) == (0, 1)
 
 
 def test_13_passes_when_nothing_is_written_after_the_record():
-    turns = (make_turn(0, make_bash("python3 - <<'PY'\njson.dump(d, open('.coyodex/build-fragments/x.json','w'))\nPY")),
-             make_turn(1, make_bash("coyodex grounding write --worklist wl.json --out g.json")))
+    turns = (make_turn(0, make_bash("python3 - <<'PY'\njson.dump(d, open('.coyomap/build-fragments/x.json','w'))\nPY")),
+             make_turn(1, make_bash("coyomap grounding write --worklist wl.json --out g.json")))
     a = P.score_turns(turns).by_id()[13]
     assert (a.observed, a.of) == (1, 1)
 
 
 def test_14_catches_a_pinned_total_that_the_live_worklist_contradicts():
-    turns = (make_turn(0, make_bash("coyodex grounding write", uid="g"),
+    turns = (make_turn(0, make_bash("coyomap grounding write", uid="g"),
                        results=(("g", "wrote g.json: 418 of 418 claim(s) challenged"),)),
-             make_turn(1, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+             make_turn(1, make_bash("coyomap anchor-drift --map m.json", uid="d"),
                        results=(("d", "2 drifted anchor(s) · challenged 403 of 415 worklist claim(s)"),)))
     a = P.score_turns(turns).by_id()[14]
     assert (a.observed, a.of) == (0, 1) and "418" in a.note and "415" in a.note
 
 
 def test_15_catches_a_gate_rerun_narrowed_by_a_grep():
-    turns = (make_turn(0, make_bash("coyodex validate map.json --check-sources")),
-             make_turn(1, make_bash("coyodex validate map.json --check-sources | grep 'carry no'")))
+    turns = (make_turn(0, make_bash("coyomap validate map.json --check-sources")),
+             make_turn(1, make_bash("coyomap validate map.json --check-sources | grep 'carry no'")))
     a = P.score_turns(turns).by_id()[15]
     assert (a.observed, a.of) == (0, 1)
 
 
 def test_15_allows_a_rerun_that_widens_the_view():
-    turns = (make_turn(0, make_bash("coyodex validate map.json | grep x")),
-             make_turn(1, make_bash("coyodex validate map.json")))
+    turns = (make_turn(0, make_bash("coyomap validate map.json | grep x")),
+             make_turn(1, make_bash("coyomap validate map.json")))
     a = P.score_turns(turns).by_id()[15]
     assert (a.observed, a.of) == (1, 1)
 
@@ -821,7 +821,7 @@ def make_timed_turn(index: int, stamp: str, *calls: ToolCall) -> Turn:
 
 
 def make_result_turn(index: int, stamp: str, uid: str) -> Turn:
-    from coyodex_eval.transcript import ToolResult
+    from coyomap_eval.transcript import ToolResult
     return Turn(index=index, role="user", timestamp=stamp,
                 tool_results=(ToolResult(tool_use_id=uid, content="done"),))
 
@@ -904,7 +904,7 @@ def test_17_flags_a_drift_exception_recorded_without_opening_the_file():
     # documentation text and a Python regex literal as recorded exceptions.
     record = ('{"extras": [{"heading": "Drift exceptions", "body": '
               '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
-    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+    turns = (make_turn(0, make_bash("coyomap anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
              make_turn(1, make_write("frag.json", record)))
@@ -920,7 +920,7 @@ def test_17_passes_when_the_cited_file_was_read_after_the_finding():
     # documentation text and a Python regex literal as recorded exceptions.
     record = ('{"extras": [{"heading": "Drift exceptions", "body": '
               '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
-    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+    turns = (make_turn(0, make_bash("coyomap anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
              make_turn(1, make_bash("sed -n '15,30p' src/session.ts")),
@@ -938,7 +938,7 @@ def test_17_does_not_count_merely_naming_the_file_in_a_patch_script():
     # documentation text and a Python regex literal as recorded exceptions.
     record = ('{"extras": [{"heading": "Drift exceptions", "body": '
               '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
-    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+    turns = (make_turn(0, make_bash("coyomap anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
              make_turn(1, make_bash("python3 - <<'PY'\nd['x']='src/session.ts:33'\nPY")),
@@ -947,31 +947,31 @@ def test_17_does_not_count_merely_naming_the_file_in_a_patch_script():
     assert (a.observed, a.of) == (0, 1)
 
 
-# ── coyodex_subcommands: the index truncated, and a real finding was published wrong ─────────────
+# ── coyomap_subcommands: the index truncated, and a real finding was published wrong ─────────────
 
 def test_a_subcommand_chained_behind_another_is_still_counted():
     """The one-line index truncates at 100 chars, so a subcommand after a `;` or `&&` was invisible
     there. A retrospective read the index, concluded `grounding write` "never ran", and published
     that about a build which ran it at turn 489 chained behind an `assemble`."""
-    from coyodex_eval.transcript import coyodex_subcommands
+    from coyomap_eval.transcript import coyomap_subcommands
     turns = [make_turn(489, make_bash(
-        "/p/.venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex "
-        "--reconcile .coyodex/reconcile.json 2>&1 | tail -3; echo '=== grounding write ==='; "
-        "/p/.venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json "
-        "--out .coyodex/build-fragments/grounding.json"))]
-    found = coyodex_subcommands(turns)
+        "/p/.venv/bin/coyomap assemble .coyomap/build-fragments/*.json --out .coyomap "
+        "--reconcile .coyomap/reconcile.json 2>&1 | tail -3; echo '=== grounding write ==='; "
+        "/p/.venv/bin/coyomap grounding write --worklist .coyomap/verify/worklist.json "
+        "--out .coyomap/build-fragments/grounding.json"))]
+    found = coyomap_subcommands(turns)
     assert (489, "assemble") in found
     assert (489, "grounding write") in found, found
 
 
 def test_an_aliased_binary_is_counted_but_prose_is_not():
-    """Builds alias the binary (`CX=…/coyodex; $CX audit …`), so the pattern must follow `$CX` — and
+    """Builds alias the binary (`CX=…/coyomap; $CX audit …`), so the pattern must follow `$CX` — and
     a pattern loose enough for that reads `$SP files` as a subcommand unless it is allowlisted.
-    The first cut reported `files`, `loc`, `map` and `runs` as coyodex subcommands."""
-    from coyodex_eval.transcript import coyodex_subcommands
-    turns = [make_turn(7, make_bash("CX=/p/.venv/bin/coyodex\n$CX audit map.json --json; "
+    The first cut reported `files`, `loc`, `map` and `runs` as coyomap subcommands."""
+    from coyomap_eval.transcript import coyomap_subcommands
+    turns = [make_turn(7, make_bash("CX=/p/.venv/bin/coyomap\n$CX audit map.json --json; "
                                     "ls $SP files; wc -l $OUT map"))]
-    found = coyodex_subcommands(turns)
+    found = coyomap_subcommands(turns)
     assert (7, "audit") in found
     assert [n for _i, n in found] == ["audit"], found
 
@@ -981,83 +981,83 @@ def test_a_quoted_alias_is_counted():
     had just been word-split by zsh — and the pattern did not match it. Forty-two successful
     `record` calls went missing while the ONE the table reported was the earlier failed attempt, and
     a retrospective read `record 1` off that table."""
-    from coyodex_eval.transcript import coyodex_subcommands
+    from coyomap_eval.transcript import coyomap_subcommands
     turns = [make_turn(224, make_bash(
-        'rec() { "$CY" record --map .coyodex/build-fragments/extras.json '
+        'rec() { "$CY" record --map .coyomap/build-fragments/extras.json '
         '--heading "Balance exceptions" --line "$1"; }\nrec "SF20: one atomic write path"'))]
-    assert (224, "record") in coyodex_subcommands(turns)
+    assert (224, "record") in coyomap_subcommands(turns)
 
 
 def test_a_heredoc_body_is_not_scanned():
-    """A build writes coyodex-shaped text into heredocs all the time — contract templates, notes,
+    """A build writes coyomap-shaped text into heredocs all the time — contract templates, notes,
     generated docs. One `cat > rules-contract.md <<'EOF'` body made `dump` and `lint-fragment`
     appear as invocations at a turn that ran neither."""
-    from coyodex_eval.transcript import coyodex_subcommands
+    from coyomap_eval.transcript import coyomap_subcommands
     turns = [make_turn(234, make_bash(
         "cat > rules-contract.md <<'EOF'\n"
-        "Useful: coyodex dump --map m.json --id C1\n"
-        "Then run coyodex lint-fragment f.json\n"
+        "Useful: coyomap dump --map m.json --id C1\n"
+        "Then run coyomap lint-fragment f.json\n"
         "EOF\n"
-        "coyodex validate m.json --check-sources"))]
-    assert [n for _i, n in coyodex_subcommands(turns)] == ["validate"]
+        "coyomap validate m.json --check-sources"))]
+    assert [n for _i, n in coyomap_subcommands(turns)] == ["validate"]
 
 
 def test_a_help_run_is_not_counted_as_the_command_running():
     """`reconcile --help` reads the interface and does none of the work. Counting it makes "the
     command ran" true of a build that only looked it up — and `reconcile --help` immediately before
     hand-writing `reconcile.json` is exactly the shape a retro is trying to see."""
-    from coyodex_eval.transcript import coyodex_subcommands
-    turns = [make_turn(132, make_bash("/p/.venv/bin/coyodex reconcile --help 2>&1")),
-             make_turn(136, make_bash("/p/.venv/bin/coyodex reconcile --rules r.json "
-                                      "--fragments .coyodex/build-fragments/*.json --out rec.json"))]
-    assert [i for i, _n in coyodex_subcommands(turns)] == [136]
+    from coyomap_eval.transcript import coyomap_subcommands
+    turns = [make_turn(132, make_bash("/p/.venv/bin/coyomap reconcile --help 2>&1")),
+             make_turn(136, make_bash("/p/.venv/bin/coyomap reconcile --rules r.json "
+                                      "--fragments .coyomap/build-fragments/*.json --out rec.json"))]
+    assert [i for i, _n in coyomap_subcommands(turns)] == [136]
 
 
 def test_help_after_a_real_invocation_does_not_swallow_it():
     """`--help` belongs to the invocation it follows, so the scan stops at the NEXT one."""
-    from coyodex_eval.transcript import coyodex_subcommands
-    turns = [make_turn(9, make_bash("coyodex audit m.json --json; coyodex fix --help"))]
-    assert [n for _i, n in coyodex_subcommands(turns)] == ["audit"]
+    from coyomap_eval.transcript import coyomap_subcommands
+    turns = [make_turn(9, make_bash("coyomap audit m.json --json; coyomap fix --help"))]
+    assert [n for _i, n in coyomap_subcommands(turns)] == ["audit"]
 
 
 def test_the_two_binaries_are_told_apart_by_resolving_the_alias():
-    """`coyodex` and `coyodex-eval` share subcommand names (`score`, `compare`, `archive`,
-    `process`), and one table headed "coyodex invocation(s)" reported a build's `coyodex-eval
+    """`coyomap` and `coyomap-eval` share subcommand names (`score`, `compare`, `archive`,
+    `process`), and one table headed "coyomap invocation(s)" reported a build's `coyomap-eval
     archive` runs as build work. Aliases resolve from the `VAR=…` assignment in the SAME command,
     which is where builds put it — each Bash call is a fresh shell."""
-    from coyodex_eval.transcript import coyodex_subcommands
-    turns = [make_turn(14, make_bash("/p/.venv/bin/coyodex-eval archive /repo")),
-             make_turn(416, make_bash("CY=/p/.venv/bin/coyodex\n$CY assemble f.json --out .coyodex"))]
-    assert [n for _i, n in coyodex_subcommands(turns, binary="coyodex")] == ["assemble"]
-    assert [n for _i, n in coyodex_subcommands(turns, binary="coyodex-eval")] == ["archive"]
+    from coyomap_eval.transcript import coyomap_subcommands
+    turns = [make_turn(14, make_bash("/p/.venv/bin/coyomap-eval archive /repo")),
+             make_turn(416, make_bash("CY=/p/.venv/bin/coyomap\n$CY assemble f.json --out .coyomap"))]
+    assert [n for _i, n in coyomap_subcommands(turns, binary="coyomap")] == ["assemble"]
+    assert [n for _i, n in coyomap_subcommands(turns, binary="coyomap-eval")] == ["archive"]
 
 
-def test_an_unresolvable_alias_falls_to_coyodex_and_is_reported():
+def test_an_unresolvable_alias_falls_to_coyomap_and_is_reported():
     """A guess that is never surfaced is indistinguishable from a measurement."""
-    from coyodex_eval.transcript import coyodex_subcommands, unresolved_aliases
+    from coyomap_eval.transcript import coyomap_subcommands, unresolved_aliases
     turns = [make_turn(5, make_bash("$CY audit m.json"))]
-    assert [n for _i, n in coyodex_subcommands(turns, binary="coyodex")] == ["audit"]
+    assert [n for _i, n in coyomap_subcommands(turns, binary="coyomap")] == ["audit"]
     assert unresolved_aliases(turns) == 1
 
 
 def test_a_directory_env_var_produces_no_invocation():
-    """`COYODEX_HOME=/p/coyodex` names a DIRECTORY, and the alias map cannot tell it from a binary
-    path. That is harmless and this pins why: a directory is used as `$COYODEX_HOME/method.md`,
+    """`COYOMAP_HOME=/p/coyomap` names a DIRECTORY, and the alias map cannot tell it from a binary
+    path. That is harmless and this pins why: a directory is used as `$COYOMAP_HOME/method.md`,
     with no space between the variable and what follows, so it never matches an invocation. If the
     invocation pattern is ever loosened to allow that, this test fails and says so."""
-    from coyodex_eval.transcript import coyodex_subcommands
-    turns = [make_turn(6, make_bash("COYODEX_HOME=/p/coyodex\ncat $COYODEX_HOME/method/dispatch.md"))]
-    assert coyodex_subcommands(turns) == []
+    from coyomap_eval.transcript import coyomap_subcommands
+    turns = [make_turn(6, make_bash("COYOMAP_HOME=/p/coyomap\ncat $COYOMAP_HOME/method/dispatch.md"))]
+    assert coyomap_subcommands(turns) == []
 
 
 def test_the_four_fix_verbs_are_reported_apart():
     """`fix dedup-edge` and `fix apply-drift` are different acts and a retro needs to tell them
     apart; anything not a known sub-verb stays at subcommand granularity."""
-    from coyodex_eval.transcript import coyodex_subcommands
-    turns = [make_turn(1, make_bash("coyodex fix dedup-edge --map m.json --accept-suggested")),
-             make_turn(2, make_bash("coyodex fix apply-drift --map m.json --verdicts v.json")),
-             make_turn(3, make_bash("coyodex validate m.json --check-sources"))]
-    names = [n for _i, n in coyodex_subcommands(turns)]
+    from coyomap_eval.transcript import coyomap_subcommands
+    turns = [make_turn(1, make_bash("coyomap fix dedup-edge --map m.json --accept-suggested")),
+             make_turn(2, make_bash("coyomap fix apply-drift --map m.json --verdicts v.json")),
+             make_turn(3, make_bash("coyomap validate m.json --check-sources"))]
+    names = [n for _i, n in coyomap_subcommands(turns)]
     assert names == ["fix dedup-edge", "fix apply-drift", "validate"]
 
 
@@ -1070,7 +1070,7 @@ def test_a18_scores_the_flow_the_method_actually_prescribes():
     build transcripts."""
     gate = ("Shape: 66 components in 14 subsystems, 55 entities in 8 subdomains, 40 deps, "
             "26 use cases, 365 edges, 36 flows/sub-flows, 281 entry points, 26 security rows.")
-    turns = [make_turn(1, make_bash("coyodex finalize m.json --emit-gate-block /tmp/g.txt", uid="f"),
+    turns = [make_turn(1, make_bash("coyomap finalize m.json --emit-gate-block /tmp/g.txt", uid="f"),
                        results=(("f", "finalize: wrote the commit-message gate block to /tmp/g.txt"),)),
              make_turn(2, make_bash("cat /tmp/g.txt", uid="c"), results=(("c", gate),)),
              make_turn(3, make_bash("git commit -F /tmp/msg.txt"))]
@@ -1081,7 +1081,7 @@ def test_a18_scores_the_flow_the_method_actually_prescribes():
 def test_a18_compares_numbers_a_commit_states_alongside_the_generated_line():
     gate = ("Shape: 66 components in 14 subsystems, 55 entities in 8 subdomains, 40 deps, "
             "26 use cases, 365 edges, 36 flows/sub-flows, 281 entry points, 26 security rows.")
-    turns = [make_turn(1, make_bash("coyodex finalize m.json", uid="f"), results=(("f", gate),)),
+    turns = [make_turn(1, make_bash("coyomap finalize m.json", uid="f"), results=(("f", gate),)),
              make_turn(2, make_bash("git commit -F - <<'MSG'\n66 components, 416 edges\nMSG"))]
     a = P.assert_18_commit_shape_matches_the_map(turns)
     assert (a.observed, a.of) == (1, 2), a
@@ -1101,7 +1101,7 @@ def make_emit_then_commit(commit_cmd: str) -> list:
 
     The `cat` turn is what puts the Shape line in reach at all — `--emit-gate-block` prints only
     "wrote the commit-message gate block to <path>", never the numbers."""
-    return [make_turn(1, make_bash('coyodex finalize m.json --emit-gate-block "$SC/gate-block.txt"',
+    return [make_turn(1, make_bash('coyomap finalize m.json --emit-gate-block "$SC/gate-block.txt"',
                                    uid="f"),
                       results=(("f", "finalize: wrote the commit-message gate block to gate-block.txt"),)),
             make_turn(2, make_bash('cat "$SC/gate-block.txt"', uid="c"), results=(("c", GATE_8),)),
@@ -1162,12 +1162,12 @@ def test_a18_matches_a_path_spelled_differently_in_the_two_turns():
 def test_a21_reads_only_the_final_assemble():
     """An unhealed count mid-build is expected and drains as the trace lands; only the last one
     means anything. A live build was told UNHEALED 4 at four successive assembles and shipped."""
-    turns = [make_turn(1, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a1"),
+    turns = [make_turn(1, make_bash("coyomap assemble f/*.json --out .coyomap", uid="a1"),
                        results=(("a1", "model: C:5 | ops: UNHEALED riding steps 4"),)),
-             make_turn(2, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a2"),
+             make_turn(2, make_bash("coyomap assemble f/*.json --out .coyomap", uid="a2"),
                        results=(("a2", "model: C:5 | ops: dup-edges collapsed 3"),))]
     assert P.assert_21_final_assemble_digest_is_clean(turns).observed == 1
-    turns.append(make_turn(3, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a3"),
+    turns.append(make_turn(3, make_bash("coyomap assemble f/*.json --out .coyomap", uid="a3"),
                            results=(("a3", "model: C:5 | ops: UNHEALED riding steps 4"),)))
     a = P.assert_21_final_assemble_digest_is_clean(turns)
     assert a.observed == 0 and a.of == 1, a
@@ -1176,13 +1176,13 @@ def test_a21_reads_only_the_final_assemble():
 def test_a22_catches_a_structural_harvest_before_any_behavioral_draft():
     """`preindex` prints GR1 on every run. A live build read it, harvested 14 structural slices, and
     wrote its behavioral fragment 79 turns later."""
-    late = [make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json")),
-            make_turn(9, make_write(".coyodex/build-fragments/behavioral.json",
+    late = [make_turn(1, make_bash("coyomap preindex --out .coyomap/preindex.json")),
+            make_turn(9, make_write(".coyomap/build-fragments/behavioral.json",
                                     '{"use_cases": [{"id": "UC1"}]}'))]
     assert P.assert_22_behavioral_draft_precedes_preindex(late).observed == 0
-    early = [make_turn(1, make_write(".coyodex/build-fragments/behavioral.json",
+    early = [make_turn(1, make_write(".coyomap/build-fragments/behavioral.json",
                                      '{"use_cases": [{"id": "UC1"}]}')),
-             make_turn(9, make_bash("coyodex preindex --out .coyodex/preindex.json"))]
+             make_turn(9, make_bash("coyomap preindex --out .coyomap/preindex.json"))]
     assert P.assert_22_behavioral_draft_precedes_preindex(early).observed == 1
 
 
@@ -1197,17 +1197,17 @@ def test_13_allows_the_final_assemble_that_the_method_now_prescribes():
     `grounding write --map` needs the assembled map to measure the live claim surface. Before this
     carve-out the assertion scored 0 for every build that followed the method: the redirection in
     `assemble … 2>&1 | tail -3` alone matched the file-write pattern."""
-    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --map m.json "
-                                    "--out .coyodex/build-fragments/grounding.json")),
-             make_turn(1, make_bash("coyodex assemble .coyodex/build-fragments/*.json "
-                                    "--out .coyodex --reconcile .coyodex/reconcile.json 2>&1 | tail -3")))
+    turns = (make_turn(0, make_bash("coyomap grounding write --worklist wl.json --map m.json "
+                                    "--out .coyomap/build-fragments/grounding.json")),
+             make_turn(1, make_bash("coyomap assemble .coyomap/build-fragments/*.json "
+                                    "--out .coyomap --reconcile .coyomap/reconcile.json 2>&1 | tail -3")))
     a = P.score_turns(turns).by_id()[13]
     assert (a.observed, a.of) == (1, 1), a
 
 
 def test_13_still_catches_a_hand_edit_after_the_record():
-    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --out g.json")),
-             make_turn(1, make_write(".coyodex/build-fragments/sec.json", "{}")))
+    turns = (make_turn(0, make_bash("coyomap grounding write --worklist wl.json --out g.json")),
+             make_turn(1, make_write(".coyomap/build-fragments/sec.json", "{}")))
     assert P.score_turns(turns).by_id()[13].observed == 0
 
 
@@ -1215,10 +1215,10 @@ def test_14_accepts_a_differing_total_when_the_record_states_the_delta():
     """`total != live` is now LEGAL and expected: reconciling a refutation rewrites its claim, and
     the pin cannot be recomputed (that records `refuted 0`). What the assertion asks is whether the
     record SAYS why."""
-    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --map m.json", uid="g"),
+    turns = (make_turn(0, make_bash("coyomap grounding write --worklist wl.json --map m.json", uid="g"),
                        results=(("g", "wrote g.json: 446 of 446 claim(s) challenged · vs the live "
                                       "map: 6 superseded, 4 added since the pin"),)),
-             make_turn(1, make_bash("coyodex audit m.json --json", uid="a"),
+             make_turn(1, make_bash("coyomap audit m.json --json", uid="a"),
                        results=(("a", "444 L2 claims on the grounding worklist"),)))
     a = P.score_turns(turns).by_id()[14]
     assert (a.observed, a.of) == (1, 1), a
@@ -1227,15 +1227,15 @@ def test_14_accepts_a_differing_total_when_the_record_states_the_delta():
 # ── the assertion-17 repair itself, which shipped untested ───────────────────────────────────────
 
 def test_17_sees_a_record_written_through_record_line_with_escaped_backticks():
-    """`coyodex record --line "anchor-drift \\`…"` is the DOCUMENTED way to write a record, and
+    """`coyomap record --line "anchor-drift \\`…"` is the DOCUMENTED way to write a record, and
     nested quoting escapes the backtick again. Requiring a bare one made three well-formed records
     invisible on a live build, which then scored 0 for a behaviour it had performed."""
-    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+    turns = (make_turn(0, make_bash("coyomap anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
              make_turn(1, make_bash("sed -n '15,30p' src/session.ts")),
              make_turn(2, make_bash(
-                 'coyodex record --map m.json --heading "Drift exceptions" --line '
+                 'coyomap record --map m.json --heading "Drift exceptions" --line '
                  '"anchor-drift \\\\`E1 runs on cadence \'continuous\'\\\\`: the stored anchor is right."')))
     a = P.score_turns(turns).by_id()[17]
     assert (a.observed, a.of) == (1, 1), a
@@ -1249,7 +1249,7 @@ def test_17_pairs_a_record_when_the_findings_were_captured_as_json():
                '"stored": "src/session.ts:21", "corrected": "src/session.ts:33"}]}')
     record = ('{"extras": [{"heading": "Drift exceptions", "body": '
               '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
-    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json --json", uid="d"),
+    turns = (make_turn(0, make_bash("coyomap anchor-drift --map m.json --json", uid="d"),
                        results=(("d", payload),)),
              make_turn(1, make_bash("sed -n '15,30p' src/session.ts")),
              make_turn(2, make_write("frag.json", record)))
@@ -1264,7 +1264,7 @@ def test_17_does_not_count_prose_or_a_regex_that_merely_says_anchor_drift():
     # The quoted text is the REAL claim, so it pairs with the finding — which is what makes this a
     # test of the GATE and not of the unpaired-key handling. It is still not a record: nobody wrote
     # anything under the heading, they printed a diagnostic about one.
-    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+    turns = (make_turn(0, make_bash("coyomap anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
              make_turn(1, make_bash(
@@ -1279,7 +1279,7 @@ def test_17_reports_a_key_that_names_no_finding_instead_of_scoring_it():
     matching nothing is worth knowing about, so it is reported."""
     record = ('{"extras": [{"heading": "Drift exceptions", "body": '
               '"- anchor-drift `a claim this run never reported`: judged fine."}]}')
-    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+    turns = (make_turn(0, make_bash("coyomap anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'x': stored [src/session.ts:21] — drift"),)),
              make_turn(1, make_write("frag.json", record)))
     a = P.score_turns(turns).by_id()[17]
@@ -1290,16 +1290,16 @@ def test_21_cannot_score_when_the_digest_was_not_captured():
     """Treating "no UNHEALED in the captured output" as clean over-credited a build that piped the
     digest through `| tail -2` — and assemble.py records a live build reading this very output with
     `| tail -4`. A scorecard may under-credit, never over-credit."""
-    turns = (make_turn(0, make_bash("coyodex assemble f/*.json --out .coyodex | tail -2", uid="a"),
-                       results=(("a", "Next: coyodex validate .coyodex/project-map.json"),)),)
+    turns = (make_turn(0, make_bash("coyomap assemble f/*.json --out .coyomap | tail -2", uid="a"),
+                       results=(("a", "Next: coyomap validate .coyomap/project-map.json"),)),)
     assert P.assert_21_final_assemble_digest_is_clean(turns).of == 0
-    turns2 = (make_turn(0, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a"),
+    turns2 = (make_turn(0, make_bash("coyomap assemble f/*.json --out .coyomap", uid="a"),
                         results=(("a", "model: C:66, D:40 | ops: dup-edges collapsed 38"),)),)
     assert P.assert_21_final_assemble_digest_is_clean(turns2).observed == 1
 
 
 def test_21_still_flags_an_unhealed_count_in_a_captured_digest():
-    turns = (make_turn(0, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a"),
+    turns = (make_turn(0, make_bash("coyomap assemble f/*.json --out .coyomap", uid="a"),
                        results=(("a", "model: C:66 | ops: UNHEALED riding steps 4"),)),)
     a = P.assert_21_final_assemble_digest_is_clean(turns)
     assert (a.observed, a.of) == (0, 1), a
@@ -1368,10 +1368,10 @@ def test_a_grounding_write_behind_a_bash_array_is_visible():
     that had done the work, and 13 turned out to be a REAL failure once it could be seen.
     """
     cmd = ('cd /Users/nitsanseniak/mee6/repos/mcpolis\n'
-           'CX=/Users/nitsanseniak/Projects/coyodex/.venv/bin/coyodex\n'
-           'V=(); for f in .coyodex/verify/verdicts-*.json; do V+=(--verdicts "$f"); done\n'
-           '$CX grounding write --worklist .coyodex/verify/worklist.json '
-           '--map .coyodex/project-map.json "${V[@]}" \\\n'
+           'CX=/Users/nitsanseniak/Projects/coyomap/.venv/bin/coyomap\n'
+           'V=(); for f in .coyomap/verify/verdicts-*.json; do V+=(--verdicts "$f"); done\n'
+           '$CX grounding write --worklist .coyomap/verify/worklist.json '
+           '--map .coyomap/project-map.json "${V[@]}" \\\n'
            '  --note "Complete pass over the pinned worklist."\n')
     assert P._invokes(cmd, "grounding"), "the bash-array idiom must not hide `grounding write`"
     assert "$CX grounding write" in P._shell_only(cmd)
@@ -1385,10 +1385,10 @@ def test_an_apostrophe_in_a_note_does_not_delete_the_next_command():
     number of `'` marries that apostrophe to the `'` in `sed -n '1,12p'` two lines down and deletes
     the audit invocation in between. That variant was measured against this corpus and rejected.
     """
-    cmd = ('CX=/x/coyodex\n'
+    cmd = ('CX=/x/coyomap\n'
            '$CX record --map f.json --heading "Audit exceptions" '
            '--line "the walk\'s first WRITE of that entity" >/dev/null\n'
-           '$CX audit .coyodex/project-map.json > /tmp/audit-2.txt 2>&1\n'
+           '$CX audit .coyomap/project-map.json > /tmp/audit-2.txt 2>&1\n'
            "sed -n '1,12p' /tmp/audit-2.txt\n")
     assert P._invokes(cmd, "audit"), "an apostrophe in a note must not delete the next command"
     assert P._invokes(cmd, "record")
@@ -1400,22 +1400,22 @@ def test_a_command_named_inside_a_multi_line_python_body_is_not_counted():
 
     The mention has to sit at the START of a line inside the quoted body, because that is the only
     shape the rest of the pipeline cannot already reject: `_segments` splits on newlines, so such a
-    line becomes a segment whose head really is `coyodex audit`. Two earlier versions of this test
-    put the mention inside `print('coyodex audit')`, which the segment-start rule blocks on its own —
+    line becomes a segment whose head really is `coyomap audit`. Two earlier versions of this test
+    put the mention inside `print('coyomap audit')`, which the segment-start rule blocks on its own —
     they passed with the stripping replaced by an identity function, and so did the whole suite.
     """
     body = ('$CX assemble f.json\n'
             'python3 -c "\n'
             'import json\n'
-            'coyodex audit m.json\n'
+            'coyomap audit m.json\n'
             '"\n')
     assert P._invokes(body, "assemble"), "the real command before the body must survive"
     assert not P._invokes(body, "audit"), "a line INSIDE a python body is not an invocation"
-    assert "coyodex audit" not in P._shell_only(body)
+    assert "coyomap audit" not in P._shell_only(body)
 
     single = ("$COY dump $MAP | python3 -c '\n"
               "import sys\n"
-              "coyodex validate m.json\n"
+              "coyomap validate m.json\n"
               "'\n")
     assert P._invokes(single, "dump"), "the real command before a single-quoted body must survive"
     assert not P._invokes(single, "validate")
@@ -1427,7 +1427,7 @@ def test_a_heredoc_body_is_not_read_as_shell():
     across the corpus where one had happened."""
     cmd = ("$CX validate m.json\n"
            "python3 - <<'PY'\n"
-           "coyodex anchor-drift --map m.json\n"
+           "coyomap anchor-drift --map m.json\n"
            "PY\n")
     assert P._invokes(cmd, "validate")
     assert not P._invokes(cmd, "anchor-drift")
@@ -1440,25 +1440,25 @@ def test_a_bash_c_body_is_read_as_shell_not_as_data():
     `bash -c`. One measured build wrapped 116 of its 123 Bash calls that way, so the scorecard could
     read 6 % of what it was scoring, and `preindex --report used` printed 0/1 over a build that ran
     it."""
-    wrapped = ("bash -c '/p/coyodex preindex --report --root /r --depth 3 --top 60 2>&1 | head -160'")
+    wrapped = ("bash -c '/p/coyomap preindex --report --root /r --depth 3 --top 60 2>&1 | head -160'")
     assert P._invokes(wrapped, "preindex")
-    assert P._segments(wrapped)[0].startswith("/p/coyodex preindex --report")
+    assert P._segments(wrapped)[0].startswith("/p/coyomap preindex --report")
     # every shape the corpus uses: a path on the interpreter, a double-quoted body, a multi-line body
     assert P._invokes('/bin/bash -c "cd /r; $CX audit m.json"', "audit")
-    assert P._invokes("bash -c 'cd /r\nCX=/p/coyodex\n$CX finalize --repo . m.json'", "finalize")
-    assert P._invokes("sh -c 'coyodex validate m.json'", "validate")
+    assert P._invokes("bash -c 'cd /r\nCX=/p/coyomap\n$CX finalize --repo . m.json'", "finalize")
+    assert P._invokes("sh -c 'coyomap validate m.json'", "validate")
 
 
 def test_unwrapping_bash_c_does_not_promote_data_to_shell():
     """The negative half. Unwrapping must not reach INSIDE the body's own data: a heredoc or a
     `python3 -c` string nested in a `bash -c` script is still data, and a mention is still a
     mention."""
-    assert not P._invokes("bash -c \"python3 - <<'PY'\ncoyodex validate x\nPY\"", "validate")
-    assert not P._invokes("bash -c 'grep -n \"coyodex anchor-drift\" method.md'", "anchor-drift")
-    assert not P._invokes('python3 -c "\nimport json\n# coyodex validate output\nprint(1)\n"',
+    assert not P._invokes("bash -c \"python3 - <<'PY'\ncoyomap validate x\nPY\"", "validate")
+    assert not P._invokes("bash -c 'grep -n \"coyomap anchor-drift\" method.md'", "anchor-drift")
+    assert not P._invokes('python3 -c "\nimport json\n# coyomap validate output\nprint(1)\n"',
                           "validate")
     # `-c` on something that is not a shell is left alone
-    assert not P._invokes('python3 -c "coyodex assemble a.json"', "assemble")
+    assert not P._invokes('python3 -c "coyomap assemble a.json"', "assemble")
 
 
 def test_a_read_only_verb_in_a_writer_group_is_not_counted_as_a_write():
@@ -1468,7 +1468,7 @@ def test_a_read_only_verb_in_a_writer_group_is_not_counted_as_a_write():
     The score barely moved; the sentence the denominator states was false."""
     assert P._writes_the_model("$CX grounding write --worklist w.json --verdicts v.json")
     assert P._writes_the_model("$CX record --map m.json --heading H --line 'C1: why'")
-    assert P._writes_the_model("bash -c '$CX assemble f.json --out .coyodex'")
+    assert P._writes_the_model("bash -c '$CX assemble f.json --out .coyomap'")
     assert not P._writes_the_model("$CX grounding lint --verdicts v.json")
     assert not P._writes_the_model("$CX grounding report --worklist w.json --verdicts v.json")
     assert not P._writes_the_model("$CX fix drop-edge --help")
@@ -1480,7 +1480,7 @@ def test_a_read_only_verb_in_a_writer_group_is_not_counted_as_a_write():
 def test_an_unbalanced_shell_c_quote_is_left_for_the_quote_scanner():
     """An unterminated `bash -c '…` cannot be unwrapped without guessing where the script ends, so it
     is handed on untouched rather than spliced at a made-up boundary."""
-    cmd = "bash -c 'coyodex validate m.json"
+    cmd = "bash -c 'coyomap validate m.json"
     assert P._unwrap_shell_c(cmd) == cmd
 
 
@@ -1497,25 +1497,25 @@ def test_the_scorecard_allowlist_carries_the_names_the_builds_actually_alias():
     makes assertions 12/13/30 readable. `scope` and `archive` are deliberately absent — neither
     appears behind an alias anywhere in either corpus, so listing two generic words would add match
     surface for nothing."""
-    assert {"grounding", "finalize", "record"} <= set(P._COYODEX_SUBCOMMANDS)
-    assert not ({"scope", "archive"} & set(P._COYODEX_SUBCOMMANDS))
+    assert {"grounding", "finalize", "record"} <= set(P._COYOMAP_SUBCOMMANDS)
+    assert not ({"scope", "archive"} & set(P._COYOMAP_SUBCOMMANDS))
 
 
 def test_the_subcommand_allowlist_matches_both_clis():
     """A missing name is a SILENT undercount — precisely the failure `--commands` exists to fix.
     The first cut omitted `bless`, `claims`, `hash` and `protocol`, and carried `impact`, which is
-    not a coyodex-eval subcommand."""
+    not a coyomap-eval subcommand."""
     import re
     from pathlib import Path
-    from coyodex_eval.transcript import _COYODEX_SUBCOMMANDS
+    from coyomap_eval.transcript import _COYOMAP_SUBCOMMANDS
     repo = Path(__file__).resolve().parents[2]
     declared: set[str] = set()
-    for rel in ("tools/coyodex/cli.py", "eval/tools/coyodex_eval/cli.py"):
+    for rel in ("tools/coyomap/cli.py", "eval/tools/coyomap_eval/cli.py"):
         declared |= set(re.findall(r'cmd == "([a-z-]+)"',
                                    (repo / rel).read_text(encoding="utf-8")))
     assert declared, "the CLIs must declare their commands as `cmd == \"...\"`, or this cannot check"
-    missing = sorted(declared - set(_COYODEX_SUBCOMMANDS))
-    extra = sorted(set(_COYODEX_SUBCOMMANDS) - declared)
+    missing = sorted(declared - set(_COYOMAP_SUBCOMMANDS))
+    extra = sorted(set(_COYOMAP_SUBCOMMANDS) - declared)
     assert not missing, f"subcommand(s) the CLIs have and --commands would never count: {missing}"
     assert not extra, f"names in the allowlist that no CLI declares: {extra}"
 
@@ -1526,7 +1526,7 @@ def test_14_does_not_pass_on_prose_that_merely_mentions_the_words():
     pass. Only an actual `grounding write --map` counts."""
     turns = (make_turn(0, make_bash("echo hi", uid="e"),
                        results=(("e", "446 of 446 claim(s) challenged (6 superseded)"),)),
-             make_turn(1, make_bash("coyodex audit m.json --json", uid="a"),
+             make_turn(1, make_bash("coyomap audit m.json --json", uid="a"),
                        results=(("a", "444 L2 claims on the grounding worklist"),)))
     a = P.score_turns(turns).by_id()[14]
     assert (a.observed, a.of) == (0, 1), a
@@ -1535,12 +1535,12 @@ def test_14_does_not_pass_on_prose_that_merely_mentions_the_words():
 def test_14_stays_explained_when_a_later_log_repeats_the_counts():
     """`explained` was reassigned on every match, so an honest run failed if a later `cat` of an old
     log re-matched "N of M claim(s) challenged"."""
-    turns = (make_turn(0, make_bash("coyodex grounding write --worklist w.json --map m.json", uid="g"),
+    turns = (make_turn(0, make_bash("coyomap grounding write --worklist w.json --map m.json", uid="g"),
                        results=(("g", "wrote g.json: 446 of 446 claim(s) challenged · vs the live "
                                       "map: 6 superseded, 4 added since the pin"),)),
              make_turn(1, make_bash("cat /tmp/old.log", uid="c"),
                        results=(("c", "418 of 418 claim(s) challenged"),)),
-             make_turn(2, make_bash("coyodex audit m.json --json", uid="a"),
+             make_turn(2, make_bash("coyomap audit m.json --json", uid="a"),
                        results=(("a", "444 L2 claims on the grounding worklist"),)))
     assert P.score_turns(turns).by_id()[14].observed == 1
 
@@ -1548,11 +1548,11 @@ def test_14_stays_explained_when_a_later_log_repeats_the_counts():
 def test_13_does_not_let_a_chained_assemble_hide_a_map_rewrite():
     """Skipping the whole call let a rewrite hide by chaining an assemble onto it — and that is the
     exact shape the real transcripts use."""
-    turns = (make_turn(0, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+    turns = (make_turn(0, make_bash("coyomap grounding write --worklist w.json --out g.json")),
              make_turn(1, make_bash(
                  "python3 - <<'EOF'\n"
-                 "import json; json.dump(d, open('.coyodex/project-map.json','w'))\nEOF\n"
-                 "coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
+                 "import json; json.dump(d, open('.coyomap/project-map.json','w'))\nEOF\n"
+                 "coyomap assemble .coyomap/build-fragments/*.json --out .coyomap")))
     a = P.score_turns(turns).by_id()[13]
     assert (a.observed, a.of) == (0, 1), a
 
@@ -1560,11 +1560,11 @@ def test_13_does_not_let_a_chained_assemble_hide_a_map_rewrite():
 def test_a22_prefers_preindex_own_gr1_verdict_over_a_transcript_guess():
     """`preindex` computes GR1 from the fragments on disk. The transcript scan cannot see a
     fragment written by a sub-agent, so a build that HAD drafted the layer read as "never"."""
-    turns = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
+    turns = (make_turn(1, make_bash("coyomap preindex --out .coyomap/preindex.json", uid="p"),
                        results=(("p", "  GR1 met: behavioral draft present (L1-usecases.json).\n"),)),)
     a = P.assert_22_behavioral_draft_precedes_preindex(turns)
     assert (a.observed, a.of) == (1, 1), a
-    turns_not = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
+    turns_not = (make_turn(1, make_bash("coyomap preindex --out .coyomap/preindex.json", uid="p"),
                            results=(("p", "  GR1 NOT MET: no fragment carries use_cases.\n"),)),)
     assert P.assert_22_behavioral_draft_precedes_preindex(turns_not).observed == 0
 
@@ -1574,14 +1574,14 @@ def test_a22_reads_single_quoted_keys_in_a_heredoc():
     turns = (make_turn(1, make_bash(
                  "python3 - <<'PY'\nimport json\n"
                  "json.dump({'use_cases': [{'id': 'UC1'}]}, "
-                 "open('.coyodex/build-fragments/beh.json','w'))\nPY")),
-             make_turn(2, make_bash("coyodex preindex --out .coyodex/preindex.json")))
+                 "open('.coyomap/build-fragments/beh.json','w'))\nPY")),
+             make_turn(2, make_bash("coyomap preindex --out .coyomap/preindex.json")))
     assert P.assert_22_behavioral_draft_precedes_preindex(turns).observed == 1
 
 
 def test_a22_says_which_signal_it_used():
     """A reader must be able to tell an authoritative verdict from an inferred one."""
-    turns = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json")),)
+    turns = (make_turn(1, make_bash("coyomap preindex --out .coyomap/preindex.json")),)
     a = P.assert_22_behavioral_draft_precedes_preindex(turns)
     assert a.evidence and "transcript scan" in str(a.evidence[0].detail["source"])
 
@@ -1590,11 +1590,11 @@ def test_a22_takes_the_verdict_from_the_first_preindex_not_the_last():
     """H3 shipped with no test. Reading the LAST run over-credited the exact build the assertion
     exists to catch: `preindex "NOT MET"` -> draft -> `preindex "met"` scored a clean 1/1, and
     re-running preindex after the fragments land is routine."""
-    turns = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p1"),
+    turns = (make_turn(1, make_bash("coyomap preindex --out .coyomap/preindex.json", uid="p1"),
                        results=(("p1", "  GR1 NOT MET: no fragment carries use_cases.\n"),)),
-             make_turn(50, make_write(".coyodex/build-fragments/beh.json",
+             make_turn(50, make_write(".coyomap/build-fragments/beh.json",
                                       '{"use_cases": [{"id": "UC1"}]}')),
-             make_turn(80, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p2"),
+             make_turn(80, make_bash("coyomap preindex --out .coyomap/preindex.json", uid="p2"),
                        results=(("p2", "  GR1 met: behavioral draft present (beh.json).\n"),)))
     a = P.assert_22_behavioral_draft_precedes_preindex(turns)
     assert (a.observed, a.of) == (0, 1), a
@@ -1602,7 +1602,7 @@ def test_a22_takes_the_verdict_from_the_first_preindex_not_the_last():
 
 def test_a22_does_not_accept_an_echoed_gr1_line():
     """The pattern is anchored to preindex's own output shape."""
-    turns = (make_turn(1, make_bash("coyodex preindex --out p.json; echo 'GR1 met'", uid="p"),
+    turns = (make_turn(1, make_bash("coyomap preindex --out p.json; echo 'GR1 met'", uid="p"),
                        results=(("p", "some output\nGR1 met\n"),)),)
     a = P.assert_22_behavioral_draft_precedes_preindex(turns)
     assert a.observed == 0, a
@@ -1613,7 +1613,7 @@ def test_a22_does_not_accept_an_echoed_gr1_line():
 def make_advisory_run(index: int, advisories: int, uid: str = "v"):
     body = "VALIDATION WARNINGS (non-blocking):\n" + "\n".join(
         f"  - advisory number {i}" for i in range(advisories))
-    return make_turn(index, make_bash("coyodex validate map.json --check-sources", uid=uid),
+    return make_turn(index, make_bash("coyomap validate map.json --check-sources", uid=uid),
                      results=((uid, body),))
 
 
@@ -1653,14 +1653,14 @@ def make_read(path: str, uid: str = "") -> ToolCall:
 
 
 def test_10_a_poll_chained_onto_real_work_is_not_an_idle_turn():
-    """`ls dir && coyodex assemble …` looks at the directory and then DOES something. Counting it
+    """`ls dir && coyomap assemble …` looks at the directory and then DOES something. Counting it
     made assertion 10 report 0.67 for a build with zero idle turns — its 88-poll predecessor scored
     the same 0.00, so the number could not tell the two apart."""
     assert not P._polls_the_fragment_dir(
-        "ls -la .coyodex/build-fragments/ && cd /x && coyodex assemble "
-        ".coyodex/build-fragments/*.json --out .coyodex 2>&1 | tail -20")
+        "ls -la .coyomap/build-fragments/ && cd /x && coyomap assemble "
+        ".coyomap/build-fragments/*.json --out .coyomap 2>&1 | tail -20")
     assert not P._polls_the_fragment_dir(
-        "rm -f .coyodex/build-fragments/*.draft.json && ls .coyodex/build-fragments/")
+        "rm -f .coyomap/build-fragments/*.draft.json && ls .coyomap/build-fragments/")
 
 
 def test_10_the_english_word_find_in_prose_is_not_a_poll():
@@ -1668,19 +1668,19 @@ def test_10_the_english_word_find_in_prose_is_not_a_poll():
     banner, one in an extras body being written into a fragment."""
     assert not P._polls_the_fragment_dir(
         'echo "--- C21 port files, find a real operative line ---"; '
-        "grep -n x .coyodex/build-fragments/gap-backend.json")
+        "grep -n x .coyomap/build-fragments/gap-backend.json")
 
 
 def test_10_still_catches_the_shapes_a_build_actually_waits_with():
     """A bare listing, a listing piped into a formatter, and an `until` spin loop whose poll hides
     inside a `$(…)`. All three are in the corpus; dropping them was an over-correction the first
     version of this fix shipped."""
-    assert P._polls_the_fragment_dir("ls .coyodex/build-fragments/")
-    assert P._polls_the_fragment_dir("ls -la .coyodex/build-fragments/ | wc -l")
+    assert P._polls_the_fragment_dir("ls .coyomap/build-fragments/")
+    assert P._polls_the_fragment_dir("ls -la .coyomap/build-fragments/ | wc -l")
     assert P._polls_the_fragment_dir(
-        "sleep 1; ls /x/.coyodex/build-fragments/ | grep -E 'h10|h9a'")
+        "sleep 1; ls /x/.coyomap/build-fragments/ | grep -E 'h10|h9a'")
     assert P._polls_the_fragment_dir(
-        'cd /x/.coyodex/build-fragments && until [ "$(ls -1 a.json)" ]; do sleep 2; done')
+        'cd /x/.coyomap/build-fragments && until [ "$(ls -1 a.json)" ]; do sleep 2; done')
 
 
 def test_9_and_23_follow_a_redirect_into_the_later_read():
@@ -1691,7 +1691,7 @@ def test_9_and_23_follow_a_redirect_into_the_later_read():
             "     4\tVALIDATION WARNINGS (non-blocking):\n"
             "     5\t  - first advisory, record `granularity` to silence\n"
             "     6\t  - second advisory, record `isolated` to silence\n")
-    turns = (make_turn(1, make_bash("coyodex validate m.json > /tmp/v1.txt 2>&1", uid="v"),
+    turns = (make_turn(1, make_bash("coyomap validate m.json > /tmp/v1.txt 2>&1", uid="v"),
                        results=(("v", "exit=0\n"),)),
              make_turn(3, make_read("/tmp/v1.txt", uid="r"), results=(("r", body),)))
     a = P.assert_23_the_build_saw_the_whole_gate(turns, P.ScoreContext(map_warnings=2))
@@ -1710,11 +1710,11 @@ def test_13_clears_its_evidence_when_the_record_is_written_again():
     """Re-running `grounding write` after further edits is the METHOD-COMPLIANT recovery. A build
     that did exactly that was reported as 'written at turn 343; 14 later map/fragment write(s)' with
     evidence starting at turn 313 — twelve of them predating the turn the note named."""
-    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
-             make_turn(3, make_bash("python3 -c \"open('.coyodex/project-map.json','w')\" "
-                                    "&& cp a .coyodex/project-map.json")),
-             make_turn(5, make_bash("coyodex grounding write --worklist w.json --map m --out g.json")),
-             make_turn(7, make_bash("coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
+    turns = (make_turn(1, make_bash("coyomap grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("python3 -c \"open('.coyomap/project-map.json','w')\" "
+                                    "&& cp a .coyomap/project-map.json")),
+             make_turn(5, make_bash("coyomap grounding write --worklist w.json --map m --out g.json")),
+             make_turn(7, make_bash("coyomap assemble .coyomap/build-fragments/*.json --out .coyomap")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
     assert (a.observed, a.of) == (1, 1), a
     assert not a.evidence, a.evidence
@@ -1722,29 +1722,29 @@ def test_13_clears_its_evidence_when_the_record_is_written_again():
 
 def test_13_still_fires_on_a_real_edit_after_the_last_record():
     """The defect itself must survive the repair."""
-    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
-             make_turn(3, make_bash("cp fixed.json .coyodex/project-map.json")))
+    turns = (make_turn(1, make_bash("coyomap grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("cp fixed.json .coyomap/project-map.json")))
     assert P.assert_13_grounding_write_is_the_last_write(turns).observed == 0
 
 
 def test_13_does_not_count_a_read_only_gate_or_the_commit_as_a_map_write():
     """`render`+`finalize` matched on `2>&1`; a read-only `python3 -c` matched on the `->` in a
     print; `git add … && git commit` named the map on the command line. None writes the model."""
-    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
-             make_turn(3, make_bash("coyodex render .coyodex/project-map.json m.md 2>&1 | tail -2 "
-                                    "&& coyodex finalize .coyodex/project-map.json 2>&1 | tail -6")),
+    turns = (make_turn(1, make_bash("coyomap grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("coyomap render .coyomap/project-map.json m.md 2>&1 | tail -2 "
+                                    "&& coyomap finalize .coyomap/project-map.json 2>&1 | tail -6")),
              make_turn(5, make_bash("python3 -c \"import json; "
-                                    "m=json.load(open('.coyodex/project-map.json')); "
+                                    "m=json.load(open('.coyomap/project-map.json')); "
                                     "print('flows', '->', len(m['flows']))\"")),
-             make_turn(7, make_bash("git add -f .coyodex/project-map.json && git commit -q -m x")))
+             make_turn(7, make_bash("git add -f .coyomap/project-map.json && git commit -q -m x")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
     assert (a.observed, a.of) == (1, 1), a
 
 
 def test_writes_a_file_ignores_a_stderr_merge_and_a_printed_arrow():
-    assert not P._WRITES_A_FILE.search("coyodex finalize m.json 2>&1 | tail -6")
+    assert not P._WRITES_A_FILE.search("coyomap finalize m.json 2>&1 | tail -6")
     assert not P._WRITES_A_FILE.search("print(sf['id'], '->', len(sf['steps']))")
-    assert P._WRITES_A_FILE.search("coyodex validate m.json > /tmp/v.txt")
+    assert P._WRITES_A_FILE.search("coyomap validate m.json > /tmp/v.txt")
 
 
 def test_22_anchors_on_the_harvest_not_on_preindex():
@@ -1752,14 +1752,14 @@ def test_22_anchors_on_the_harvest_not_on_preindex():
     preindex at 42, was told GR1 NOT MET, drafted at 58 and fanned out at 76 — it obeyed the rule
     and still scored 0, indistinguishable from the build that harvested first and drafted 79 turns
     later."""
-    drafted = make_write(".coyodex/build-fragments/behavioral.json", '{"use_cases": []}')
-    obeyed = (make_turn(4, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
-                        results=(("p", "  GR1 NOT MET: no .coyodex/build-fragments/ yet\n"),)),
+    drafted = make_write(".coyomap/build-fragments/behavioral.json", '{"use_cases": []}')
+    obeyed = (make_turn(4, make_bash("coyomap preindex --out .coyomap/preindex.json", uid="p"),
+                        results=(("p", "  GR1 NOT MET: no .coyomap/build-fragments/ yet\n"),)),
               make_turn(6, drafted),
               make_turn(8, make_agent(), make_agent()))
     assert P.assert_22_behavioral_draft_precedes_preindex(obeyed).observed == 1
-    broke = (make_turn(4, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
-                       results=(("p", "  GR1 NOT MET: no .coyodex/build-fragments/ yet\n"),)),
+    broke = (make_turn(4, make_bash("coyomap preindex --out .coyomap/preindex.json", uid="p"),
+                       results=(("p", "  GR1 NOT MET: no .coyomap/build-fragments/ yet\n"),)),
              make_turn(6, make_agent(), make_agent()),
              make_turn(8, drafted))
     assert P.assert_22_behavioral_draft_precedes_preindex(broke).observed == 0
@@ -1769,9 +1769,9 @@ def test_8_does_not_flag_the_batches_summary():
     """`--batches` writes the claim FILES; its stdout is a summary, so paging it hides nothing and
     `--json` is meaningless for it. A build that ran the JSON form and the batches form in one turn
     scored 1/2 for the second."""
-    turns = (make_turn(1, make_bash("coyodex audit m.json --json > worklist.json", uid="j"),
+    turns = (make_turn(1, make_bash("coyomap audit m.json --json > worklist.json", uid="j"),
                        results=(("j", _AUDIT_L2),)),
-             make_turn(3, make_bash("coyodex audit m.json --batches .coyodex/verify --cap 40 "
+             make_turn(3, make_bash("coyomap audit m.json --batches .coyomap/verify --cap 40 "
                                     "2>&1 | tail -20", uid="b"),
                        results=(("b", _AUDIT_L2),)))
     a = P.assert_8_audit_read_as_json(turns)
@@ -1792,10 +1792,10 @@ def test_24_flags_a_recorded_exception_that_silences_nothing():
 def test_25_flags_a_to_reconcile_run_that_recorded_nothing():
     """`--to-reconcile` used to be ignored without `--keep`/`--accept-suggested`: exit 0, a full
     listing, an untouched file. One build escaped only because it read the file back."""
-    turns = (make_turn(1, make_bash("coyodex fix dedup-edge --map m.json --to-reconcile r.json",
+    turns = (make_turn(1, make_bash("coyomap fix dedup-edge --map m.json --to-reconcile r.json",
                                     uid="a"),
                        results=(("a", "46 edge(s) declared more than once…\n"),)),
-             make_turn(3, make_bash("coyodex fix dedup-edge --map m.json --accept-suggested "
+             make_turn(3, make_bash("coyomap fix dedup-edge --map m.json --accept-suggested "
                                     "--to-reconcile r.json", uid="b"),
                        results=(("b", "dedup-edge: recorded 46 new and updated 0 keep_edges "
                                       "directive(s) in r.json (46 total).\n"),)))
@@ -1810,9 +1810,9 @@ def test_13_is_not_disarmed_by_a_read_only_grounding_command():
     """`edited_after.clear()` keyed on the `grounding` GROUP, so `grounding report` — which
     method.md now PRESCRIBES running straight after `write` — reset the anchor and wiped the
     evidence. Every compliant build would have scored clean whatever it did."""
-    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
-             make_turn(3, make_bash("cp fixed.json .coyodex/project-map.json")),
-             make_turn(5, make_bash("coyodex grounding report --worklist w.json --map m")))
+    turns = (make_turn(1, make_bash("coyomap grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("cp fixed.json .coyomap/project-map.json")),
+             make_turn(5, make_bash("coyomap grounding report --worklist w.json --map m")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
     assert (a.observed, a.of) == (0, 1), a
     assert a.evidence[0].turn == 3, a.evidence
@@ -1829,11 +1829,11 @@ def test_13_counts_the_header_backfill_the_method_mandates_and_says_why():
     sound, because the same write can be spelled `cd`-relative, through a variable, or inside a
     heredoc. The fix is to read `grounding.claims_added_since` off the map instead of counting
     writes; until then this stays a known false alarm rather than a false clean."""
-    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+    turns = (make_turn(1, make_bash("coyomap grounding write --worklist w.json --out g.json")),
              make_turn(3, make_bash(
-                 "python3 -c \"import json; p='.coyodex/build-fragments/header.json'; "
+                 "python3 -c \"import json; p='.coyomap/build-fragments/header.json'; "
                  "d=json.load(open(p)); d['built']='2026-08-14 13:19'; json.dump(d,open(p,'w'))\"\n"
-                 "coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
+                 "coyomap assemble .coyomap/build-fragments/*.json --out .coyomap")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
     assert (a.observed, a.of) == (0, 1), a
 
@@ -1841,9 +1841,9 @@ def test_13_counts_the_header_backfill_the_method_mandates_and_says_why():
 def test_13_catches_claims_smuggled_through_a_header_fragment():
     """The regression the removed carve-out allowed: `header.json` carrying real claims, written
     after the record, scored a perfect 1.00."""
-    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+    turns = (make_turn(1, make_bash("coyomap grounding write --worklist w.json --out g.json")),
              make_turn(3, make_bash(
-                 "cat > .coyodex/build-fragments/header.json <<'EOF'\n"
+                 "cat > .coyomap/build-fragments/header.json <<'EOF'\n"
                  '{"title":"T","rules":[{"id":"BR1","statement":"a claim no skeptic saw"}]}\n'
                  "EOF")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
@@ -1854,11 +1854,11 @@ def test_13_still_catches_a_real_fragment_edit_however_it_is_spelled():
     """Path spelling must not decide the answer — `cd`-relative and `$VAR` forms are the shapes a
     path-keyed exemption could not have covered."""
     for segment in (
-            "cd .coyodex/build-fragments && cat > h05-domain-model.json <<'EOF'\n{}\nEOF",
-            "F=.coyodex/build-fragments; cat > $F/h05-domain-model.json <<'EOF'\n{}\nEOF",
+            "cd .coyomap/build-fragments && cat > h05-domain-model.json <<'EOF'\n{}\nEOF",
+            "F=.coyomap/build-fragments; cat > $F/h05-domain-model.json <<'EOF'\n{}\nEOF",
             "python3 - <<'PY'\nimport json\n"
-            "json.dump({}, open('.coyodex/build-fragments/h05-domain-model.json','w'))\nPY"):
-        turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+            "json.dump({}, open('.coyomap/build-fragments/h05-domain-model.json','w'))\nPY"):
+        turns = (make_turn(1, make_bash("coyomap grounding write --worklist w.json --out g.json")),
                  make_turn(3, make_bash(segment)))
         a = P.assert_13_grounding_write_is_the_last_write(turns)
         assert (a.observed, a.of) == (0, 1), (segment, a)
@@ -1867,9 +1867,9 @@ def test_13_still_catches_a_real_fragment_edit_however_it_is_spelled():
 def test_13_does_not_invent_a_record_from_a_help_call():
     """A transcript that only ran `grounding --help` and `grounding report` reported "written at
     turn 229" about a record that was never written."""
-    turns = (make_turn(1, make_bash("coyodex grounding --help | head -80")),
-             make_turn(3, make_bash("coyodex grounding report --worklist w.json")),
-             make_turn(5, make_bash("cp fixed.json .coyodex/project-map.json")))
+    turns = (make_turn(1, make_bash("coyomap grounding --help | head -80")),
+             make_turn(3, make_bash("coyomap grounding report --worklist w.json")),
+             make_turn(5, make_bash("cp fixed.json .coyomap/project-map.json")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
     assert a.of == 0, a
 
@@ -1883,10 +1883,10 @@ def test_9_does_not_attribute_an_earlier_dirty_view_to_a_later_clean_run():
              "     2\t  - first, record `granularity` to silence\n"
              "     3\t  - second, record `isolated` to silence\n")
     clean = "     1\tSchema OK — structure valid.\n"
-    turns = (make_turn(1, make_bash("coyodex validate m.json > /tmp/v.txt 2>&1", uid="v1"),
+    turns = (make_turn(1, make_bash("coyomap validate m.json > /tmp/v.txt 2>&1", uid="v1"),
                        results=(("v1", "exit=0\n"),)),
              make_turn(3, make_read("/tmp/v.txt", uid="r1"), results=(("r1", dirty),)),
-             make_turn(5, make_bash("coyodex validate m.json > /tmp/v.txt 2>&1", uid="v2"),
+             make_turn(5, make_bash("coyomap validate m.json > /tmp/v.txt 2>&1", uid="v2"),
                        results=(("v2", "exit=0\n"),)),
              make_turn(7, make_read("/tmp/v.txt", uid="r2"), results=(("r2", clean),)))
     runs = P._validate_warnings(turns)
@@ -1899,9 +1899,9 @@ def test_22_is_not_flipped_by_how_the_harvest_was_batched():
     that dispatched its slices one per turn — the failure assertion 3 measures, not a virtue — had
     no >=2-agent turn during the harvest, so the anchor slid to a later skeptic batch and the same
     build scored 1 instead of 0."""
-    drafted = make_write(".coyodex/build-fragments/behavioral.json", '{"use_cases": []}')
-    preindex = make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p")
-    res = (("p", "  GR1 NOT MET: no .coyodex/build-fragments/ yet\n"),)
+    drafted = make_write(".coyomap/build-fragments/behavioral.json", '{"use_cases": []}')
+    preindex = make_bash("coyomap preindex --out .coyomap/preindex.json", uid="p")
+    res = (("p", "  GR1 NOT MET: no .coyomap/build-fragments/ yet\n"),)
     serial = (make_turn(4, preindex, results=res),
               *[make_turn(20 + i, make_agent()) for i in range(14)],   # one slice per turn
               make_turn(100, drafted),
@@ -1916,11 +1916,11 @@ def test_22_is_not_flipped_by_how_the_harvest_was_batched():
 def test_10_does_not_score_a_mutating_command_as_a_wait():
     """`sed -i` edits in place, `awk … > out` and `grep -c … > count.txt` redirect, and `xargs` runs
     whatever it is handed — `ls DIR | xargs rm` deleted files and scored as an idle wait."""
-    for cmd in ("sed -i s/a/b/ .coyodex/build-fragments/h1.json; ls .coyodex/build-fragments",
-                "ls .coyodex/build-fragments/*.json | xargs rm",
-                "ls .coyodex/build-fragments; awk 1 x.json > out.json",
-                "grep -c x .coyodex/build-fragments/a.json > count.txt; ls .coyodex/build-fragments",
-                "ls .coyodex/build-fragments; xargs -I{} cp {} /tmp/backup/"):
+    for cmd in ("sed -i s/a/b/ .coyomap/build-fragments/h1.json; ls .coyomap/build-fragments",
+                "ls .coyomap/build-fragments/*.json | xargs rm",
+                "ls .coyomap/build-fragments; awk 1 x.json > out.json",
+                "grep -c x .coyomap/build-fragments/a.json > count.txt; ls .coyomap/build-fragments",
+                "ls .coyomap/build-fragments; xargs -I{} cp {} /tmp/backup/"):
         assert not P._polls_the_fragment_dir(cmd), cmd
 
 
@@ -1928,18 +1928,18 @@ def test_10_requires_the_poll_itself_to_name_the_directory():
     """Requiring only that the command mention the dir SOMEWHERE let `wc -l /tmp/validate4.txt` —
     counting a gate's output — read as a directory poll."""
     assert not P._polls_the_fragment_dir(
-        "sed -n 1,5p .coyodex/build-fragments/h1.json; wc -l /tmp/v.txt")
+        "sed -n 1,5p .coyomap/build-fragments/h1.json; wc -l /tmp/v.txt")
 
 
 def test_25_does_not_accuse_the_tools_own_refusal_or_a_clean_map():
     """The same batch made `--to-reconcile` without a decision exit 2 with an ERROR. A build that
     trips that guard, reads it and re-runs correctly is the opposite of the silent no-op. A map with
     no duplicate edges has nothing to record either."""
-    refused = (make_turn(1, make_bash("coyodex fix dedup-edge --map m --to-reconcile r.json",
+    refused = (make_turn(1, make_bash("coyomap fix dedup-edge --map m --to-reconcile r.json",
                                       uid="a"),
                          results=(("a", "ERROR: --to-reconcile needs a decision to record\n"),)),)
     assert P.assert_25_dedup_to_reconcile_recorded_something(refused).of == 0
-    clean = (make_turn(1, make_bash("coyodex fix dedup-edge --map m --accept-suggested "
+    clean = (make_turn(1, make_bash("coyomap fix dedup-edge --map m --accept-suggested "
                                     "--to-reconcile r.json", uid="b"),
                        results=(("b", "dedup-edge: no (src, verb, dst) edge is declared more than "
                                       "once.\n"),)),)
@@ -1949,8 +1949,8 @@ def test_25_does_not_accuse_the_tools_own_refusal_or_a_clean_map():
 def test_8_batches_skip_does_not_erase_a_paged_read_chained_beside_it():
     """Skipping the whole Bash call let a paged human-report read hide behind a `--batches` run
     chained after it — and two audit forms in one turn is the observed shape."""
-    turns = (make_turn(1, make_bash("coyodex audit m.json | head -40; "
-                                    "coyodex audit m.json --batches .coyodex/verify --cap 40",
+    turns = (make_turn(1, make_bash("coyomap audit m.json | head -40; "
+                                    "coyomap audit m.json --batches .coyomap/verify --cap 40",
                                     uid="c"),
                        results=(("c", _AUDIT_L2),)),)
     a = P.assert_8_audit_read_as_json(turns)
@@ -1986,8 +1986,8 @@ def make_bash_turn(index: int, command: str, result: str = "") -> P.Turn:
 
 
 def test_26_flags_a_gate_read_as_a_bare_count():
-    turns = (make_bash_turn(1, "coyodex validate map.json | grep -ciE '^  - '"),
-             make_bash_turn(2, "coyodex audit map.json --json"))
+    turns = (make_bash_turn(1, "coyomap validate map.json | grep -ciE '^  - '"),
+             make_bash_turn(2, "coyomap audit map.json --json"))
     a = P.assert_26_gate_output_not_reduced_to_a_count(turns)
     assert (a.observed, a.of) == (1, 2)
 
@@ -1995,7 +1995,7 @@ def test_26_flags_a_gate_read_as_a_bare_count():
 def test_26_ignores_a_gate_redirected_to_a_file():
     """Reading the REPORT FILE is what the method asks for — scoring it as a narrowed read would
     punish the prescribed behaviour."""
-    turns = (make_bash_turn(1, "coyodex validate map.json > v.txt 2>&1"),)
+    turns = (make_bash_turn(1, "coyomap validate map.json > v.txt 2>&1"),)
     a = P.assert_26_gate_output_not_reduced_to_a_count(turns)
     assert a.of == 0
 
@@ -2004,10 +2004,10 @@ def test_27_flags_an_inline_program_that_writes_a_fragment():
     """The clobber script assigned the path on one line and wrote on another, so an adjacency rule
     could not see it."""
     script = ("python3 -c \"\nimport json,pathlib\n"
-              "p=pathlib.Path('.coyodex/build-fragments/extras.json')\n"
+              "p=pathlib.Path('.coyomap/build-fragments/extras.json')\n"
               "m=json.loads(p.read_text())\np.write_text(json.dumps(m))\n\"")
     turns = (make_bash_turn(1, script),
-             make_bash_turn(2, "coyodex fix security-row --map .coyodex/project-map.json "
+             make_bash_turn(2, "coyomap fix security-row --map .coyomap/project-map.json "
                                "--claim 'x' --set-risk y"))
     a = P.assert_27_no_hand_script_mutated_the_model(turns)
     assert (a.observed, a.of) == (1, 2)
@@ -2015,17 +2015,17 @@ def test_27_flags_an_inline_program_that_writes_a_fragment():
 
 def test_27_counts_a_chained_hand_edit_as_hand_written():
     """Chaining the script behind a real command is how the hand edit hid."""
-    turns = (make_bash_turn(1, "coyodex assemble f.json --out .coyodex; python3 -c \""
-                               "import json;json.dump(m, open('.coyodex/project-map.json','w'))\""),)
+    turns = (make_bash_turn(1, "coyomap assemble f.json --out .coyomap; python3 -c \""
+                               "import json;json.dump(m, open('.coyomap/project-map.json','w'))\""),)
     a = P.assert_27_no_hand_script_mutated_the_model(turns)
     assert (a.observed, a.of) == (0, 1)
 
 
 def test_28_prefers_the_record_command_over_a_hand_edit():
-    turns = (make_bash_turn(1, "coyodex record --map .coyodex/build-fragments/extras.json "
+    turns = (make_bash_turn(1, "coyomap record --map .coyomap/build-fragments/extras.json "
                                "--heading 'Audit exceptions' --line 'HP4: why'"),
              make_bash_turn(2, "python3 -c \"import json,pathlib\n"
-                               "p=pathlib.Path('.coyodex/build-fragments/extras.json')\n"
+                               "p=pathlib.Path('.coyomap/build-fragments/extras.json')\n"
                                "p.write_text('Audit exceptions')\""))
     a = P.assert_28_extras_written_with_record(turns)
     assert (a.observed, a.of) == (1, 2)
@@ -2033,25 +2033,25 @@ def test_28_prefers_the_record_command_over_a_hand_edit():
 
 def test_29_flags_reading_the_archived_map_but_not_archiving_it():
     archive_read = P.Turn(index=2, role="assistant", tool_calls=(P.ToolCall(
-        name="Read", input={"file_path": ".coyodex/dev-rebuilds/0016/project-map.json"},
+        name="Read", input={"file_path": ".coyomap/dev-rebuilds/0016/project-map.json"},
         id="r"),))
-    turns = (make_bash_turn(1, "coyodex-eval archive . "), archive_read,
-             make_bash_turn(3, "coyodex assemble f.json --out .coyodex"))
+    turns = (make_bash_turn(1, "coyomap-eval archive . "), archive_read,
+             make_bash_turn(3, "coyomap assemble f.json --out .coyomap"))
     a = P.assert_29_previous_map_not_read_during_the_build(turns)
     assert (a.observed, a.of) == (0, 1)
-    clean = (make_bash_turn(1, "coyodex-eval archive ."),
-             make_bash_turn(2, "coyodex assemble f.json --out .coyodex"))
+    clean = (make_bash_turn(1, "coyomap-eval archive ."),
+             make_bash_turn(2, "coyomap assemble f.json --out .coyomap"))
     b = P.assert_29_previous_map_not_read_during_the_build(clean)
     assert (b.observed, b.of) == (1, 1)
 
 
 def test_30_flags_a_record_written_before_the_drift_fix():
-    early = (make_bash_turn(1, "coyodex grounding write --worklist w.json --verdicts v.json"),
-             make_bash_turn(2, "coyodex fix apply-drift --map m.json --verdicts v.json"))
+    early = (make_bash_turn(1, "coyomap grounding write --worklist w.json --verdicts v.json"),
+             make_bash_turn(2, "coyomap fix apply-drift --map m.json --verdicts v.json"))
     a = P.assert_30_grounding_write_follows_the_drift_fix(early)
     assert (a.observed, a.of) == (0, 1)
-    ordered = (make_bash_turn(1, "coyodex fix apply-drift --map m.json --verdicts v.json"),
-               make_bash_turn(2, "coyodex grounding write --worklist w.json --verdicts v.json"))
+    ordered = (make_bash_turn(1, "coyomap fix apply-drift --map m.json --verdicts v.json"),
+               make_bash_turn(2, "coyomap grounding write --worklist w.json --verdicts v.json"))
     b = P.assert_30_grounding_write_follows_the_drift_fix(ordered)
     assert (b.observed, b.of) == (1, 1)
 
@@ -2086,18 +2086,18 @@ def test_26_keeps_the_pipeline_with_its_gate():
     """Splitting on `|` put the gate in one segment and the `| grep -c` that reads it in another,
     so the finding vanished; scanning the whole blob instead let an unrelated `wc -l` two lines
     away convict a full read."""
-    honest = (make_bash_turn(1, "coyodex validate map.json --check-sources\n"
-                                "ls .coyodex/build-fragments/*.json | wc -l"),)
+    honest = (make_bash_turn(1, "coyomap validate map.json --check-sources\n"
+                                "ls .coyomap/build-fragments/*.json | wc -l"),)
     assert P.assert_26_gate_output_not_reduced_to_a_count(honest).score == 1.0
-    guilty = (make_bash_turn(1, "coyodex validate map.json | grep -c '^  - '\n"
+    guilty = (make_bash_turn(1, "coyomap validate map.json | grep -c '^  - '\n"
                                 "echo done > /tmp/marker.txt"),)
     assert P.assert_26_gate_output_not_reduced_to_a_count(guilty).score == 0.0
 
 
 def test_26_does_not_call_an_ordinary_grep_a_count():
-    turns = (make_bash_turn(1, "coyodex validate map.json | grep 'cross-cutting'"),
-             make_bash_turn(2, "coyodex validate map.json | grep -E 'not-connected'"),
-             make_bash_turn(3, "coyodex validate map.json | grep --color=always 'runs-in'"))
+    turns = (make_bash_turn(1, "coyomap validate map.json | grep 'cross-cutting'"),
+             make_bash_turn(2, "coyomap validate map.json | grep -E 'not-connected'"),
+             make_bash_turn(3, "coyomap validate map.json | grep --color=always 'runs-in'"))
     a = P.assert_26_gate_output_not_reduced_to_a_count(turns)
     assert (a.observed, a.of) == (3, 3)
 
@@ -2107,11 +2107,11 @@ def test_27_treats_authoring_a_fragment_differently_from_rewriting_one():
     the lead writes behavioral.json by hand and that IS the method — so only an ad-hoc program that
     loads, mutates and writes one back is a finding."""
     authoring = P.Turn(index=1, role="assistant", tool_calls=(P.ToolCall(
-        name="Write", input={"file_path": ".coyodex/build-fragments/behavioral.json",
+        name="Write", input={"file_path": ".coyomap/build-fragments/behavioral.json",
                              "content": "{}"}, id="w"),))
     assert P.assert_27_no_hand_script_mutated_the_model((authoring,)).of == 0
     hand_map = P.Turn(index=1, role="assistant", tool_calls=(P.ToolCall(
-        name="Write", input={"file_path": ".coyodex/project-map.json", "content": "{}"}, id="w"),))
+        name="Write", input={"file_path": ".coyomap/project-map.json", "content": "{}"}, id="w"),))
     assert P.assert_27_no_hand_script_mutated_the_model((hand_map,)).score == 0.0
 
 
@@ -2120,15 +2120,15 @@ def test_27_reads_the_raw_input_not_its_json_escaping():
     so a pattern spanning lines never matched, and the detector missed the very script that
     prompted it (path bound on one line, written on the next)."""
     script = ("python3 - <<'PY'\nimport json,pathlib\n"
-              "p = pathlib.Path('.coyodex/build-fragments/extras.json')\n"
+              "p = pathlib.Path('.coyomap/build-fragments/extras.json')\n"
               "m = json.loads(p.read_text())\np.write_text(json.dumps(m))\nPY")
     a = P.assert_27_no_hand_script_mutated_the_model((make_bash_turn(1, script),))
     assert a.score == 0.0
 
 
 def test_27_ignores_a_program_that_only_READS_the_map():
-    honest = ("coyodex assemble f.json --out .coyodex\npython3 - <<'PY'\nimport json,pathlib\n"
-              "m = json.loads(pathlib.Path('.coyodex/project-map.json').read_text())\n"
+    honest = ("coyomap assemble f.json --out .coyomap\npython3 - <<'PY'\nimport json,pathlib\n"
+              "m = json.loads(pathlib.Path('.coyomap/project-map.json').read_text())\n"
               "pathlib.Path('/tmp/legend.txt').write_text(str(len(m)))\nPY")
     a = P.assert_27_no_hand_script_mutated_the_model((make_bash_turn(1, honest),))
     assert (a.observed, a.of) == (1, 1)
@@ -2136,28 +2136,28 @@ def test_27_ignores_a_program_that_only_READS_the_map():
 
 def test_29_sees_a_read_inside_a_program_body_and_not_a_mkdir():
     real = ("python -c \"\nimport json\n"
-            "m=json.load(open('.coyodex/dev-rebuilds/0016/project-map.json'))\nprint(m['goal'])\n\"")
-    turns = (make_bash_turn(1, real), make_bash_turn(2, "coyodex assemble f.json --out .coyodex"))
+            "m=json.load(open('.coyomap/dev-rebuilds/0016/project-map.json'))\nprint(m['goal'])\n\"")
+    turns = (make_bash_turn(1, real), make_bash_turn(2, "coyomap assemble f.json --out .coyomap"))
     assert P.assert_29_previous_map_not_read_during_the_build(turns).score == 0.0
     honest = (make_bash_turn(1, ".venv/bin/python -m pytest -q\n"
-                                "mkdir -p .coyodex/dev-rebuilds/0017"),
-              make_bash_turn(2, "coyodex assemble f.json --out .coyodex"))
+                                "mkdir -p .coyomap/dev-rebuilds/0017"),
+              make_bash_turn(2, "coyomap assemble f.json --out .coyomap"))
     assert P.assert_29_previous_map_not_read_during_the_build(honest).score == 1.0
 
 
 def test_30_accepts_the_prescribed_order_run_as_one_block():
     """The sequence method.md prescribes is most naturally pasted as one command. With turn index
     alone both markers landed on the same turn and a build following the rule scored 0."""
-    block = ("coyodex fix apply-drift --map m.json --verdicts v.json --to-reconcile r.json\n"
-             "coyodex assemble f.json --out .coyodex --reconcile r.json\n"
-             "coyodex grounding write --worklist w.json --verdicts v.json --out g.json")
+    block = ("coyomap fix apply-drift --map m.json --verdicts v.json --to-reconcile r.json\n"
+             "coyomap assemble f.json --out .coyomap --reconcile r.json\n"
+             "coyomap grounding write --worklist w.json --verdicts v.json --out g.json")
     assert P.assert_30_grounding_write_follows_the_drift_fix((make_bash_turn(1, block),)).score == 1.0
 
 
 def test_30_does_not_count_grounding_report_as_a_write():
-    turns = (make_bash_turn(1, "coyodex grounding write --worklist w.json --verdicts v.json"),
-             make_bash_turn(2, "coyodex fix apply-drift --map m.json --verdicts v.json"),
-             make_bash_turn(3, "coyodex grounding report --worklist w.json --verdicts v.json"))
+    turns = (make_bash_turn(1, "coyomap grounding write --worklist w.json --verdicts v.json"),
+             make_bash_turn(2, "coyomap fix apply-drift --map m.json --verdicts v.json"),
+             make_bash_turn(3, "coyomap grounding report --worklist w.json --verdicts v.json"))
     assert P.assert_30_grounding_write_follows_the_drift_fix(turns).score == 0.0
 
 
@@ -2177,7 +2177,7 @@ def test_31_scores_the_harvest_not_the_first_errand():
 # proposed inverting the tool's default to fix a durability problem the build did not have.
 
 def test_25_credits_apply_drift_which_records_in_its_own_wording():
-    turns = (make_turn(1, make_bash("coyodex fix apply-drift --map m.json --verdicts v.json "
+    turns = (make_turn(1, make_bash("coyomap fix apply-drift --map m.json --verdicts v.json "
                                     "--to-reconcile r.json", uid="a"),
                        results=(("a", "apply-drift: recorded 14 new and 0 updated anchor "
                                       "correction(s) in r.json.\n"),)),)
@@ -2186,7 +2186,7 @@ def test_25_credits_apply_drift_which_records_in_its_own_wording():
 
 
 def test_25_credits_drop_edge_which_records_one_drop_and_names_no_count():
-    turns = (make_turn(1, make_bash("coyodex fix drop-edge --map m.json C1 reads E4 "
+    turns = (make_turn(1, make_bash("coyomap fix drop-edge --map m.json C1 reads E4 "
                                     "--to-reconcile r.json", uid="a"),
                        results=(("a", "drop-edge: recorded the drop of 'C1 reads E4' in r.json — "
                                       "the MAP was not edited.\n"),)),)
@@ -2196,15 +2196,15 @@ def test_25_credits_drop_edge_which_records_one_drop_and_names_no_count():
 
 def test_25_credits_a_build_that_recorded_with_all_three_verbs():
     """The exact shape of the argus 2026-08-13 build, which scored 1/3 before this was fixed."""
-    turns = (make_turn(1, make_bash("coyodex fix apply-drift --map m.json --verdicts v.json "
+    turns = (make_turn(1, make_bash("coyomap fix apply-drift --map m.json --verdicts v.json "
                                     "--to-reconcile r.json", uid="a"),
                        results=(("a", "apply-drift: recorded 8 new and 0 updated anchor "
                                       "correction(s) in r.json.\n"),)),
-             make_turn(3, make_bash("coyodex fix dedup-edge --map m.json --accept-suggested "
+             make_turn(3, make_bash("coyomap fix dedup-edge --map m.json --accept-suggested "
                                     "--to-reconcile r.json", uid="b"),
                        results=(("b", "dedup-edge: recorded 28 new and updated 0 keep_edges "
                                       "directive(s) in r.json (28 total).\n"),)),
-             make_turn(5, make_bash("coyodex fix drop-edge --map m.json C1 reads E24 "
+             make_turn(5, make_bash("coyomap fix drop-edge --map m.json C1 reads E24 "
                                     "--to-reconcile r.json", uid="c"),
                        results=(("c", "drop-edge: recorded the drop of 'C1 reads E24' in r.json.\n"),)))
     a = P.assert_25_dedup_to_reconcile_recorded_something(turns)
@@ -2212,7 +2212,7 @@ def test_25_credits_a_build_that_recorded_with_all_three_verbs():
 
 
 def test_25_still_flags_a_verb_that_asked_to_record_and_said_nothing():
-    turns = (make_turn(1, make_bash("coyodex fix apply-drift --map m.json --verdicts v.json "
+    turns = (make_turn(1, make_bash("coyomap fix apply-drift --map m.json --verdicts v.json "
                                     "--to-reconcile r.json", uid="a"),
                        results=(("a", "apply-drift: rewrote nothing.\n"),)),)
     a = P.assert_25_dedup_to_reconcile_recorded_something(turns)
@@ -2220,7 +2220,7 @@ def test_25_still_flags_a_verb_that_asked_to_record_and_said_nothing():
 
 
 def test_25_does_not_credit_a_zero_count_recording_line():
-    turns = (make_turn(1, make_bash("coyodex fix apply-drift --map m.json --verdicts v.json "
+    turns = (make_turn(1, make_bash("coyomap fix apply-drift --map m.json --verdicts v.json "
                                     "--to-reconcile r.json", uid="a"),
                        results=(("a", "apply-drift: recorded 0 new and 0 updated anchor "
                                       "correction(s) in r.json.\n"),)),)
@@ -2233,7 +2233,7 @@ def test_every_fix_verb_that_accepts_to_reconcile_has_a_recorded_pattern():
     `_RECORDED_PATTERNS` lands in the denominator and can never score."""
     import ast
 
-    from coyodex import fix as fix_mod
+    from coyomap import fix as fix_mod
 
     src = Path(fix_mod.__file__ or "").read_text(encoding="utf-8")
     # Each sub-verb is a top-level function whose body mentions the flag string.
@@ -2275,37 +2275,37 @@ def test_34_does_not_accuse_ordinary_string_building():
 
 
 def test_34_is_na_when_no_command_splits_a_literal():
-    turns = (make_turn(1, make_bash("coyodex validate .coyodex/project-map.json")),)
+    turns = (make_turn(1, make_bash("coyomap validate .coyomap/project-map.json")),)
     assert P.assert_34_no_guard_evaded_by_splitting_a_literal(turns).of == 0
 
 
 def test_35_flags_the_cd_that_leaked_into_a_relative_map_path():
-    """The exact live command: the `cd` persisted and the trailing script read coyodex's own map."""
+    """The exact live command: the `cd` persisted and the trailing script read coyomap's own map."""
     turns = (make_turn(1, make_bash(
-        "cd /Users/x/Projects/coyodex && .venv/bin/coyodex validate /Users/x/Projects/argus/"
-        ".coyodex/project-map.json ; python3 -c \"import json; "
-        "m=json.load(open('.coyodex/project-map.json')); print(len(m['entities']))\"")),)
+        "cd /Users/x/Projects/coyomap && .venv/bin/coyomap validate /Users/x/Projects/argus/"
+        ".coyomap/project-map.json ; python3 -c \"import json; "
+        "m=json.load(open('.coyomap/project-map.json')); print(len(m['entities']))\"")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (0, 1), a
 
 
 def test_35_is_clean_when_the_trailing_path_is_absolute():
     turns = (make_turn(1, make_bash(
-        "cd /Users/x/Projects/coyodex && .venv/bin/coyodex validate /abs/.coyodex/project-map.json "
-        "; python3 -c \"import json; json.load(open('/abs/.coyodex/project-map.json'))\"")),)
+        "cd /Users/x/Projects/coyomap && .venv/bin/coyomap validate /abs/.coyomap/project-map.json "
+        "; python3 -c \"import json; json.load(open('/abs/.coyomap/project-map.json'))\"")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (1, 1), a
 
 
 def test_35_ignores_a_relative_path_BEFORE_the_cd():
     turns = (make_turn(1, make_bash(
-        "cat .coyodex/provenance.json && cd /Users/x/Projects/coyodex && .venv/bin/coyodex --version")),)
+        "cat .coyomap/provenance.json && cd /Users/x/Projects/coyomap && .venv/bin/coyomap --version")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (1, 1), a
 
 
 def test_35_is_na_for_a_command_that_never_enters_the_clone():
-    turns = (make_turn(1, make_bash("python3 -c \"import json; json.load(open('.coyodex/x.json'))\"")),)
+    turns = (make_turn(1, make_bash("python3 -c \"import json; json.load(open('.coyomap/x.json'))\"")),)
     assert P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns).of == 0
 
 
@@ -2315,10 +2315,10 @@ def test_35_is_na_for_a_command_that_never_enters_the_clone():
 # path several calls later — while this assertion returned 9 of 9 on that very build.
 
 def test_35_follows_the_clone_folder_ACROSS_bash_calls():
-    turns = (make_turn(1, make_bash("cd /Users/x/Projects/coyodex")),
+    turns = (make_turn(1, make_bash("cd /Users/x/Projects/coyomap")),
              make_turn(2, make_bash("git log --oneline -3")),
              make_turn(3, make_bash(
-                 "python3 -c \"import json; json.load(open('.coyodex/project-map.json'))\"")))
+                 "python3 -c \"import json; json.load(open('.coyomap/project-map.json'))\"")))
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     # 2 scored spans, not 3: the bare `cd` call has nothing after it to score.
     assert (a.observed, a.of) == (1, 2), a
@@ -2326,17 +2326,17 @@ def test_35_follows_the_clone_folder_ACROSS_bash_calls():
 
 
 def test_35_stops_following_once_a_later_call_cds_elsewhere():
-    turns = (make_turn(1, make_bash("cd /Users/x/Projects/coyodex")),
+    turns = (make_turn(1, make_bash("cd /Users/x/Projects/coyomap")),
              make_turn(2, make_bash("cd /Users/x/Projects/argus")),
              make_turn(3, make_bash(
-                 "python3 -c \"import json; json.load(open('.coyodex/project-map.json'))\"")))
+                 "python3 -c \"import json; json.load(open('.coyomap/project-map.json'))\"")))
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert a.of == 0, a
 
 
 def test_35_scores_nothing_when_the_session_never_enters_the_clone():
     turns = (make_turn(1, make_bash("cd /Users/x/Projects/argus")),
-             make_turn(2, make_bash("cat .coyodex/provenance.json")))
+             make_turn(2, make_bash("cat .coyomap/provenance.json")))
     assert P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns).of == 0
 
 
@@ -2372,25 +2372,25 @@ def test_34_does_not_flag_a_split_that_shares_nothing_with_the_refusal():
     assert (a.observed, a.of) == (1, 1), a
 
 
-def test_35_is_not_fooled_by_a_coyodex_path_inside_a_printed_string():
+def test_35_is_not_fooled_by_a_coyomap_path_inside_a_printed_string():
     turns = (make_turn(1, make_bash(
-        'cd /Users/x/coyodex && out=/abs/target/.coyodex/verify && '
-        'print(f"wrote -> .coyodex/verify/claims.txt")')),)
+        'cd /Users/x/coyomap && out=/abs/target/.coyomap/verify && '
+        'print(f"wrote -> .coyomap/verify/claims.txt")')),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (1, 1), a
 
 
 def test_35_ignores_a_git_pathspec_which_resolves_against_dash_C():
     turns = (make_turn(1, make_bash(
-        "cd /Users/x/coyodex && git -C /abs/target diff -- .coyodex/project-map.json")),)
+        "cd /Users/x/coyomap && git -C /abs/target diff -- .coyomap/project-map.json")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (1, 1), a
 
 
 def test_35_resets_at_a_later_cd_that_re_anchors_the_shell():
     turns = (make_turn(1, make_bash(
-        "cd /Users/x/coyodex\n.venv/bin/coyodex --version\ncd /Users/x/target\n"
-        "$CX finalize .coyodex/project-map.json")),)
+        "cd /Users/x/coyomap\n.venv/bin/coyomap --version\ncd /Users/x/target\n"
+        "$CX finalize .coyomap/project-map.json")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (1, 1), a
 
@@ -2399,14 +2399,14 @@ def test_35_catches_a_newline_terminated_cd_which_the_first_cut_missed():
     """Requiring `&&`/`;`/end-of-string missed 73 commands corpus-wide — a multi-line Bash block
     separates by newline."""
     turns = (make_turn(1, make_bash(
-        "cd /Users/x/coyodex\npython3 -c \"import json; json.load(open('.coyodex/project-map.json'))\"")),)
+        "cd /Users/x/coyomap\npython3 -c \"import json; json.load(open('.coyomap/project-map.json'))\"")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (0, 1), a
 
 
 def test_35_catches_pushd_too():
     turns = (make_turn(1, make_bash(
-        "pushd /Users/x/coyodex && cat .coyodex/project-map.json")),)
+        "pushd /Users/x/coyomap && cat .coyomap/project-map.json")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (0, 1), a
 
@@ -2416,17 +2416,17 @@ def test_35_still_sees_a_relative_path_inside_an_interpreter_heredoc():
     detector miss a live case — a build cd'd into the clone and a python heredoc then read a
     relative fragment path."""
     turns = (make_turn(1, make_bash(
-        "cd /Users/x/coyodex && .venv/bin/coyodex fix dedup-edge --map /abs/.coyodex/project-map.json\n"
+        "cd /Users/x/coyomap && .venv/bin/coyomap fix dedup-edge --map /abs/.coyomap/project-map.json\n"
         "python3 - <<'PY'\nimport json\n"
-        "d = json.load(open('.coyodex/build-fragments/g2.json'))\nPY\n")),)
+        "d = json.load(open('.coyomap/build-fragments/g2.json'))\nPY\n")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (0, 1), a
 
 
 def test_35_still_ignores_a_heredoc_redirected_into_a_documentation_file():
     turns = (make_turn(1, make_bash(
-        "cd /Users/x/coyodex && cat > /abs/scratch/contract.md <<'MD'\n"
-        "Read the map at .coyodex/project-map.json before you start.\nMD\n")),)
+        "cd /Users/x/coyomap && cat > /abs/scratch/contract.md <<'MD'\n"
+        "Read the map at .coyomap/project-map.json before you start.\nMD\n")),)
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     assert (a.observed, a.of) == (1, 1), a
 
@@ -2484,9 +2484,9 @@ def test_to_turn_bounds_the_scorecard_to_the_build():
     import tempfile
     from pathlib import Path as _Path
     records = []
-    for i, cmd in enumerate(["coyodex preindex . --report",
-                             "coyodex assemble f.json --out .coyodex",
-                             "coyodex anchor-drift --map m.json"]):
+    for i, cmd in enumerate(["coyomap preindex . --report",
+                             "coyomap assemble f.json --out .coyomap",
+                             "coyomap anchor-drift --map m.json"]):
         records.append(json.dumps({
             "type": "assistant",
             "message": {"id": f"m{i}", "content": [
@@ -2516,9 +2516,9 @@ def test_37_sees_a_filter_applied_to_the_file_the_gate_wrote():
     def call(cmd):
         return {"type": "assistant", "message": {"id": "m", "content": [
             {"type": "tool_use", "id": "t", "name": "Bash", "input": {"command": cmd}}]}}
-    narrow = ('coyodex validate m.json > v.txt 2>&1; '
+    narrow = ('coyomap validate m.json > v.txt 2>&1; '
               'grep -E "^  - " v.txt | grep -vE "Balance:|unclaimed" | head -40')
-    wider = ('coyodex validate m.json > v.txt 2>&1; '
+    wider = ('coyomap validate m.json > v.txt 2>&1; '
              'grep -E "^  - " v.txt | grep -vE "Balance:|unclaimed|bucket|entry-point kind" | head -25')
     # `read_turns` reads a file, so the records go through one. There used to be a
     # `hasattr(P, "read_turns_from_records")` branch in front of this: the module has never had that
@@ -2547,7 +2547,7 @@ def test_31_follows_a_pointer_to_the_brief_on_disk():
         brief.write_text("Own C1-C20. Your slice serves UC3, UC7 and CAP2.\n", encoding="utf-8")
         pointer = f"Read {brief} completely and follow it end to end. Your AGENT_ID is h-domain."
         turns = (make_turn(0, make_agent(prompt=pointer), make_agent(prompt=pointer)),
-                 make_turn(1, make_bash("coyodex assemble f.json")))
+                 make_turn(1, make_bash("coyomap assemble f.json")))
         a = score(*turns)[31]
         assert (a.observed, a.of, a.score) == (1, 1, 1.0)
 
@@ -2556,7 +2556,7 @@ def test_31_says_cannot_tell_when_the_pointed_at_brief_is_gone():
     """A build scratchpad is temporary. A retro run days later must not read that as a miss."""
     pointer = "Read /nonexistent/scratchpad/prompt-h-domain.md completely and follow it."
     turns = (make_turn(0, make_agent(prompt=pointer), make_agent(prompt=pointer)),
-             make_turn(1, make_bash("coyodex assemble f.json")))
+             make_turn(1, make_bash("coyomap assemble f.json")))
     a = score(*turns)[31]
     assert (a.observed, a.of) == (0, 0) and a.score is None
     assert "files are gone" in (a.note or "")
@@ -2565,7 +2565,7 @@ def test_31_says_cannot_tell_when_the_pointed_at_brief_is_gone():
 def test_31_still_fails_a_brief_that_cites_nothing():
     turns = (make_turn(0, make_agent(prompt="own backend/src/adapters, return components"),
                        make_agent(prompt="own frontend/src, return components")),
-             make_turn(1, make_bash("coyodex assemble f.json")))
+             make_turn(1, make_bash("coyomap assemble f.json")))
     a = score(*turns)[31]
     assert (a.observed, a.of, a.score) == (0, 1, 0.0)
 
@@ -2576,18 +2576,18 @@ def test_31_still_fails_a_brief_that_cites_nothing():
 
 
 def test_38_resolves_a_shell_variable_in_the_redirect_target():
-    turns = (make_bash_turn(1, "CO=/repo/.coyodex\n"
-                               "coyodex audit $CO/project-map.json --json > $CO/verify/w.json"),
-             make_bash_turn(2, "CO=/repo/.coyodex\n"
-                               "coyodex grounding write --worklist $CO/verify/w.json"))
+    turns = (make_bash_turn(1, "CO=/repo/.coyomap\n"
+                               "coyomap audit $CO/project-map.json --json > $CO/verify/w.json"),
+             make_bash_turn(2, "CO=/repo/.coyomap\n"
+                               "coyomap grounding write --worklist $CO/verify/w.json"))
     a = P.score_turns(turns).by_id()[38]
     assert (a.observed, a.of, a.score) == (1, 1, 1.0)
 
 
 def test_38_still_flags_a_json_nobody_opened():
-    turns = (make_bash_turn(1, "CO=/repo/.coyodex\n"
-                               "coyodex audit $CO/project-map.json --json > $CO/verify/w.json"),
-             make_bash_turn(2, "coyodex validate /repo/.coyodex/project-map.json"))
+    turns = (make_bash_turn(1, "CO=/repo/.coyomap\n"
+                               "coyomap audit $CO/project-map.json --json > $CO/verify/w.json"),
+             make_bash_turn(2, "coyomap validate /repo/.coyomap/project-map.json"))
     a = P.score_turns(turns).by_id()[38]
     assert (a.observed, a.of, a.score) == (0, 1, 0.0)
 
@@ -2597,7 +2597,7 @@ def test_38_still_flags_a_json_nobody_opened():
 def test_a_var_bound_path_written_through_open_is_a_hand_write():
     """The fourth write shape, and the one two measured builds actually used.
 
-    `p='.coyodex/build-fragments/extras.json'; json.dump(d, open(p,'w'))` binds the path to a
+    `p='.coyomap/build-fragments/extras.json'; json.dump(d, open(p,'w'))` binds the path to a
     variable and writes through it. The literal-path patterns miss it, and `_VAR_BOUND_WRITE`
     catches only the `Path(...)` + `.write_text()` idiom. Assertion 27 lost 21 rows on one build
     and 6 on the one before it; assertion 28 reported a denominator of 2 about a run that
@@ -2605,13 +2605,13 @@ def test_a_var_bound_path_written_through_open_is_a_hand_write():
     """
     blob = ("python3 - <<'PY'\n"
             "import json\n"
-            "p='.coyodex/build-fragments/extras.json'; d=json.load(open(p))\n"
+            "p='.coyomap/build-fragments/extras.json'; d=json.load(open(p))\n"
             "d['extras'].append({'heading':'Sweep debt','body':'x'})\n"
             "json.dump(d, open(p,'w'), indent=2)\n"
             "PY")
     assert P._python_write(blob, "build-fragments/") is True
     # A read-only script through the same idiom is NOT a write.
-    read_only = ("p='.coyodex/build-fragments/extras.json'\n"
+    read_only = ("p='.coyomap/build-fragments/extras.json'\n"
                  "import json; print(json.load(open(p))['extras'][0]['heading'])")
     assert P._python_write(read_only, "build-fragments/") is False
 
@@ -2628,11 +2628,11 @@ def test_assertion_21_says_when_the_digest_was_filtered_away():
     discarded it, which is the class assertion 37 exists to catch, reported as a clean absence.
     """
     narrowed = P.assert_21_final_assemble_digest_is_clean(_turns_with_assemble(
-        'coyodex assemble f.json --out .coyodex 2>&1 | grep -E "ERROR|Assembled"', "Assembled 3"))
+        'coyomap assemble f.json --out .coyomap 2>&1 | grep -E "ERROR|Assembled"', "Assembled 3"))
     assert narrowed.of == 0 and "NARROWED" in (narrowed.note or ""), narrowed
 
     plain = P.assert_21_final_assemble_digest_is_clean(_turns_with_assemble(
-        "coyodex assemble f.json --out .coyodex", "Assembled 3 fragment(s)"))
+        "coyomap assemble f.json --out .coyomap", "Assembled 3 fragment(s)"))
     assert plain.of == 0 and "NARROWED" not in (plain.note or ""), plain
 
 
@@ -2643,8 +2643,8 @@ def test_assertion_40_counts_only_real_lint_invocations():
     source. Counting that as a narrowed self-check inflated both halves of the tally by one.
     """
     ctx = P.ScoreContext(agent_lint_calls=(
-        ("A1", "coyodex lint-fragment --repo . A1.json"),
-        ("A3", "coyodex lint-fragment --repo . A3.json 2>&1 | head -60"),
+        ("A1", "coyomap lint-fragment --repo . A1.json"),
+        ("A3", "coyomap lint-fragment --repo . A3.json 2>&1 | head -60"),
     ))
     a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
     assert (a.observed, a.of) == (1, 2), a
@@ -2714,7 +2714,7 @@ def test_a_pipe_on_a_backslash_continuation_line_is_seen():
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         calls = _lint_calls_from(
-            "coyodex lint-fragment --repo . \\\n  --ids ids.json f.json | tail -5", Path(td))
+            "coyomap lint-fragment --repo . \\\n  --ids ids.json f.json | tail -5", Path(td))
     assert len(calls) == 1, calls
     ctx = P.ScoreContext(agent_lint_calls=calls)
     a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
@@ -2725,7 +2725,7 @@ def test_a_continued_command_with_no_pipe_still_scores_clean():
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         calls = _lint_calls_from(
-            "coyodex lint-fragment --repo . \\\n  --ids ids.json f.json", Path(td))
+            "coyomap lint-fragment --repo . \\\n  --ids ids.json f.json", Path(td))
     ctx = P.ScoreContext(agent_lint_calls=calls)
     a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
     assert (a.observed, a.of) == (1, 1), a
@@ -2736,7 +2736,7 @@ def test_a_second_command_after_a_newline_is_still_a_separate_command():
     is one clean invocation, not a narrowed one."""
     import tempfile
     with tempfile.TemporaryDirectory() as td:
-        calls = _lint_calls_from("coyodex lint-fragment --repo . f.json\ncat notes.md | head -5",
+        calls = _lint_calls_from("coyomap lint-fragment --repo . f.json\ncat notes.md | head -5",
                                  Path(td))
     ctx = P.ScoreContext(agent_lint_calls=calls)
     a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
@@ -2744,7 +2744,7 @@ def test_a_second_command_after_a_newline_is_still_a_separate_command():
 
 
 # --- ship runs its steps INSIDE itself (retro 2026-09-01, argus row 6) ---------------------------
-# This scorecard reads typed shell text. `coyodex ship` is now the method's prescribed path and runs
+# This scorecard reads typed shell text. `coyomap ship` is now the method's prescribed path and runs
 # ten subcommands in one process, so a compliant build leaves no shell text for the assertions that
 # look for them: 13 and 30 read `n/a` and 38 read 0 of 1, all about work that ran.
 
@@ -2753,10 +2753,10 @@ def test_ship_runs_matches_the_real_build_plan():
     same contract the two reconcile field tables have."""
     import tempfile
     from pathlib import Path
-    from coyodex import ship
+    from coyomap import ship
     with tempfile.TemporaryDirectory() as td:
         repo = Path(td) / "repo"
-        out = repo / ".coyodex"
+        out = repo / ".coyomap"
         (out / "build-fragments").mkdir(parents=True)
         (out / "verify").mkdir(parents=True)
         (out / "build-fragments" / "a.json").write_text("{}")
@@ -2773,7 +2773,7 @@ def test_ship_runs_matches_the_real_build_plan():
 
 
 def test_a_ship_with_a_note_counts_as_writing_the_grounding_record():
-    cmd = "cd /repo && $CX ship /repo --note-file /repo/.coyodex/note.md"
+    cmd = "cd /repo && $CX ship /repo --note-file /repo/.coyomap/note.md"
     assert P._writes_the_grounding_record(cmd)
 
 
@@ -2783,7 +2783,7 @@ def test_a_ship_WITHOUT_a_note_writes_no_record():
 
 
 def test_a_ship_invocation_counts_as_invoking_the_steps_it_runs():
-    cmd = "$CX ship /repo --note-file /repo/.coyodex/note.md"
+    cmd = "$CX ship /repo --note-file /repo/.coyomap/note.md"
     for sub in ("validate", "audit", "finalize", "render", "provenance", "lint-fragment"):
         assert P._invokes(cmd, sub), sub
 
@@ -2813,7 +2813,7 @@ def test_38_sees_a_read_inside_a_python_heredoc_one_statement_later():
     """`_shell_only` deletes interpreter bodies so a NAMED command is not counted as a RUN one.
     That is the wrong rule for "was this file read": the commonest way a build reads a gate's JSON
     is a python heredoc, and stripping the body deletes the read itself."""
-    cmd = ("$CX validate /repo/.coyodex/project-map.json --json > /tmp/v.json\n"
+    cmd = ("$CX validate /repo/.coyomap/project-map.json --json > /tmp/v.json\n"
            "python3 - <<'PY'\n"
            "import json\n"
            "d = json.load(open('/tmp/v.json'))\n"
@@ -2825,7 +2825,7 @@ def test_38_sees_a_read_inside_a_python_heredoc_one_statement_later():
 
 
 def test_38_still_flags_a_json_nobody_opens():
-    cmd = "$CX validate /repo/.coyodex/project-map.json --json > /tmp/v.json"
+    cmd = "$CX validate /repo/.coyomap/project-map.json --json > /tmp/v.json"
     turns = (make_turn(1, make_bash(cmd)),)
     a = P.assert_38_written_json_is_read(turns)
     assert (a.observed, a.of) == (0, 1), a
@@ -2834,7 +2834,7 @@ def test_38_still_flags_a_json_nobody_opens():
 def test_8_credits_an_audit_json_redirected_to_a_file_that_is_read():
     """Redirecting leaves stdout empty, so the claim-row test found nothing and the ideal shape
     scored as absent — the whole assertion read `n/a` for a run that did the right thing."""
-    turns = (make_turn(1, make_bash("$CX audit /repo/.coyodex/project-map.json --json > /tmp/a.json")),
+    turns = (make_turn(1, make_bash("$CX audit /repo/.coyomap/project-map.json --json > /tmp/a.json")),
              make_turn(2, make_bash("python3 -c \"import json; json.load(open('/tmp/a.json'))\"")))
     a = P.assert_8_audit_read_as_json(turns)
     assert (a.observed, a.of) == (1, 1), a
@@ -2843,7 +2843,7 @@ def test_8_credits_an_audit_json_redirected_to_a_file_that_is_read():
 def test_8_does_not_credit_an_audit_json_nobody_opens():
     """A write nobody reads is the defect assertion 38 exists for; crediting it here would score the
     same mistake as a success."""
-    turns = (make_turn(1, make_bash("$CX audit /repo/.coyodex/project-map.json --json > /tmp/a.json")),)
+    turns = (make_turn(1, make_bash("$CX audit /repo/.coyomap/project-map.json --json > /tmp/a.json")),)
     assert P.assert_8_audit_read_as_json(turns).of == 0
 
 
@@ -2853,39 +2853,39 @@ def test_8_does_not_credit_an_audit_json_nobody_opens():
 
 def _cd_case(first: str) -> "tuple[int, int]":
     turns = (make_turn(1, make_bash(first)),
-             make_turn(2, make_bash("coyodex validate .coyodex/project-map.json")))
+             make_turn(2, make_bash("coyomap validate .coyomap/project-map.json")))
     a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
     return a.observed, a.of
 
 
 def test_35_ignores_a_cd_that_only_moves_a_CHILD_shell():
-    assert _cd_case("( cd /Users/x/Projects/coyodex && git log -1 )") == (0, 0)
-    assert _cd_case("bash -c 'cd /Users/x/Projects/coyodex && git status'") == (0, 0)
+    assert _cd_case("( cd /Users/x/Projects/coyomap && git log -1 )") == (0, 0)
+    assert _cd_case("bash -c 'cd /Users/x/Projects/coyomap && git status'") == (0, 0)
 
 
 def test_35_ignores_a_cd_written_inside_a_document_heredoc():
-    assert _cd_case("cat > /tmp/n.md <<'EOF'\ncd ~/Projects/coyodex\nEOF") == (0, 0)
+    assert _cd_case("cat > /tmp/n.md <<'EOF'\ncd ~/Projects/coyomap\nEOF") == (0, 0)
 
 
 def test_35_clears_on_a_bare_cd_and_on_popd():
     """Both leave the clone without naming a target; both used to be invisible."""
-    assert _cd_case("cd /Users/x/Projects/coyodex\ncd") == (0, 0)
-    assert _cd_case("pushd /Users/x/Projects/coyodex\npopd") == (0, 0)
+    assert _cd_case("cd /Users/x/Projects/coyomap\ncd") == (0, 0)
+    assert _cd_case("pushd /Users/x/Projects/coyomap\npopd") == (0, 0)
 
 
-def test_35_needs_a_path_boundary_before_coyodex():
-    """`argus-coyodex` is the MAPPED repo, whose name merely ends in the word."""
-    assert _cd_case("cd /repo/argus-coyodex") == (0, 0)
+def test_35_needs_a_path_boundary_before_coyomap():
+    """`argus-coyomap` is the MAPPED repo, whose name merely ends in the word."""
+    assert _cd_case("cd /repo/argus-coyomap") == (0, 0)
 
 
 def test_35_still_catches_the_real_thing_after_all_that():
-    assert _cd_case("cd /Users/x/Projects/coyodex") == (0, 1)
+    assert _cd_case("cd /Users/x/Projects/coyomap") == (0, 1)
 
 
 def test_38_does_not_count_a_filename_named_in_a_DOCUMENT_heredoc():
     """`cat > report.md <<'EOF' … v.json … EOF` is a markdown file being WRITTEN that happens to
     name the path. Counting it credits the run for the very thing this assertion measures."""
-    cmd = ("$CX validate /repo/.coyodex/project-map.json --json > /tmp/v.json\n"
+    cmd = ("$CX validate /repo/.coyomap/project-map.json --json > /tmp/v.json\n"
            "cat > /tmp/report.md <<'EOF'\n"
            "the gate output is in /tmp/v.json\n"
            "EOF")
@@ -2921,7 +2921,7 @@ def test_an_unknown_outcome_still_credits_the_whole_plan():
 
 def test_12_reads_the_verdict_in_the_gate_blocks_spelling():
     gate = "Gates: finalize ADVISORIES — 0 blocking, 16 advisory (map sha256 571862b64417…)."
-    turns = (make_turn(0, make_bash('coyodex ship . --note-file n.txt > ship.txt; cat gate-block.md',
+    turns = (make_turn(0, make_bash('coyomap ship . --note-file n.txt > ship.txt; cat gate-block.md',
                                     uid="s"), results=(("s", gate),)),
              make_turn(1, make_bash('git commit -m "Gates: finalize clean — 0 blocking, 0 advisory"')))
     a = P.score_turns(turns).by_id()[12]
@@ -2931,7 +2931,7 @@ def test_12_reads_the_verdict_in_the_gate_blocks_spelling():
 
 
 def test_14_counts_a_ship_run_as_the_recorded_delta():
-    turns = (make_turn(0, make_bash("coyodex ship . --note-file n.txt --partial", uid="s"),
+    turns = (make_turn(0, make_bash("coyomap ship . --note-file n.txt --partial", uid="s"),
                        results=(("s", "wrote g.json: 842 of 1791 claim(s) challenged"),)),
              make_turn(1, make_bash("cat gate-block.md", uid="g"),
                        results=(("g", "audit: 0 blocking — 833 L2 claims on the grounding worklist"),)))
@@ -2941,15 +2941,15 @@ def test_14_counts_a_ship_run_as_the_recorded_delta():
 
 def test_40_ignores_a_help_run_and_a_grep_whose_pattern_carries_an_escaped_pipe():
     """Its only two hits on the 2026-09-08 build were `lint-fragment --help 2>&1 | head -40` and a
-    `grep -n "foo\\|coyodex lint-fragment" … | head`; the true reading was 89 of 89, not 89 of 91."""
+    `grep -n "foo\\|coyomap lint-fragment" … | head`; the true reading was 89 of 89, not 89 of 91."""
     import tempfile
     with tempfile.TemporaryDirectory() as td:
-        assert _lint_calls_from("coyodex lint-fragment --help 2>&1 | head -40", Path(td)) == ()
+        assert _lint_calls_from("coyomap lint-fragment --help 2>&1 | head -40", Path(td)) == ()
     with tempfile.TemporaryDirectory() as td:
         assert _lint_calls_from(
-            'grep -n "handlePlanLimitError(\\|coyodex lint-fragment" src/*.py | head', Path(td)) == ()
+            'grep -n "handlePlanLimitError(\\|coyomap lint-fragment" src/*.py | head', Path(td)) == ()
     with tempfile.TemporaryDirectory() as td:
-        assert len(_lint_calls_from("coyodex lint-fragment f.json | head -5", Path(td))) == 1
+        assert len(_lint_calls_from("coyomap lint-fragment f.json | head -5", Path(td))) == 1
 
 
 def test_27_follows_a_fragment_directory_bound_to_a_variable_two_hops_from_the_write():
@@ -2958,18 +2958,18 @@ def test_27_follows_a_fragment_directory_bound_to_a_variable_two_hops_from_the_w
     `build-fragments/` never appears, so the detector saw 2 of 16. A scratch write after a read of
     the map, followed by the real verbs, is still not a mutation."""
     mutation = ("python3 - <<'PY'\nimport json\n"
-                "FD=\"/repo/.coyodex/build-fragments\"\n"
+                "FD=\"/repo/.coyomap/build-fragments\"\n"
                 "p=f\"{FD}/h-ops.json\"; d=json.load(open(p))\n"
                 "d[\"components\"]=[c for c in d[\"components\"] if c[\"id\"]!=\"C90\"]\n"
                 "json.dump(d,open(p,\"w\"),indent=2)\nPY")
     assert P._hand_written_artifact(make_bash(mutation)) == "build-fragments/"
     scratch = ("python3 - <<'PY'\nimport json\nSP=\"/tmp/scratch\"\n"
-               "m=json.load(open(\"/repo/.coyodex/project-map.json\"))\n"
+               "m=json.load(open(\"/repo/.coyomap/project-map.json\"))\n"
                "r=json.load(open(f\"{SP}/rules.json\"))\n"
                "json.dump(r,open(f\"{SP}/rules.json\",\"w\"),indent=2)\nPY\n"
-               "$CX assemble .coyodex/build-fragments/*.json --out .coyodex")
+               "$CX assemble .coyomap/build-fragments/*.json --out .coyomap")
     assert P._hand_written_artifact(make_bash(scratch)) is None
-    glob_bound = ("python3 - <<'PY'\nimport glob, json\nFD=\"/repo/.coyodex/build-fragments\"\n"
+    glob_bound = ("python3 - <<'PY'\nimport glob, json\nFD=\"/repo/.coyomap/build-fragments\"\n"
                   "for p in glob.glob(f\"{FD}/h-*.json\"):\n    d=json.load(open(p))\n"
                   "    open(p,\"w\").write(json.dumps(d))\nPY")
     assert P._hand_written_artifact(make_bash(glob_bound)) == "build-fragments/"
@@ -2981,25 +2981,25 @@ def test_12_takes_the_gate_block_spelling_only_from_a_read_of_the_live_gate_bloc
     build's block, a grep of a file carrying the spelling. Only a read of the live file counts."""
     clean_block = "Gates: finalize CLEAN — 0 blocking, 0 advisory (map sha256 abc…)."
     commit = make_turn(2, make_bash('git commit -m "Gates: finalize clean — 0 blocking, 0 advisory"'))
-    real = make_turn(0, make_bash("coyodex finalize m.json", uid="f"),
+    real = make_turn(0, make_bash("coyomap finalize m.json", uid="f"),
                      results=(("f", "finalize: ADVISORIES — 0 blocking, 3 advisory"),))
-    for laundering in ('echo "x" # gate-block', "tee .coyodex/verify/gate-block.md <<EOF",
-                       "cat .coyodex/dev-rebuilds/0025/verify/gate-block.md",
+    for laundering in ('echo "x" # gate-block', "tee .coyomap/verify/gate-block.md <<EOF",
+                       "cat .coyomap/dev-rebuilds/0025/verify/gate-block.md",
                        'grep -r "Gates:" notes/gate-block.txt'):
         turns = (real, make_turn(1, make_bash(laundering, uid="l"), results=(("l", clean_block),)), commit)
         a = P.score_turns(turns).by_id()[12]
         assert (a.observed, a.of) == (0, 1), (laundering, a)
-    turns = (real, make_turn(1, make_bash("cat .coyodex/verify/gate-block.md", uid="c"),
+    turns = (real, make_turn(1, make_bash("cat .coyomap/verify/gate-block.md", uid="c"),
                              results=(("c", clean_block),)), commit)
     assert P.score_turns(turns).by_id()[12].observed == 1
 
 
 def test_14_a_ship_run_read_back_in_a_later_call_still_records_the_delta():
-    turns = (make_turn(0, make_bash("coyodex ship . --note-file n.txt > ship.txt", uid="s"),
+    turns = (make_turn(0, make_bash("coyomap ship . --note-file n.txt > ship.txt", uid="s"),
                        results=(("s", ""),)),
              make_turn(1, make_bash('grep -E "SHIP|challenged" ship.txt', uid="g"),
                        results=(("g", "wrote g.json: 842 of 1791 claim(s) challenged\nSHIP COMPLETE — quote"),)),
-             make_turn(2, make_bash("cat .coyodex/verify/gate-block.md", uid="b"),
+             make_turn(2, make_bash("cat .coyomap/verify/gate-block.md", uid="b"),
                        results=(("b", "audit: 0 blocking — 833 L2 claims on the grounding worklist"),)))
     a = P.score_turns(turns).by_id()[14]
     assert (a.observed, a.of) == (1, 1) and "delta recorded" in a.note, a
@@ -3010,14 +3010,14 @@ def test_27_binds_from_the_right_hand_side_only_and_never_from_an_f_string_prefi
     it bound `out` from a `FD=…` on the same line past a `;`, and took the `f` of `f"…"` as a
     name. And it missed the `for f in glob(…build-fragments…)` shape, which one real turn used."""
     scratch = ("python3 - <<'PY'\nimport json\n"
-               "FD=\"/repo/.coyodex/build-fragments\"; SP=\"/tmp/s\"; out=f\"{SP}/slots.json\"\n"
+               "FD=\"/repo/.coyomap/build-fragments\"; SP=\"/tmp/s\"; out=f\"{SP}/slots.json\"\n"
                "for f in [\"a\", \"b\"]:\n    open(out,\"w\").write(f\"{f}\")\nPY")
     assert P._hand_written_artifact(make_bash(scratch)) is None
     glob_loop = ("python3 - <<'PY'\nimport glob, json\n"
-                 "for f in glob.glob('/repo/.coyodex/build-fragments/r*.json'):\n"
+                 "for f in glob.glob('/repo/.coyomap/build-fragments/r*.json'):\n"
                  "    d=json.load(open(f))\n    json.dump(d,open(f,'w'))\nPY")
     assert P._hand_written_artifact(make_bash(glob_loop)) == "build-fragments/"
-    path_ctor = ("python3 - <<'PY'\nfrom pathlib import Path\nFD=\"/repo/.coyodex/build-fragments\"\n"
+    path_ctor = ("python3 - <<'PY'\nfrom pathlib import Path\nFD=\"/repo/.coyomap/build-fragments\"\n"
                  "Path(FD, \"x.json\").write_text(\"{}\")\nPY")
     assert P._hand_written_artifact(make_bash(path_ctor)) == "build-fragments/"
 
@@ -3025,4 +3025,4 @@ def test_27_binds_from_the_right_hand_side_only_and_never_from_an_f_string_prefi
 def test_40_a_grep_dash_h_after_the_pipe_is_still_a_lint_invocation():
     import tempfile
     with tempfile.TemporaryDirectory() as td:
-        assert len(_lint_calls_from("coyodex lint-fragment f.json 2>&1 | grep -h FAIL", Path(td))) == 1
+        assert len(_lint_calls_from("coyomap lint-fragment f.json 2>&1 | grep -h FAIL", Path(td))) == 1

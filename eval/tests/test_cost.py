@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex-eval cost` — what a build spent.
+"""Tests for `coyomap-eval cost` — what a build spent.
 
 Run either way (needs an editable install: `make install-eval`):
     python3 eval/tests/test_cost.py
@@ -12,8 +12,8 @@ import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 
-from coyodex_eval import cost
-from coyodex_eval.transcript import Usage, read_turns
+from coyomap_eval import cost
+from coyomap_eval.transcript import Usage, read_turns
 
 # The whole report rests on two readings that are easy to get wrong, and both were wrong once:
 #   * usage repeats on every record of one message — summing records inflates output ~8x
@@ -375,7 +375,7 @@ def test_the_refutation_rate_is_divided_by_what_was_actually_challenged(tmp_path
     of 1,385, and the rate the method tells you to read was printed as 0.4% for a true 0.8%."""
     from pathlib import Path
     from dataclasses import asdict
-    from coyodex_eval.cost import read_map
+    from coyomap_eval.cost import read_map
     p = tmp_path / "m.json"
     p.write_text(json.dumps({"title": "t", "goal": "g", "grounding": {
         "claims_total": 1385, "claims_challenged": 743,
@@ -391,7 +391,7 @@ def test_a_map_without_the_challenged_field_falls_back_to_the_total(tmp_path):
     """Maps written before the field existed must still report a rate rather than a divide-by-zero."""
     from pathlib import Path
     from dataclasses import asdict
-    from coyodex_eval.cost import read_map
+    from coyomap_eval.cost import read_map
     p = tmp_path / "m.json"
     p.write_text(json.dumps({"title": "t", "goal": "g", "grounding": {
         "claims_total": 500, "claims_refuted": 5}}), encoding="utf-8")
@@ -407,13 +407,13 @@ def test_a_map_without_the_challenged_field_falls_back_to_the_total(tmp_path):
 
 
 def _turn(index: int, role: str, stamp: str, *, tool_results=()):
-    from coyodex_eval.transcript import Turn as T
+    from coyomap_eval.transcript import Turn as T
     return T(index=index, role=role, timestamp=stamp, tool_results=tool_results)
 
 
 def test_duration_excludes_the_wait_for_a_coordinator_follow_up():
-    from coyodex_eval.cost import Actor
-    from coyodex_eval.transcript import ToolResult
+    from coyomap_eval.cost import Actor
+    from coyomap_eval.transcript import ToolResult
     agent = Actor(name="trace-gateway", role="trace", turns=(
         _turn(0, "assistant", "2026-08-17T09:13:00Z"),
         # an ordinary tool round trip: the user turn CARRIES a result, so it is work, not a block
@@ -429,8 +429,8 @@ def test_duration_excludes_the_wait_for_a_coordinator_follow_up():
 
 
 def test_an_agent_that_was_never_resumed_is_unchanged():
-    from coyodex_eval.cost import Actor
-    from coyodex_eval.transcript import ToolResult
+    from coyomap_eval.cost import Actor
+    from coyomap_eval.transcript import ToolResult
     agent = Actor(name="skeptic-rule-1", role="verify", turns=(
         _turn(0, "assistant", "2026-08-17T09:53:00Z"),
         _turn(1, "user", "2026-08-17T09:56:00Z",

@@ -1,7 +1,7 @@
-"""Tests for `coyodex.anchors` — anchor format, parsing, and the drift comparator (Phase A2 + G)."""
+"""Tests for `coyomap.anchors` — anchor format, parsing, and the drift comparator (Phase A2 + G)."""
 from __future__ import annotations
 
-from coyodex.anchors import (AnchorLoc, DriftResult, anchor_drift, is_anchor, is_file_anchor,
+from coyomap.anchors import (AnchorLoc, DriftResult, anchor_drift, is_anchor, is_file_anchor,
                              parse_anchor)
 
 

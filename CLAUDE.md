@@ -1,8 +1,8 @@
-# coyodex
+# coyomap
 
 ## Design philosophy
 
-What coyodex is FOR. This shapes design decisions about the map and the viewer, and
+What coyomap is FOR. This shapes design decisions about the map and the viewer, and
 it outranks any local argument about a single screen or a single field.
 
 - **Use cases and business rules are the two ways in, and they are PEERS.** Not a
@@ -14,7 +14,7 @@ it outranks any local argument about a single screen or a single field.
 - **The critical pieces are surfaced, not buried.** A reader gets the product's
   functionality AND the edge of its architecture without having to drill down.
 - **Today "critical" means interfaces and records.** That list is NOT settled. What
-  is worth surfacing will change as we use coyodex on real projects, so treat the
+  is worth surfacing will change as we use coyomap on real projects, so treat the
   list as this year's answer rather than a principle.
 - **Everything else is drill-down.** A reader who wants more implementation detail
   goes and gets it.
@@ -37,8 +37,8 @@ the code's names.
 
 **The product**
 
-- **map** — the whole picture coyodex produces for a project: the diagrams, the
-  plain-language text on every box, and the code links. Lives in `.coyodex/`.
+- **map** — the whole picture coyomap produces for a project: the diagrams, the
+  plain-language text on every box, and the code links. Lives in `.coyomap/`.
 - **baseline** — the map as currently accepted, pinned to a commit. What a
   change is compared against.
 - **build** — analyzing a project from scratch and producing a new map. Throws
@@ -140,7 +140,7 @@ the code's names.
   collapsing the flow from burying the product's edge and its saved data, and
   there they are one per person, door or record inside it.
 - **way in** — one address, command or tool an interface is made of. An
-  interface groups many; coyodex's own command line is 32 ways in.
+  interface groups many; coyomap's own command line is 32 ways in.
 - **named / run / loose** — the three ways a way in can be covered by the use
   cases, as the validator's coverage line counts them. **Named**: a use case
   lists the way in as where it starts; authored, never derived. **Run**: a flow
@@ -149,7 +149,7 @@ the code's names.
   through the way in. **Loose**: nobody names it and no step sits on it, but a
   flow touches the component that owns it, so the check counts it as covered on
   a rule alone. A way in that is none of the three is **unclaimed**, and the
-  validator warns about those per component. On 2026-09-10 coyodex's own map
+  validator warns about those per component. On 2026-09-10 coyomap's own map
   read 8 named, 25 run, 62 loose, 2 unclaimed of 97 ways in.
 - **far side** — who or what is on the other side of an interface.
 - **client** — what a person reaches an interface THROUGH: a browser for a web
@@ -188,7 +188,7 @@ the code's names.
   its reason, never by its key. The audit's paid reading agents judge two more things,
   an unknown word and a sentence that says nothing specific, on a smaller set of
   fields.
-- **Coyote Effect** — the situation coyodex exists for: your agent wrote a lot
+- **Coyote Effect** — the situation coyomap exists for: your agent wrote a lot
   of code, it runs, and you have lost track of what is under your feet.
 
 **The viewer's screens** (see the Notion page "feature-driven map spec" for the
@@ -256,16 +256,16 @@ design principles these come from)
   because a feature is linked to a service only when a step of its own flow is
   drawn at that service.
 
-**How coyodex is delivered**
+**How coyomap is delivered**
 
 - **the method** — `method.md` and the files under `method/`: the instructions
   the coding agent follows to build a map. The product's real logic lives here,
   not in code.
-- **the skill** — what `make install` puts into the agent so `/coyodex` works.
+- **the skill** — what `make install` puts into the agent so `/coyomap` works.
 - **the tools** — the small programs the agent calls while building (indexing,
   code sizing, validation).
 
-**Working on coyodex**
+**Working on coyomap**
 
 - **eval** — scoring two maps of the same project to tell whether a change to
   the method made map quality better or worse.

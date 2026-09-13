@@ -1,15 +1,15 @@
 # <Project> — Codebase Analysis
 
-> Built with the **coyodex** method. Behavioral layer first (Goal → Glossary → Roles →
+> Built with the **coyomap** method. Behavioral layer first (Goal → Glossary → Roles →
 > Use cases → Happy Path), then the structural machine (Components → Entry points /
 > Model / Deps → Flows + Edges), joined at **use case ↔ flow**.
 > Every row is drillable: name a row and it expands to a lower table or a `file:line`.
 > **Schema v1** (ID-based): every element has a stable ID (`UC`/`C`/`D`/`E`/`HP`);
-> cross-references use IDs; validated by `coyodex validate`.
+> cross-references use IDs; validated by `coyomap validate`.
 > Confidence: **verified** (you read the code and traced it) vs **inferred** (taken from a name, a
 > path or a convention). It records what the AUTHOR knew and nothing writes it. Whether the
 > grounding skeptics confirmed a row is a different question, answered by
-> `coyodex grounding by-element` from the votes and never stored here.
+> `coyomap grounding by-element` from the votes and never stored here.
 > **Commit:** `<sha>` · **Committed:** `<commit-date>` · **Built:** `<YYYY-MM-DD HH:MM>`
 
 ---
@@ -350,7 +350,7 @@ SOURCE: [file](path/sub:1)
 
      In the JSON source a rule is { "id": "BRn", "name", "statement", "block": "BLKn", "access": bool,
      "sites": [ { "where": "path:line", "why", "no_call_site": bool } ] }; `block` is assigned by
-     the LEAD after the rule fan-out, via `coyodex reconcile` — never in a fragment (a `BLK` id is
+     the LEAD after the rule fan-out, via `coyomap reconcile` — never in a fragment (a `BLK` id is
      minted at synthesis, before the rules exist, so a re-synthesis that renumbers blocks must not
      silently re-point every rule). Blocks are `blocks[]`, a Group forest. -->
 
@@ -441,4 +441,4 @@ use-case steps under it are DERIVED from the site anchors — no field carries t
 
 ---
 
-*Generated with coyodex. This file documents the GENERATED markdown view's shape — the committed source is `.coyodex/project-map.json` (see method/model.md); do not fill this template by hand.*
+*Generated with coyomap. This file documents the GENERATED markdown view's shape — the committed source is `.coyomap/project-map.json` (see method/model.md); do not fill this template by hand.*

@@ -16,12 +16,12 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
-from coyodex import grammar
-from coyodex.model import (Dep, EntityRelation, ProjectModel, Role, UseCase, all_elements,
+from coyomap import grammar
+from coyomap.model import (Dep, EntityRelation, ProjectModel, Role, UseCase, all_elements,
                            load_model)
-from coyodex.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
-from coyodex.viewer import build_graph, gen_viewer
-from coyodex.views import _relation_item, and_list, model_to_graph
+from coyomap.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
+from coyomap.viewer import build_graph, gen_viewer
+from coyomap.views import _relation_item, and_list, model_to_graph
 
 VIEWER_DIR = Path(gen_viewer.__file__).resolve().parent  # the served shell + viewer.js/css live here
 
@@ -38,7 +38,7 @@ def make_grouped_map(layout: str = "proper") -> str:
     layout='agent' drops them (id in col 0, Subsystem at index 1) — the regression case."""
     if layout == "agent":
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -115,7 +115,7 @@ def make_grouped_map(layout: str = "proper") -> str:
   "extras": []
 }"""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -198,7 +198,7 @@ def make_card_map() -> str:
     (C1->C3), both cross into S2's component C2, and C2 touches a dep D1. Lets the tests assert
     a subsystem card keeps internal wiring + deps, while an edge card keeps ONLY the cross edges."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -335,7 +335,7 @@ def make_nested_subsystem_map() -> str:
     (not S2's components flattened in), and the C2->C3 crossing must resolve to the S3 box at S1's
     altitude."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -442,7 +442,7 @@ def make_nested_subsystem_map() -> str:
 def make_ungrouped_map() -> str:
     """No S table; prose mentions AWS S3/S4 (must not be treated as references)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "X",
   "goal": "",
   "commit": null,
@@ -487,7 +487,7 @@ def make_ungrouped_map() -> str:
 def make_fenced_node_map() -> str:
     """A real C1 plus a fenced example mentioning C9 — the parser must not graph C9."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -597,7 +597,7 @@ def make_domain_map(cards: str | None = None) -> str:
     (Order contains LineItem; LineItem uses a bullet-list FIELDS)."""
     if cards is None:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -694,7 +694,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_EMBEDDED_ENTITY_TYPE:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -775,7 +775,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_COLLECTION_MARKER:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -876,7 +876,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_RELATION_LABELS:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -999,7 +999,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_UNGROUNDED_VERB:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1084,7 +1084,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_FORWARD_FK:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1176,7 +1176,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_BACKING_HOW:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1294,7 +1294,7 @@ def make_gp_map() -> str:
     """A two-step Happy Path (HP1=UC1 actor Andy, HP2=UC2 actor Adam) + the two use-case T6 flows.
     Exercises the GP overview sequence (actors from the UCs) and each use case's flow sequence."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1448,7 +1448,7 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
     uses the default Role-matching actor (the undefined-actor variant only served the retired
     validator test)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1681,7 +1681,7 @@ def make_nested_bridge_map() -> str:
     """A nested subsystem (S2<-S1) and nested subdomain (SD2<-SD1) joined by a C->E owns edge — so a
     bridge arrow can be drawn on a NESTED subsystem card AND a nested subdomain card (review finding #1)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1872,7 +1872,7 @@ def test_glued_collection_relation_is_labelled() -> None:
     """An entity-typed collection field written glued (`tokens:E28[]`) must still BACK its relation,
     so the composition arrow renders its real field name as the label (not blank)."""
     cards = """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2119,7 +2119,7 @@ def test_class_diagram_inheritance_arrow_labelled_isa() -> None:
     # Verb principle: the inheritance triangle trusts the authored `isA` verb (never code-verified) —
     # a derivation, not an asserted fact (verbs prioritize, never gate) — rendered as the bare verb.
     md = """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2199,7 +2199,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     refersTo E4 (the one CROSS-context relation), so the tests exercise membership + a crossing edge."""
     if cards is not None and contexts is not None:
         return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2340,7 +2340,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
   "extras": []
 }"""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2478,7 +2478,7 @@ def make_nested_subdomain_map() -> str:
     (in SD2), E3 in SD3. E1 contains E2 (direct entity -> child-subdomain box), E2 refersTo E3
     (grandchild -> sibling subdomain). The domain mirror of make_nested_subsystem_map."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2677,7 +2677,7 @@ def make_bridge_map() -> str:
     """Subsystems S1/S2 + context SD1 with entity E1; C1 (S1) persists E1, C2 (S2) reads E1. Exercises
     the S→SD bridge: the owning subsystem's card shows an `owns` arrow, the reader's a `reads` arrow."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2922,7 +2922,7 @@ def _two_context_map(cards_extra: str = "") -> str:
     """SD1 (Ordering, has E1) + SD2 (Catalog, EMPTY — no card assigned to it). `cards_extra` is unused
     by the surviving (kept) callers, which all take the default — a defined-but-empty SD2."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3015,7 +3015,7 @@ def make_both_groupings_map() -> str:
     (C→E bridge edges), and E1 refersTo E3 (an E→E relation crossing SD1→SD2). The Subsystems overview
     must show ONLY S→S and never a SD box; the Domain overview ONLY SD→SD and never an S box."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3271,7 +3271,7 @@ def test_hp_actors_are_one_per_distinct_driver_in_walk_order() -> None:
 def test_hp_actor_fallback_without_uc() -> None:
     # A GP step with no `*(UCn)*` tag falls back to a generic 'Actor' lifeline (no crash).
     md = """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3348,7 +3348,7 @@ def test_parser_hp_captures_first_uc_of_multi_tag() -> None:
     # A step tagged with several UCs (`*(UC1, UC2)*`) or trailing text (`*(UC3 follow-on)*`) must
     # resolve to its FIRST UC — not fall back to a generic 'Actor' lifeline (the multi-UC regression).
     md = """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3554,7 +3554,7 @@ def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> st
     Kind-column shape (the invalid-Kind and Kind-column-optional variants only served the retired
     validator tests)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3819,7 +3819,7 @@ def test_order_buckets_seeds_first_then_minted_then_catchall() -> None:
 
 
 def _bucket_model() -> ProjectModel:
-    m = ProjectModel(title="Shop", format="coyodex-map")
+    m = ProjectModel(title="Shop", format="coyomap-map")
     m.deps = [
         Dep(id="D1", name="Postgres", kind="datastore", type="Relational DB",
             used_for="Primary store, orders", bucket="Data & storage"),
@@ -3855,7 +3855,7 @@ def test_libs_drill_groups_libraries_into_bucket_clusters() -> None:
 def _fold_model() -> ProjectModel:
     """A map with one BIG external bucket (Observability, 5 deps → folds) and one small one
     (Data & storage, 2 deps → stays inline)."""
-    m = ProjectModel(title="Big", format="coyodex-map")
+    m = ProjectModel(title="Big", format="coyomap-map")
     obs = [Dep(id=f"D{i}", name=f"Mon{i}", kind="service", type="monitoring",
                used_for=f"metric {i}", bucket="Observability") for i in range(1, 6)]
     data = [Dep(id="D6", name="Postgres", kind="datastore", type="SQL", used_for="store",
@@ -3897,7 +3897,7 @@ def test_small_map_has_no_folds() -> None:
 def _library_fold_model() -> ProjectModel:
     """A map whose FOLDED libraries include a big purpose bucket (Data drivers, 5) → the Libraries drill
     folds all its buckets into drillable count boxes too."""
-    m = ProjectModel(title="Libs", format="coyodex-map")
+    m = ProjectModel(title="Libs", format="coyomap-map")
     drivers = [Dep(id=f"D{i}", name=f"drv{i}", kind="library", type="db driver",
                    used_for="io", bucket="Data drivers") for i in range(1, 6)]
     ui = [Dep(id="D6", name="React", kind="framework", type="ui", used_for="ui", bucket="Frontend / UI"),
@@ -3974,7 +3974,7 @@ def test_a_view_only_node_id_can_never_answer_to_a_model_element_id() -> None:
 def test_bundle_meta_carries_built_and_pin_and_tests() -> None:
     # The header meta line states the build stamp and the commit pin, and the graph ships each tests[]
     # row with its targets resolved server-side (the Tests tab renders names + locate-links, no parsing).
-    m = ProjectModel(title="Tiny", built="2026-01-02 03:04", format="coyodex-map",
+    m = ProjectModel(title="Tiny", built="2026-01-02 03:04", format="coyomap-map",
                      commit="abc1234", committed="2026-01-01")
     m.use_cases = [UseCase(id="UC1", name="Login")]
     m.tests = [GapRow(targets=["UC1"], tested="yes")]
@@ -3984,10 +3984,10 @@ def test_bundle_meta_carries_built_and_pin_and_tests() -> None:
     # date+time when git can resolve the sha, else the stored date (this fake sha resolves nowhere).
     assert "<code>abc1234</code> 2026-01-01" in b["meta"]
     # The `format` literal is the same on every map, so it is not in the header. The header DOES
-    # name the repo folder, and a worktree named `coyodex-map-…` carries the literal by accident:
+    # name the repo folder, and a worktree named `coyomap-map-…` carries the literal by accident:
     # checked with that name blanked, so the assertion is about the format field and nothing else.
     repo_name = Path(VIEWER_DIR).resolve().parents[2].name
-    assert "coyodex-map" not in b["meta"].replace(repo_name, "")
+    assert "coyomap-map" not in b["meta"].replace(repo_name, "")
     assert b["graph"]["tests"][0]["targets"][0] == {"id": "UC1", "name": "Login", "node": "UC1"}
 
 

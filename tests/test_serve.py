@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the local map server (coyodex.viewer.serve) — the file browser + code viewer backend.
+"""Tests for the local map server (coyomap.viewer.serve) — the file browser + code viewer backend.
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`, and `git`
 on PATH for the git-integration tests):
@@ -22,14 +22,14 @@ import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from coyodex.viewer.filetree import FileTreeNode
-from coyodex.viewer.recents import RecentsStore, register_project
-from coyodex.viewer.running import running_servers
-from coyodex.viewer.serve import (
+from coyomap.viewer.filetree import FileTreeNode
+from coyomap.viewer.recents import RecentsStore, register_project
+from coyomap.viewer.running import running_servers
+from coyomap.viewer.serve import (
     Handler,
     Project,
     _FRONTEND_DIR,
-    _has_coyodex,
+    _has_coyomap,
     _loopback_host,
     _safe_rel,
     _strip_dirty,
@@ -69,10 +69,10 @@ def make_git_repo(root: Path, files: dict[str, str]) -> str:
 
 
 def make_project_dir(parent: Path, name: str) -> Path:
-    """Create `parent/name` with a `.coyodex/project-map.json` (the committed fixture) inside."""
+    """Create `parent/name` with a `.coyomap/project-map.json` (the committed fixture) inside."""
     d = parent / name
-    (d / ".coyodex").mkdir(parents=True)
-    shutil.copy(_FIXTURE_MAP, d / ".coyodex" / "project-map.json")
+    (d / ".coyomap").mkdir(parents=True)
+    shutil.copy(_FIXTURE_MAP, d / ".coyomap" / "project-map.json")
     return d
 
 
@@ -184,23 +184,23 @@ def test_register_project() -> None:
     injected temp files, never the real list."""
     with tempfile.TemporaryDirectory() as td:
         repo = Path(td) / "myproj"
-        (repo / ".coyodex").mkdir(parents=True)
-        opt_out = os.environ.pop("COYODEX_NO_SERVE_REGISTER", None)
+        (repo / ".coyomap").mkdir(parents=True)
+        opt_out = os.environ.pop("COYOMAP_NO_SERVE_REGISTER", None)
         try:
             store = RecentsStore(Path(td) / "recents.json")
-            register_project(repo / ".coyodex", store=store)
+            register_project(repo / ".coyomap", store=store)
             assert [Path(p).name for p in store.list()] == ["myproj"]   # registered the project root
-            register_project(repo, store=store)                          # not a .coyodex dir -> ignored
+            register_project(repo, store=store)                          # not a .coyomap dir -> ignored
             assert len(store.list()) == 1
-            os.environ["COYODEX_NO_SERVE_REGISTER"] = "1"                 # opt-out (the eval, the tests)
+            os.environ["COYOMAP_NO_SERVE_REGISTER"] = "1"                 # opt-out (the eval, the tests)
             store2 = RecentsStore(Path(td) / "recents2.json")
-            register_project(repo / ".coyodex", store=store2)
+            register_project(repo / ".coyomap", store=store2)
             assert store2.list() == []
         finally:
             if opt_out is None:
-                os.environ.pop("COYODEX_NO_SERVE_REGISTER", None)
+                os.environ.pop("COYOMAP_NO_SERVE_REGISTER", None)
             else:
-                os.environ["COYODEX_NO_SERVE_REGISTER"] = opt_out
+                os.environ["COYOMAP_NO_SERVE_REGISTER"] = opt_out
 
 
 def test_recents_store_prune_missing_drops_only_folders_that_are_gone() -> None:
@@ -261,10 +261,10 @@ def test_load_project_valid_and_invalid() -> None:
         assert proj.goal                            # a non-empty goal is carried too
         assert load_project(str(Path(td) / "nope")) is None          # no such folder
         (Path(td) / "bare").mkdir()
-        assert load_project(str(Path(td) / "bare")) is None          # folder, but no .coyodex map
+        assert load_project(str(Path(td) / "bare")) is None          # folder, but no .coyomap map
         broken = Path(td) / "broken"
-        (broken / ".coyodex").mkdir(parents=True)
-        (broken / ".coyodex" / "project-map.json").write_text("{ not json", encoding="utf-8")
+        (broken / ".coyomap").mkdir(parents=True)
+        (broken / ".coyomap" / "project-map.json").write_text("{ not json", encoding="utf-8")
         assert load_project(str(broken)) is None                     # map won't parse
 
 
@@ -278,20 +278,20 @@ def test_build_projects_slug_collision_and_skips_invalid() -> None:
 
 
 # --- filesystem browser ---------------------------------------------------------
-def test_list_dirs_flags_coyodex_and_parent() -> None:
+def test_list_dirs_flags_coyomap_and_parent() -> None:
     with tempfile.TemporaryDirectory() as td:
         parent = Path(td)
-        make_project_dir(parent, "withmap")               # .coyodex/project-map.json (valid)
-        (parent / "empty-coyodex" / ".coyodex").mkdir(parents=True)  # .coyodex dir, NO map file yet
-        (parent / "plain").mkdir()                        # no .coyodex at all
+        make_project_dir(parent, "withmap")               # .coyomap/project-map.json (valid)
+        (parent / "empty-coyomap" / ".coyomap").mkdir(parents=True)  # .coyomap dir, NO map file yet
+        (parent / "plain").mkdir()                        # no .coyomap at all
         data = list_dirs(parent)
         assert data["path"] == str(parent)
         assert data["parent"] == str(parent.parent)
         by_name = {e["name"]: e for e in data["entries"]}  # type: ignore[union-attr]
         assert by_name["withmap"]["hasMap"] is True
-        assert by_name["empty-coyodex"]["hasMap"] is True  # a bare .coyodex/ is addable (card: "No valid map yet")
+        assert by_name["empty-coyomap"]["hasMap"] is True  # a bare .coyomap/ is addable (card: "No valid map yet")
         assert by_name["plain"]["hasMap"] is False
-        assert _has_coyodex(parent / "empty-coyodex") and not _has_coyodex(parent / "plain")
+        assert _has_coyomap(parent / "empty-coyomap") and not _has_coyomap(parent / "plain")
 
 
 # --- git-backed file-browser tree -----------------------------------------------
@@ -299,10 +299,10 @@ def test_project_tree_from_git() -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         sha = make_git_repo(root, {"src/app.py": "x = 1\n", "docs/readme.md": "hi\n"})
-        (root / ".coyodex").mkdir()
-        shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
+        (root / ".coyomap").mkdir()
+        shutil.copy(_FIXTURE_MAP, root / ".coyomap" / "project-map.json")
         proj = Project(slug=root.name, repo_root=root,
-                       map_json=root / ".coyodex" / "project-map.json", commit=sha)
+                       map_json=root / ".coyomap" / "project-map.json", commit=sha)
         tree = project_tree(proj)
         assert tree["name"] == root.name and tree["dir"]
         paths = _all_paths(tree)
@@ -320,17 +320,17 @@ def _all_paths(node: FileTreeNode) -> set[str]:
 def test_project_symbols_flattens_preindex() -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        (root / ".coyodex").mkdir()
-        shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
+        (root / ".coyomap").mkdir()
+        shutil.copy(_FIXTURE_MAP, root / ".coyomap" / "project-map.json")
         preindex = {"symbols": {"by_name": {
             "Widget": [{"file": "src/widget.py", "line": 3, "kind": "class"}],
             "run": [{"file": "src/a.py", "line": 5, "kind": "function"},
                     {"file": "src/b.py", "line": 9, "kind": "function"}],
             "bad": "not-a-list",                                  # skipped: malformed value
         }}}
-        (root / ".coyodex" / "preindex.json").write_text(json.dumps(preindex), encoding="utf-8")
+        (root / ".coyomap" / "preindex.json").write_text(json.dumps(preindex), encoding="utf-8")
         proj = Project(slug=root.name, repo_root=root,
-                       map_json=root / ".coyodex" / "project-map.json", commit="abc123")
+                       map_json=root / ".coyomap" / "project-map.json", commit="abc123")
         syms = project_symbols(proj)
         # one entry per definition SITE; ambiguous names keep every site
         assert {"name": "Widget", "file": "src/widget.py", "line": 3, "kind": "class"} in syms
@@ -342,10 +342,10 @@ def test_project_symbols_flattens_preindex() -> None:
 def test_project_symbols_missing_preindex_is_empty() -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        (root / ".coyodex").mkdir()
-        shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
+        (root / ".coyomap").mkdir()
+        shutil.copy(_FIXTURE_MAP, root / ".coyomap" / "project-map.json")
         proj = Project(slug=root.name, repo_root=root,
-                       map_json=root / ".coyodex" / "project-map.json", commit="abc123")
+                       map_json=root / ".coyomap" / "project-map.json", commit="abc123")
         assert project_symbols(proj) == []  # no pre-index -> degrade cleanly, never raise
 
 
@@ -364,11 +364,11 @@ def test_project_symbols_malformed_preindex_is_empty() -> None:
     for i, doc in enumerate(bad_docs):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            (root / ".coyodex").mkdir()
-            shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
-            (root / ".coyodex" / "preindex.json").write_text(json.dumps(doc), encoding="utf-8")
+            (root / ".coyomap").mkdir()
+            shutil.copy(_FIXTURE_MAP, root / ".coyomap" / "project-map.json")
+            (root / ".coyomap" / "preindex.json").write_text(json.dumps(doc), encoding="utf-8")
             proj = Project(slug=f"p{i}", repo_root=root,
-                           map_json=root / ".coyodex" / "project-map.json", commit="abc123")
+                           map_json=root / ".coyomap" / "project-map.json", commit="abc123")
             assert project_symbols(proj) == []  # malformed shape -> empty, not a crash
 
 
@@ -390,7 +390,7 @@ def test_project_view_tolerates_malformed_change_report() -> None:
     # A short/garbage change-report.md must not crash the view build (build_diff skips bad rows).
     with tempfile.TemporaryDirectory() as td:
         folder = make_project_dir(Path(td), "alpha")
-        (folder / ".coyodex" / "change-report.md").write_text(
+        (folder / ".coyomap" / "change-report.md").write_text(
             "# a -> b\n\n| from | verb | to |\n| --- | --- | --- |\n| A |\n", encoding="utf-8")
         proj = load_project(str(folder))
         assert proj is not None
@@ -426,11 +426,11 @@ def test_http_static_and_view_routes() -> None:
             assert code == 200 and "text/css" in ctype
             assert _http_get(port, "/static/nope.js")[0] == 404       # off-whitelist name rejected
             assert _http_get(port, "/static/../serve.py")[0] == 404   # not a 2-segment /static/<name>
-            code, ctype, body = _http_get(port, f"/coyodex/{slug}/api/view")
+            code, ctype, body = _http_get(port, f"/coyomap/{slug}/api/view")
             assert code == 200 and "application/json" in ctype
             data = json.loads(body)
             assert data["graph"]["nodes"] and data["mermaidContext"] and data["hasDiff"] is False
-            assert _http_get(port, "/coyodex/ghost/api/view")[0] == 404     # unknown project
+            assert _http_get(port, "/coyomap/ghost/api/view")[0] == 404     # unknown project
             # A CLEAN BREAK, decided: the old prefix is not redirected, it is an unknown path.
             assert _http_get(port, f"/p/{slug}/")[0] == 404
             assert _http_get(port, f"/p/{slug}/api/view")[0] == 404
@@ -445,7 +445,7 @@ def test_the_landing_page_forgets_a_folder_that_is_gone() -> None:
     with tempfile.TemporaryDirectory() as td:
         live = make_project_dir(Path(td), "alpha")               # a valid map
         unbuilt = Path(td) / "beta"                               # exists, no map yet
-        (unbuilt / ".coyodex").mkdir(parents=True)
+        (unbuilt / ".coyomap").mkdir(parents=True)
         gone = Path(td) / "gamma"                                 # never created
         store_path = Path(td) / "recents.json"
         store = RecentsStore(store_path)
@@ -482,10 +482,10 @@ def test_live_reload_is_off_unless_dev_is_asked_for() -> None:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
             port = httpd.server_address[1]
-            code, ctype, body = _http_get(port, f"/coyodex/{slug}/")
+            code, ctype, body = _http_get(port, f"/coyomap/{slug}/")
             assert code == 200 and "text/html" in ctype
             assert b"api/dev-reload" not in body
-            assert _http_get(port, f"/coyodex/{slug}/api/dev-reload")[0] == 404
+            assert _http_get(port, f"/coyomap/{slug}/api/dev-reload")[0] == 404
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -506,14 +506,14 @@ def test_dev_serves_the_shell_with_live_reload_and_a_stamp() -> None:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
             port = httpd.server_address[1]
-            code, ctype, body = _http_get(port, f"/coyodex/{slug}/")
+            code, ctype, body = _http_get(port, f"/coyomap/{slug}/")
             assert code == 200 and "text/html" in ctype
             assert b"api/dev-reload" in body and b"location.reload()" in body
             assert body.index(b"api/dev-reload") > body.index(b"<body")  # inside the document
             # A stale process is about to be killed; reloading from it loads assets from a port
             # that dies mid-request and leaves a blank page nothing will fix.
             assert b"!d.stale" in body, "the page never reloads from a process owed a restart"
-            code, ctype, body = _http_get(port, f"/coyodex/{slug}/api/dev-reload")
+            code, ctype, body = _http_get(port, f"/coyomap/{slug}/api/dev-reload")
             assert code == 200 and "application/json" in ctype
             answer = json.loads(body)
             stamp = answer["stamp"]
@@ -550,7 +550,7 @@ if __name__ == "__main__":
 
 
 def test_serve_records_its_bound_port_while_it_runs_and_forgets_it_after() -> None:
-    """`coyodex url` finds a server through this record and nothing else, so the record must say
+    """`coyomap url` finds a server through this record and nothing else, so the record must say
     the port the OS actually gave (port 0 asks for any) and must be gone once the server is."""
     with tempfile.TemporaryDirectory() as td:
         running = Path(td) / "running.json"

@@ -1,0 +1,228 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'An interface is labelled by what it is, never by what it is for.' is enforced at tools/coyomap/lint_fragment.py:244 — Catches the same purpose label while one part of the map is still being written.",
+   "anchor": "tools/coyomap/lint_fragment.py:244",
+   "detail": "In: Fragment self-check (C5)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An interface is labelled by what it is, never by what it is for.' is enforced at method.md:564 — States that a payment service and a crash reporter are the same kind of thing.",
+   "anchor": "method.md:564",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Who stands on the far side of an interface is read from the flows, never written by hand.' is enforced at tools/coyomap/validate_model.py:1248 — Takes each person standing at a step next to an interface as its far side.",
+   "anchor": "tools/coyomap/validate_model.py:1248",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Who stands on the far side of an interface is read from the flows, never written by hand.' is enforced at method/model.md:487 — States that the far side has no field of its own.",
+   "anchor": "method/model.md:487",
+   "detail": "In: Map model spec (C129)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Who stands on the far side of an interface is read from the flows, never written by hand.' is enforced at method.md:625 — Forbids writing the far side by hand, and names the two ways it is worked out.",
+   "anchor": "method.md:625",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A person meets the product through an interface at every step, not only the first and the last.' is enforced at tools/coyomap/validate_model.py:2947 — Calls a step a crossing when a person is at one end, code at the other, and no interface between.",
+   "anchor": "tools/coyomap/validate_model.py:2947",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A person meets the product through an interface at every step, not only the first and the last.' is enforced at tools/coyomap/validate_model.py:2837 — Reports every such step of a story, so a crossing in the middle is heard about too.",
+   "anchor": "tools/coyomap/validate_model.py:2837",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A person meets the product through an interface at every step, not only the first and the last.' is enforced at method.md:661 — States that a crossing in the middle of a story owes a door like the two ends.",
+   "anchor": "method.md:661",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Work the product schedules for itself is never an outsider, so it crosses no interface.' is enforced at tools/coyomap/validate_model.py:918 — Drops a role that is both a machine and internal from the list of outsiders.",
+   "anchor": "tools/coyomap/validate_model.py:918",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Work the product schedules for itself is never an outsider, so it crosses no interface.' is enforced at method.md:652 — States that the product's own scheduled work is not an actor for the door rule.",
+   "anchor": "method.md:652",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A command is a way in only when it acts on the running product or its stored data.' is enforced at method.md:466 — States the only test that decides a command: what the command acts on, not its name and not its purpose.",
+   "anchor": "method.md:466",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A command is a way in only when it acts on the running product or its stored data.' is enforced at method/templates/harvest-contract.md:95 — Hands the same test to the agent that mints the way-in rows. A table shows what counts on each side.",
+   "anchor": "method/templates/harvest-contract.md:95",
+   "detail": "In: Fan-out worker contracts (C132)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A command judged not to be a way in must still be recorded as a run or build command.' is enforced at method.md:482 — Says the decision is only half the work. The other half is writing the command into the run-and-build list.",
+   "anchor": "method.md:482",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A command judged not to be a way in must still be recorded as a run or build command.' is enforced at method/templates/harvest-contract.md:125 — Makes the mover count and name every command it took out, so the second half becomes visible in the reply.",
+   "anchor": "method/templates/harvest-contract.md:125",
+   "detail": "In: Fan-out worker contracts (C132)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A way in is recorded once, at the thing that does the acting, and never again at whatever calls it.' is enforced at method/templates/harvest-contract.md:115 — Says a command calling one of the product's own addresses adds no new way in. The address already is one.",
+   "anchor": "method/templates/harvest-contract.md:115",
+   "detail": "In: Fan-out worker contracts (C132)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A way in is recorded once, at the thing that does the acting, and never again at whatever calls it.' is enforced at method/templates/harvest-contract.md:117 — Says a wrapper and the command it wraps are one way in, recorded at the command that acts.",
+   "anchor": "method/templates/harvest-contract.md:117",
+   "detail": "In: Fan-out worker contracts (C132)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A way in is recorded once, at the thing that does the acting, and never again at whatever calls it.' is enforced at method.md:477 — States both cuts in the method itself, so the rule survives outside the worker brief.",
+   "anchor": "method.md:477",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A timer, a boot hook or a queue reader is work the product does to itself, not a way in.' is enforced at tools/coyomap/validate_model.py:2594 — Rejects an interface that claims a self-started way in, and says the work is the product acting on itself.",
+   "anchor": "tools/coyomap/validate_model.py:2594",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A timer, a boot hook or a queue reader is work the product does to itself, not a way in.' is enforced at tools/coyomap/validate_model.py:770 — Keeps only the outside-driven ways in, so every outside-edge check reads the same shorter list.",
+   "anchor": "tools/coyomap/validate_model.py:770",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A timer, a boot hook or a queue reader is work the product does to itself, not a way in.' is enforced at tools/coyomap/grammar.py:575 — Fixes, per kind of way in, which ones are self-started and which ones somebody outside asks for.",
+   "anchor": "tools/coyomap/grammar.py:575",
+   "detail": "In: Shared map grammar (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A way in of a kind nobody recognises is treated as one somebody outside asks for.' is enforced at tools/coyomap/grammar.py:599 — Answers outside-driven whenever no self-starting word matches the kind of the way in.",
+   "anchor": "tools/coyomap/grammar.py:599",
+   "detail": "In: Shared map grammar (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded.' is enforced at method.md:641 — States the one-interface rule and the recorded line that excuses a deliberate exception.",
+   "anchor": "method.md:641",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded.' is enforced at tools/coyomap/validate_model.py:2598 — Blocks a way in that more than one interface claims, and blocks one interface listing it twice.",
+   "anchor": "tools/coyomap/validate_model.py:2598",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded.' is enforced at tools/coyomap/validate_model.py:2764 — Collects the ways in that no interface claims and that no recorded line excuses.",
+   "anchor": "tools/coyomap/validate_model.py:2764",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Work every request passes through on its way in is not itself a way in, so it joins no interface.' is enforced at tools/coyomap/validate_model.py:2486 — Names shared request handling as the one kind excused from belonging to an interface.",
+   "anchor": "tools/coyomap/validate_model.py:2486",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Work every request passes through on its way in is not itself a way in, so it joins no interface.' is enforced at tools/coyomap/validate_model.py:2500 — Drops that kind before every check that asks which interface a way in belongs to.",
+   "anchor": "tools/coyomap/validate_model.py:2500",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A way in that no story reaches is reported, including the ones the product starts for itself.' is enforced at method.md:212 — States that self-started ways in are not exempt, because a scheduled job is an actor with a goal.",
+   "anchor": "method.md:212",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A way in that no story reaches is reported, including the ones the product starts for itself.' is enforced at tools/coyomap/validate_model.py:2142 — Reports the outside-driven ways in that no story reaches, grouped by the part of the product that owns them.",
+   "anchor": "tools/coyomap/validate_model.py:2142",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A way in that no story reaches is reported, including the ones the product starts for itself.' is enforced at tools/coyomap/validate_model.py:2149 — Reports the self-started ways in that no story reaches, in the same grouped shape.",
+   "anchor": "tools/coyomap/validate_model.py:2149",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An advisory never stops a build; only a gate does.' is enforced at tools/coyomap/validate_model.py:6657 — fails a build on gate findings alone, however many advisories were printed",
+   "anchor": "tools/coyomap/validate_model.py:6657",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An advisory never stops a build; only a gate does.' is enforced at tools/coyomap/lint_fragment.py:654 — passes one fragment, counting its advisories, when no gate finding was found",
+   "anchor": "tools/coyomap/lint_fragment.py:654",
+   "detail": "In: Fragment self-check (C5)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An advisory never stops a build; only a gate does.' is enforced at method.md:1604 — states that the component count check advises, and that a justified exception stays a judgement call",
+   "anchor": "method.md:1604",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyomap/finalize.py:693 — calls a build incomplete when a gate that should have run did not",
+   "anchor": "tools/coyomap/finalize.py:693",
+   "detail": "In: Build closer (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyomap/finalize.py:695 — calls a build advisory when only advisories were found, which is not clean",
+   "anchor": "tools/coyomap/finalize.py:695",
+   "detail": "In: Build closer (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyomap/finalize.py:1286 — exits with failure on an incomplete build, so a skipped gate cannot read as a pass",
+   "anchor": "tools/coyomap/finalize.py:1286",
+   "detail": "In: Build closer (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyomap/ship.py:353 — stops the closing sequence at the first failing step, and names the steps that never ran",
+   "anchor": "tools/coyomap/ship.py:353",
+   "detail": "In: Build closer (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An advisory the operator decides to live with is silenced only by a reason recorded in the map.' is enforced at method.md:1620 — says a durably justified exception is recorded in the map and silences its own advisory",
+   "anchor": "method.md:1620",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

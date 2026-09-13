@@ -3,7 +3,7 @@
 Change (2026-09-06): T4 gains the cut that decides whether a command is an entry point — what the
 command ACTS ON decides, and being a test exempts nothing. Stated in both `method.md` (the lead)
 and `method/templates/harvest-contract.md` (the harvesting agent, which never reads method.md).
-`tools/coyodex/validate_model.py` gains an "Entry-point coverage" line splitting the two arms of
+`tools/coyomap/validate_model.py` gains an "Entry-point coverage" line splitting the two arms of
 claiming. NO live map was hand-fixed.
 
 Escalation: if check 1 or check 4 fails, the wording did not survive the trip to the agent. Re-run
@@ -82,7 +82,7 @@ the row it picked was one the author's own gold answer had missed.
    — which the PRE-CHANGE argus map already does. It would have passed whether or not the change
    landed, so it measured nothing. An item that the old world already satisfies is not a check.
 
-6. record the number, do not judge it: the "Entry-point coverage" line `coyodex validate` now
+6. record the number, do not judge it: the "Entry-point coverage" line `coyomap validate` now
    prints. Baselines measured 2026-09-06 — argus **86 external ways in: 73 named by a use case, 13
    reached only through the component a walk touches, 0 unclaimed**; mcpolis **250: 64 named, 144
    component-only, 42 unclaimed**.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex provenance` — the stamp `finalize` requires before a map is committed.
+"""Tests for `coyomap provenance` — the stamp `finalize` requires before a map is committed.
 
 The defect behind this module: provenance.json was produced ONLY by `tools/map_backup.py`, a script
-in the coyodex clone that the shipped CLI does not install. A live build ran `finalize`, was told to
+in the coyomap clone that the shipped CLI does not install. A live build ran `finalize`, was told to
 produce provenance, re-ran `finalize` unchanged, got the identical complaint, and only then went
 looking for the script.
 
@@ -16,12 +16,12 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.provenance import Provenance, main, stamp, tool_commit_here
+from coyomap.provenance import Provenance, main, stamp, tool_commit_here
 
 
 def make_repo(td: str) -> Path:
     repo = Path(td) / "proj"
-    (repo / ".coyodex").mkdir(parents=True)
+    (repo / ".coyomap").mkdir(parents=True)
     return repo
 
 
@@ -29,10 +29,10 @@ def test_stamp_writes_the_file_finalize_requires():
     with tempfile.TemporaryDirectory() as td:
         repo = make_repo(td)
         path, entry, warnings = stamp(repo, session_id="sess-1", built_at="2026-08-02 18:00")
-        assert path == repo / ".coyodex" / "provenance.json"
+        assert path == repo / ".coyomap" / "provenance.json"
         assert not warnings
         doc = json.loads(path.read_text(encoding="utf-8"))
-        assert doc["schema"] == "coyodex-provenance/v1"
+        assert doc["schema"] == "coyomap-provenance/v1"
         assert doc["project"] == "proj"
         assert doc["sessions"] == [{"session_id": "sess-1", "built_at": "2026-08-02 18:00",
                                     "mode": "build", "code_commit": None, "code_committed": None,
@@ -45,7 +45,7 @@ def test_re_stamping_one_session_updates_it_rather_than_appending():
         repo = make_repo(td)
         stamp(repo, session_id="sess-1", built_at="2026-08-02 18:00")
         stamp(repo, session_id="sess-1", built_at="2026-08-02 18:40")
-        sessions = json.loads((repo / ".coyodex" / "provenance.json").read_text())["sessions"]
+        sessions = json.loads((repo / ".coyomap" / "provenance.json").read_text())["sessions"]
         assert [s["built_at"] for s in sessions] == ["2026-08-02 18:40"]
 
 
@@ -54,7 +54,7 @@ def test_a_second_session_is_appended():
         repo = make_repo(td)
         stamp(repo, session_id="sess-1", built_at="2026-08-02 18:00")
         stamp(repo, session_id="sess-2", built_at="2026-08-03 09:00", mode="accept")
-        sessions = json.loads((repo / ".coyodex" / "provenance.json").read_text())["sessions"]
+        sessions = json.loads((repo / ".coyomap" / "provenance.json").read_text())["sessions"]
         assert [s["session_id"] for s in sessions] == ["sess-1", "sess-2"]
         assert sessions[-1]["mode"] == "accept"
 
@@ -63,10 +63,10 @@ def test_a_corrupt_file_is_repaired_by_the_stamp_with_a_warning():
     """The stamp IS the repair — refusing would leave the build with no way forward."""
     with tempfile.TemporaryDirectory() as td:
         repo = make_repo(td)
-        (repo / ".coyodex" / "provenance.json").write_text("{not json", encoding="utf-8")
+        (repo / ".coyomap" / "provenance.json").write_text("{not json", encoding="utf-8")
         _path, _entry, warnings = stamp(repo, session_id="sess-1", built_at="2026-08-02 18:00")
         assert warnings and "rewriting from scratch" in warnings[0]
-        assert Provenance.load(repo / ".coyodex" / "provenance.json") is not None
+        assert Provenance.load(repo / ".coyomap" / "provenance.json") is not None
 
 
 def test_stamp_refuses_without_a_session_id():
@@ -85,18 +85,18 @@ def test_stamp_refuses_without_a_session_id():
                 os.environ["CLAUDE_CODE_SESSION_ID"] = prior
 
 
-def test_stamp_refuses_a_repo_with_no_coyodex_dir():
+def test_stamp_refuses_a_repo_with_no_coyomap_dir():
     with tempfile.TemporaryDirectory() as td:
         try:
             stamp(Path(td), session_id="sess-1")
             raise AssertionError("expected FileNotFoundError")
         except FileNotFoundError as e:
-            assert ".coyodex/ directory" in str(e)
+            assert ".coyomap/ directory" in str(e)
 
 
 def test_built_at_goes_to_stdout_so_the_header_can_reuse_the_exact_minute(capsys):
     """The build copies this minute into the map header's "Built:" cell, so the human line has to
-    stay on stderr — `built_at=$(coyodex provenance stamp)` must be a usable idiom."""
+    stay on stderr — `built_at=$(coyomap provenance stamp)` must be a usable idiom."""
     with tempfile.TemporaryDirectory() as td:
         repo = make_repo(td)
         assert main(["stamp", str(repo), "--session-id", "s", "--built-at",
@@ -135,10 +135,10 @@ def test_update_header_writes_the_stamped_minute_into_the_header_fragment():
     import tempfile as _tempfile
     from pathlib import Path as _Path
 
-    from coyodex.provenance import main as _main
+    from coyomap.provenance import main as _main
     with _tempfile.TemporaryDirectory() as td:
         repo = _Path(td)
-        frag = repo / ".coyodex" / "build-fragments"
+        frag = repo / ".coyomap" / "build-fragments"
         frag.mkdir(parents=True)
         header = frag / "header.json"
         header.write_text('{"title": "t", "goal": "g", "built": ""}', encoding="utf-8")
@@ -146,7 +146,7 @@ def test_update_header_writes_the_stamped_minute_into_the_header_fragment():
                       "--built-at", "2026-08-17 12:16",
                       "--update-header", str(header)]) == 0
         assert _json.loads(header.read_text(encoding="utf-8"))["built"] == "2026-08-17 12:16"
-        prov = _json.loads((repo / ".coyodex" / "provenance.json").read_text(encoding="utf-8"))
+        prov = _json.loads((repo / ".coyomap" / "provenance.json").read_text(encoding="utf-8"))
         assert prov["sessions"][-1]["built_at"] == "2026-08-17 12:16"
 
 
@@ -154,10 +154,10 @@ def test_update_header_on_a_missing_file_is_an_error_not_a_silent_skip():
     import tempfile as _tempfile
     from pathlib import Path as _Path
 
-    from coyodex.provenance import main as _main
+    from coyomap.provenance import main as _main
     with _tempfile.TemporaryDirectory() as td:
         repo = _Path(td)
-        (repo / ".coyodex").mkdir()
+        (repo / ".coyomap").mkdir()
         assert _main(["stamp", str(repo), "--session-id", "s1",
                       "--update-header", str(repo / "nope.json")]) == 2
 
@@ -170,7 +170,7 @@ def test_the_stamp_help_names_update_header_in_its_PROSE():
     map header's Built cell" and named no alternative, and `method.md` said the same in two places.
     The grammar line had carried the flag the whole time. So this pins the PROSE, not the grammar:
     the sentence a reader acts on is the one in the body."""
-    from coyodex.provenance import USAGE
+    from coyomap.provenance import USAGE
     # The PROSE block, not the grammar: split on the "stamp   " heading that opens the description,
     # never on the first "stamp" — that one is inside the usage grammar this test exists to look
     # past, and splitting there passed while the body still said nothing.
@@ -199,7 +199,7 @@ def test_the_method_prescribes_the_flag_rather_than_a_hand_write():
 def test_stamp_records_the_tool_commit_the_retro_needs():
     """The map header's `tool_commit` is re-stamped by any later repair; the retro's check range
     needs the BUILD's tool commit, and the session entry is where it survives."""
-    from coyodex.provenance import Provenance, tool_commit_here
+    from coyomap.provenance import Provenance, tool_commit_here
     with tempfile.TemporaryDirectory() as td:
         repo = make_repo(td)
         path, entry, _warnings = stamp(repo, session_id="sess-1", built_at="2026-08-02 18:00")
@@ -212,7 +212,7 @@ def test_the_sessions_agent_transcripts_are_found_from_the_repo_path_and_the_ses
     """`grounding lint --agent-transcripts` was advertised by the tool and passed 0 times across
     four builds. The directory is derivable: the harness names it after the repo path (every `/`
     and `.` a `-`) and the session id the environment carries."""
-    from coyodex.provenance import project_slug, session_agent_transcripts
+    from coyomap.provenance import project_slug, session_agent_transcripts
     assert project_slug(Path("/a/b.c/d")) == "-a-b-c-d"
     with tempfile.TemporaryDirectory() as td:
         home, repo = Path(td) / "home", Path(td) / "repo"
@@ -225,7 +225,7 @@ def test_the_sessions_agent_transcripts_are_found_from_the_repo_path_and_the_ses
 
 
 def test_agent_spans_read_the_name_under_both_pointer_shapes_and_the_meta_description():
-    from coyodex.provenance import agent_spans
+    from coyomap.provenance import agent_spans
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         verb = "h-x\n/tmp/h-x.md\nRead it COMPLETELY and follow it — it is your entire brief.\n"

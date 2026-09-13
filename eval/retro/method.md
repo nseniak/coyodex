@@ -1,4 +1,4 @@
-# coyodex-retro — a retrospective on one finished build
+# coyomap-retro — a retrospective on one finished build
 
 A build just ran. Two artifacts survive it: the **map** it produced and the **transcript** that
 produced it. This method reads both and reports what the run says about the tools and the method.
@@ -7,24 +7,24 @@ produced it. This method reads both and reports what the run says about the tool
 is a proposal the user decides on. Saying "I would change X" is the deliverable; changing X is not.
 In-memory experiments against the tools are the exception and are encouraged: Step 2 prescribes one.
 
-**Why it is not `/coyodex-eval`.** That one REBUILDS the map blind and judges it against a
+**Why it is not `/coyomap-eval`.** That one REBUILDS the map blind and judges it against a
 baseline: *did quality regress?* This one never builds anything. It asks a different question —
 *what did this run reveal?* — and its answer is a list of bugs, friction and gaps. The two are
 complementary; neither replaces the other.
 
 ## Paths — keep them straight
 
-- **`COYODEX_HOME`** — the coyodex clone (the skill substitutes the real path). The CLI is
-  `COYODEX_HOME/.venv/bin/coyodex` and `COYODEX_HOME/.venv/bin/coyodex-eval`; the method under
-  audit is `COYODEX_HOME/method.md` + `COYODEX_HOME/method/`.
-- **The reviewed project** — your cwd. Map in `.coyodex/`, previous maps in
-  `.coyodex/dev-rebuilds/NNNN/`, output in `.coyodex-eval/retro/<timestamp>/`.
+- **`COYOMAP_HOME`** — the coyomap clone (the skill substitutes the real path). The CLI is
+  `COYOMAP_HOME/.venv/bin/coyomap` and `COYOMAP_HOME/.venv/bin/coyomap-eval`; the method under
+  audit is `COYOMAP_HOME/method.md` + `COYOMAP_HOME/method/`.
+- **The reviewed project** — your cwd. Map in `.coyomap/`, previous maps in
+  `.coyomap/dev-rebuilds/NNNN/`, output in `.coyomap-eval/retro/<timestamp>/`.
 
-**`dev-rebuilds/` is a coyodex-DEVELOPER convention and nothing a user of coyodex should have.** A
+**`dev-rebuilds/` is a coyomap-DEVELOPER convention and nothing a user of coyomap should have.** A
 user's map evolves incrementally with their code, so a from-scratch rebuild is a first-run event and
-they never accumulate previous maps. Rebuilding repeatedly is what someone changing coyodex does, and
-`coyodex-eval archive` is what files each snapshot. No production code path reads the
-directory — a *build* compares against nothing, deliberately. So expect it in the coyodex author's own
+they never accumulate previous maps. Rebuilding repeatedly is what someone changing coyomap does, and
+`coyomap-eval archive` is what files each snapshot. No production code path reads the
+directory — a *build* compares against nothing, deliberately. So expect it in the coyomap author's own
 repos and expect it to be ABSENT everywhere else; when it is missing, say Step 1's comparison was
 skipped rather than treating it as a defect.
 
@@ -33,7 +33,7 @@ skipped rather than treating it as a defect.
 ## Step 0a — Run this in a NEW chat, not the build's own
 
 **If this retro is running in the same session that built the map, STOP and say so.** Check
-`$CLAUDE_CODE_SESSION_ID` against the `session_id` in `.coyodex/provenance.json`; if they match, the
+`$CLAUDE_CODE_SESSION_ID` against the `session_id` in `.coyomap/provenance.json`; if they match, the
 retro is invalid and must not proceed.
 
 Three reasons, and the first is mechanical:
@@ -47,19 +47,19 @@ Three reasons, and the first is mechanical:
 3. **Context budget.** A build is 300–500 turns. Reading it in slices AND fanning out sub-agents
    needs headroom a spent context does not have.
 
-Tell the user to open a new chat in the same project and run `/coyodex-retro` there.
+Tell the user to open a new chat in the same project and run `/coyomap-retro` there.
 
 ## Step 0 — Locate the run, and refuse clearly if you cannot
 
 ```
-.coyodex/project-map.json        the map to review
-.coyodex/provenance.json         names the session that built it
+.coyomap/project-map.json        the map to review
+.coyomap/provenance.json         names the session that built it
 ```
 
 **First, refuse if the build has not finished:**
 
 ```
-COYODEX_HOME/.venv/bin/coyodex-eval retro-precheck        # exit 1 = do not proceed
+COYOMAP_HOME/.venv/bin/coyomap-eval retro-precheck        # exit 1 = do not proceed
 ```
 
 **Run it bare — never pipe it.** `cmd | tail -3; echo $?` reports `tail`'s status, so a REFUSED
@@ -71,7 +71,7 @@ the END of a build, so while one is running it still names the PREVIOUS build �
 id from yours, so the guard passes, the retro proceeds, and every finding is about the wrong run
 with nothing saying so. `retro-precheck` refuses a half-written map, refuses while another
 session's transcript is still being written, and — the case the transcript scan cannot see — refuses
-while anything under `.coyodex/` is still being written.
+while anything under `.coyomap/` is still being written.
 
 **That last check is the one that matters most, because provenance being fresh does not mean the
 build is over.** A build stamps provenance and then keeps going: recording advisories, `finalize`,
@@ -84,7 +84,7 @@ survives the operator carrying on chatting in the build window after the commit.
 Do not hand-roll this wait. The one live attempt used `find -newermt '-120 seconds'`, which this
 platform's `find` rejects outright — so the idle test silently read as "always idle" — and it waited
 on a `dev-rebuilds/NNNN/` directory that **a build never creates** (archiving is
-`coyodex-eval archive`, a developer convention; see the note above). Both conditions were
+`coyomap-eval archive`, a developer convention; see the note above). Both conditions were
 unsatisfiable, and the finished build went unnoticed for ~90 minutes. Poll the command instead, from
 a background waiter, and read its exit code.
 
@@ -107,7 +107,7 @@ one is often the retro itself.
 ```
 
 Every sub-agent a build fans out keeps a full transcript here — the tools it called, the files it
-opened, what it wrote. `coyodex-eval cost` has read them all along and says why in its own `--help`:
+opened, what it wrote. `coyomap-eval cost` has read them all along and says why in its own `--help`:
 they are "~80% of the spend — a reader that opens only the session file measures the lead and misses
 the build." That holds for a reader looking for friction too.
 
@@ -120,8 +120,8 @@ so rather than imply the agents were checked.
 
 Also locate, for comparison (all optional — say so when absent):
 
-- **the previous map** — the highest-numbered `.coyodex/dev-rebuilds/NNNN/project-map.json`. That is
-  where `coyodex-eval archive` puts the map a from-scratch rebuild replaced. Names are zero-padded, so a
+- **the previous map** — the highest-numbered `.coyomap/dev-rebuilds/NNNN/project-map.json`. That is
+  where `coyomap-eval archive` puts the map a from-scratch rebuild replaced. Names are zero-padded, so a
   plain sort is a numeric sort; take the last one.
 - **the previous transcript** — the `session_id` in that archive's own `provenance.json`.
 
@@ -131,8 +131,8 @@ still do Steps 1 and 6, and must say that Steps 2–5 were skipped — including
 
 **Then read the backlog and the previous retro, before you create your own directory.**
 
-`COYODEX_HOME/eval/retro/backlog.md` is the durable record of what past retros proposed and where
-each item stands. Read it first — it is tracked, whereas a report is not: `.coyodex-eval/` is
+`COYOMAP_HOME/eval/retro/backlog.md` is the durable record of what past retros proposed and where
+each item stands. Read it first — it is tracked, whereas a report is not: `.coyomap-eval/` is
 git-ignored scratch, one `git clean` from gone, which is exactly why the backlog exists.
 
 It carries two kinds of item and both bear on this run. The proposals stop you re-finding what is
@@ -141,7 +141,7 @@ already parked** — if one of them is about the build you are reading, say whet
 narrows it, or leaves it alone, and only add a new question when none of them covers it.
 
 Then, if the reviewed project still has one, take the highest-numbered directory under
-`.coyodex-eval/retro/` — noting that once you create yours, the newest one is yours, the same trap
+`.coyomap-eval/retro/` — noting that once you create yours, the newest one is yours, the same trap
 this step already warns about for transcripts — and read its `Proposals` for anything the backlog
 has not absorbed.
 
@@ -161,7 +161,7 @@ wastes a fan-out re-finding what is already fixed. Two failure modes it catches,
 
 The backlog above carries past PROPOSALS. It does not carry past FINDINGS, and neither can say
 whether a landed fix changed anything. Load the newest
-`.coyodex-eval/retro/<ts>/findings.json` and settle every row **before any other analysis starts**.
+`.coyomap-eval/retro/<ts>/findings.json` and settle every row **before any other analysis starts**.
 A recurrence changes what the rest of the retro should look for, and a fix that landed and did
 nothing is the most expensive result a method change can produce.
 
@@ -171,7 +171,7 @@ change worker behaviour while the churn it targeted did not move.
 
 For each row, run both probes.
 
-- **`product_probe`** answers *did the fix land in `COYODEX_HOME`*. A grep, a `--help` check, or one
+- **`product_probe`** answers *did the fix land in `COYOMAP_HOME`*. A grep, a `--help` check, or one
   command against a copy. `null` means the finding is not a product change.
 - **`behaviour_probe`** answers *does the behaviour still occur in THIS build*, and it must return a
   NUMBER, not a yes. Store it in `observed` and move the old value to `prior`. "Reproduced or
@@ -218,7 +218,7 @@ for four retros is a different problem from a new one**, and the count is what m
 recurring item visible. Carry every row forward whatever its severity: a LOW-severity item that has
 survived five retros outranks a new MED one, and only the count can say so.
 
-**Before writing it, run `coyodex-eval ledger <the previous findings.json> --repo <the coyodex
+**Before writing it, run `coyomap-eval ledger <the previous findings.json> --repo <the coyomap
 clone>`.** The `landed` flag is hand-set and it is the one input this carry-forward depends on;
 nothing checked it until that command existed. On the session that wrote it, an operator answered 40
 rows and fixed seven of them in the same session, leaving all seven reading `landed: false` — seven
@@ -232,7 +232,7 @@ appended. The shape:
 
 ```json
 {
-  "schema": "coyodex-retro-ledger/v1",
+  "schema": "coyomap-retro-ledger/v1",
   "project": "<repo>", "retro": "<ts>", "build_session": "…", "built_at": "…",
   "code_commit": "…", "tool_commit": "…",
   "findings": [
@@ -254,16 +254,16 @@ appended. The shape:
 Step 3. They are three different questions and collapsing them into one impression is what a
 ranked list of prose does instead.
 
-The ledger is git-ignored like everything else under `.coyodex-eval/`. Anything that must outlive a
+The ledger is git-ignored like everything else under `.coyomap-eval/`. Anything that must outlive a
 `git clean` is promoted into the tracked `backlog.md`, exactly as a proposal is today.
 
-Create the output directory `.coyodex-eval/retro/<YYYY-MM-DD_HHMM>/` and write everything there.
+Create the output directory `.coyomap-eval/retro/<YYYY-MM-DD_HHMM>/` and write everything there.
 
 ### Step 0c — Run the retro-checks committed since the previous build
 
 Step 0b looks BACKWARD: it re-verifies what past retros found. This step looks FORWARD: it runs
 the checks that method and tool changes declared about themselves when they were committed. The
-convention lives in `COYODEX_HOME/method/retro-checks/README.md` — every commit that changes the
+convention lives in `COYOMAP_HOME/method/retro-checks/README.md` — every commit that changes the
 method or the tools in a way that should change build behaviour also adds one check file there,
 stating the observable outcome the change promises. This step is what makes those promises come
 due. Without it, a method change is verified only if someone remembers it existed.
@@ -278,7 +278,7 @@ Compute the commit range from data both ends already record:
 - **`new`** — the `tool_commit` of the map being retro'd.
 
 ```
-git -C COYODEX_HOME diff --diff-filter=AM --name-only <old>..<new> -- method/retro-checks/
+git -C COYOMAP_HOME diff --diff-filter=AM --name-only <old>..<new> -- method/retro-checks/
 ```
 
 Added files are the pending checks. A MODIFIED check file counts as re-armed: someone sharpened
@@ -309,17 +309,17 @@ declines and the check stays armed.
 What the map itself says. Capture each command's output to the run directory.
 
 ```
-coyodex validate .coyodex/project-map.json --check-sources --check-coverage
-coyodex audit .coyodex/project-map.json
-coyodex balance .coyodex/project-map.json
-coyodex-eval score .coyodex/project-map.json --repo . --json
+coyomap validate .coyomap/project-map.json --check-sources --check-coverage
+coyomap audit .coyomap/project-map.json
+coyomap balance .coyomap/project-map.json
+coyomap-eval score .coyomap/project-map.json --repo . --json
 ```
 
 If a previous map exists, score it too and compare:
 
 ```
-coyodex-eval score <archive>/project-map.json --repo . --json > prev-profile.json
-coyodex-eval compare prev-profile.json profile.json
+coyomap-eval score <archive>/project-map.json --repo . --json > prev-profile.json
+coyomap-eval compare prev-profile.json profile.json
 ```
 
 Record: blocking problems (should be zero), the advisory count and which advisories survived, the
@@ -393,7 +393,7 @@ Four checks, all cheap, all deterministic, each one productive on that run:
    superseded total its own fields contradicted, because the prose was written against an earlier
    pass and re-pasted.
 2. **Match each `finalize` advisory to a record in the map's extras. Run it with `--no-write`.**
-   `finalize` OVERWRITES `.coyodex/finalize-report.{json,md}` on every run, so a report-only reader
+   `finalize` OVERWRITES `.coyomap/finalize-report.{json,md}` on every run, so a report-only reader
    that runs it plainly destroys the record of the build it came to read — the retro replaces the
    build's own disposition with its own. `--no-write` prints the same report and leaves the files
    alone. `finalize` says in its own
@@ -416,9 +416,9 @@ sentence against the number. That pairing is where this class lives.
 What the RUN did, as opposed to what it produced.
 
 ```
-coyodex-eval process <transcript> --map .coyodex/project-map.json \
-    --out .coyodex-eval/retro/<ts>/process.json
-coyodex-eval transcript <transcript> --stats
+coyomap-eval process <transcript> --map .coyomap/project-map.json \
+    --out .coyomap-eval/retro/<ts>/process.json
+coyomap-eval transcript <transcript> --stats
 ```
 
 **`--map` is not optional here.** Without it, assertion 6 falls back to transcript inference and
@@ -429,9 +429,9 @@ the retro that found the omission had to re-run the whole scorecard.
 If the previous transcript exists:
 
 ```
-coyodex-eval process <prev-transcript> --map <archive>/project-map.json \
+coyomap-eval process <prev-transcript> --map <archive>/project-map.json \
     --out .../prev-process.json
-coyodex-eval process --diff .../prev-process.json .../process.json
+coyomap-eval process --diff .../prev-process.json .../process.json
 ```
 
 Pass each transcript the map IT produced — the archived one for the previous run — or the diff
@@ -441,8 +441,8 @@ for that reason alone.
 ### What it cost
 
 ```
-coyodex-eval cost <transcript> --map .coyodex/project-map.json
-coyodex-eval cost <prev-transcript> --map <archive>/project-map.json
+coyomap-eval cost <transcript> --map .coyomap/project-map.json
+coyomap-eval cost <prev-transcript> --map <archive>/project-map.json
 ```
 
 Wall time, tokens, and both PER ROW of map produced, plus the straggler waste in each fan-out.
@@ -472,12 +472,12 @@ their turn numbers and nothing has to be redone. Note the last build turn once (
 commit turn), pass `--to-turn` on every `cost` and `process` run, and say in the report which
 snapshot the numbers describe.
 
-**Note the transcript's turn count now** (`coyodex-eval transcript <t> --stats`) so Step 6 can tell
+**Note the transcript's turn count now** (`coyomap-eval transcript <t> --stats`) so Step 6 can tell
 whether it grew while you read.
 
 The assertions and what each audits are in
-`COYODEX_HOME/eval/fixtures/trapdoor/L3-DESIGN.md` — **all of them, so check the doc against
-`coyodex-eval process` output rather than against any count written here.** This file said "the ten
+`COYOMAP_HOME/eval/fixtures/trapdoor/L3-DESIGN.md` — **all of them, so check the doc against
+`coyomap-eval process` output rather than against any count written here.** This file said "the ten
 assertions" while the scorecard ran fifteen, and the six the doc did not cover were three of the
 four a live build scored zero on; the retro had to read the source to learn what they meant. Then it
 happened AGAIN, in the same file, two paragraphs later — the report template below still said "the
@@ -497,7 +497,7 @@ came from.
 
 1. **Was `--map` passed?** Assertions 6, 23 and 24 go `n/a` without it. That is your own omission,
    not the build's.
-2. **Does the assertion measure a COMMAND?** Then cross-check `coyodex-eval transcript --commands`.
+2. **Does the assertion measure a COMMAND?** Then cross-check `coyomap-eval transcript --commands`.
    An assertion whose note says a command "never ran" against an index listing four runs of it is a
    detector bug.
 3. **Otherwise, read the assertion's source in `process_scorecard.py`.** Several score turn
@@ -513,9 +513,9 @@ That turns "this regex looks wrong" into an exact list of which lines move, on r
 nothing on disk:
 
 ```python
-import sys; sys.path.insert(0, "COYODEX_HOME/eval/tools")
-from coyodex_eval import process_scorecard as P
-P._COYODEX_SUBCOMMANDS = P._COYODEX_SUBCOMMANDS | {"grounding"}     # the suspect override
+import sys; sys.path.insert(0, "COYOMAP_HOME/eval/tools")
+from coyomap_eval import process_scorecard as P
+P._COYOMAP_SUBCOMMANDS = P._COYOMAP_SUBCOMMANDS | {"grounding"}     # the suspect override
 for t, m in ((cur_transcript, cur_map), (prev_transcript, prev_map)):
     print(P.score_transcript(t, map_path=m, to_turn=LAST_BUILD_TURN))
 ```
@@ -528,7 +528,7 @@ This is worth doing because it has paid twice. On the 2026-08-13 coworker retro 
 bugs — an alias-blind subcommand list and a quoted-string scanner that ate whole invocations —
 between them mis-measuring nine of the twenty-two SCORED lines on BOTH the build and its baseline
 (eleven of the twenty-eight printed, counting two that printed `n/a`), changing three of the diff's
-directions and inverting one outright. **Both are fixed** (`_COYODEX_SUBCOMMANDS`, `_MULTILINE_QUOTE`);
+directions and inverting one outright. **Both are fixed** (`_COYOMAP_SUBCOMMANDS`, `_MULTILINE_QUOTE`);
 they are cited here as the shape to look for, not as live bugs.
 
 
@@ -543,9 +543,9 @@ and it is the reason this skill exists.
 index and the fan-out map:
 
 ```
-coyodex-eval transcript <transcript> --stats
-coyodex-eval transcript <transcript> --commands         # every coyodex subcommand, with turn numbers
-coyodex-eval transcript <transcript>                    # one line per tool call, with turn numbers
+coyomap-eval transcript <transcript> --stats
+coyomap-eval transcript <transcript> --commands         # every coyomap subcommand, with turn numbers
+coyomap-eval transcript <transcript>                    # one line per tool call, with turn numbers
 ```
 
 **Use `--commands` before concluding a command "never ran".** The one-line index truncates at 100
@@ -559,7 +559,7 @@ draft**, **pre-index + harvest**, **synthesis**, **trace**, **gates (validate/au
 its exact turn range:
 
 ```
-coyodex-eval transcript <transcript> --from <lo> --to <hi> --full
+coyomap-eval transcript <transcript> --from <lo> --to <hi> --full
 ```
 
 Hand every sub-agent the same brief: **the evidence classes below**, the requirement that each
@@ -574,7 +574,7 @@ two minutes apart. Three sub-agents on one run independently reported "the fan-o
 separate turns, violating the one-message rule", and all three were wrong: the fourteen records
 shared one `message.id`. The transcript reader groups by that id on purpose (`transcript.py`, "A
 JSONL record is NOT a turn"), and assertion 3 already measures this correctly. Put it in the brief:
-**turn boundaries and turn counts come only from `coyodex-eval transcript`; agent wall times come
+**turn boundaries and turn counts come only from `coyomap-eval transcript`; agent wall times come
 only from the per-agent files, which slice readers do not have; never mix the two.** A timestamp
 spread inside one printed turn is streaming, not round trips.
 
@@ -583,8 +583,8 @@ spread inside one printed turn is streaming, not round trips.
 Each one has been observed in a real build. Name them in the prompt: a vague "find problems"
 returns vague findings.
 
-1. **Hand-written what a tool produces.** A `python3 - <<'PY'` block doing something a `coyodex`
-   subcommand already does. The headline case: `coyodex reconcile` ran zero times across eight
+1. **Hand-written what a tool produces.** A `python3 - <<'PY'` block doing something a `coyomap`
+   subcommand already does. The headline case: `coyomap reconcile` ran zero times across eight
    builds while every build hand-wrote the file it generates.
 2. **A tool that failed, and a workaround instead of a fix.** A command that errored and was never
    retried, or was replaced by a manual approach. Look for the SECOND attempt: what changed
@@ -593,7 +593,7 @@ returns vague findings.
 4. **Repeated lint / validate rounds on the same thing.** A fragment bouncing three times means a
    rule was not stated clearly enough in the prompt that produced it.
 5. **A prescribed step skipped.** The method says do X; the transcript never does X. Check against
-   `COYODEX_HOME/method.md`, not memory.
+   `COYOMAP_HOME/method.md`, not memory.
 6. **A doc that misled.** The agent read a doc and then did the wrong thing, or had to ask a
    question the doc should have answered.
 7. **An advisory neither fixed nor recorded.** The "waved through" failure the method names.
@@ -611,7 +611,7 @@ returns vague findings.
 The slice readers cover the lead's turns and cannot see inside a sub-agent. Send a second, small wave
 at the per-agent files from Step 0. You do not need them all.
 
-**Start from the fan-out table `coyodex-eval cost` already printed** in Step 2 — it has slowest,
+**Start from the fan-out table `coyomap-eval cost` already printed** in Step 2 — it has slowest,
 median and straggler waste per batch. What it does not give you is *which* agent was slowest, because
 the batch rows carry no names. That is the only reason to compute a duration by hand: open
 `<session>/subagents/` and take first-to-last record of each `agent-*.jsonl` to put a name to the
@@ -656,7 +656,7 @@ the minutes it spent.
   Split rows are common and honest: HARD to detect, SOFT to prevent;
 - **`risk`** — `LOW | MEDIUM | HIGH`. **What applying the fix could break**, never what leaving the
   bug in place costs. **The gate for LOW is testability: a fix is LOW only when a test in the
-  coyodex suite can hold it** — the test fails before the change, passes after, fails again on a
+  coyomap suite can hold it** — the test fails before the change, passes after, fails again on a
   revert, and what it asserts is the WHOLE of the fix. **Name that test file on every LOW row**, or
   the claim is unfalsifiable. MEDIUM: no test can hold the whole fix, OR the change alters what
   passes and fails, OR something downstream may already read the old shape — a method sentence
@@ -690,7 +690,7 @@ because the brief named `backend/src/…/settings.py` and the command ran `cat -
 **normalise before differencing, and never read an empty intersection as absence.** A pipe count
 said 4 of 23 because the display truncated at 150 characters and hid four more. A per-agent
 read count did not reproduce at all. Cross-check any hand-rolled per-agent number against a second
-signal, and prefer `coyodex-eval transcript` to a heredoc wherever it can answer — the tool exists
+signal, and prefer `coyomap-eval transcript` to a heredoc wherever it can answer — the tool exists
 and every wrong number above came from not using it.
 
 **A trend claim needs the whole ordered list, not its two ends.** This is the most common way a wrong
@@ -754,7 +754,7 @@ The brief that works:
   forces you to accept it. A refuted claim is a more valuable result than a confirmed one."** Say it
   first and say it plainly — a reviewer asked to "check" a list confirms it.
 - Give each claim **as stated**, with its turn numbers and where the underlying artifact lives.
-- Point at the files, hard: the map, `.coyodex/verify/`, the build scratchpad, and the per-agent
+- Point at the files, hard: the map, `.coyomap/verify/`, the build scratchpad, and the per-agent
   transcripts. **"Prefer computing from files on disk over trusting the claim."** The refuter that
   recomputed per-batch counts from the claims files confirmed the headline finding to the digit; the
   one that read the agent transcripts broke three.
@@ -770,7 +770,7 @@ The brief that works:
 
 Then reconcile every verdict — fix or reject, each with a reason. **A refuter is not automatically
 right.** One reported the previous map absent and a baseline unverifiable; it had searched the
-coyodex clone instead of the archive under the project, and the finding stood. Check before you
+coyomap clone instead of the archive under the project, and the finding stood. Check before you
 retract.
 
 Expect this to change the report substantially. If nothing comes back overturned, suspect the brief
@@ -811,7 +811,7 @@ accepting them** — a report-level reader is not automatically right either. Th
 
 ## Step 6 — Report
 
-Write `.coyodex-eval/retro/<ts>/report.md` and summarise it in chat. Structure:
+Write `.coyomap-eval/retro/<ts>/report.md` and summarise it in chat. Structure:
 
 ```
 # Retrospective — <project> build of <built_at> (session <id>)
@@ -864,10 +864,10 @@ narrowed self-checks the report went on to under-count
 
 - **Numbers with evidence, never verdicts.** No PASS/FAIL. `observed / of` and turn numbers.
 - **Say what you could not assess.** A retro that only lists what it found reads as complete when
-  it is not. Semantic map quality is NOT assessed here — that is `/coyodex-eval`. Say so.
+  it is not. Semantic map quality is NOT assessed here — that is `/coyomap-eval`. Say so.
   **And propose a backlog line for every item in `Not assessed` that is a QUESTION about this build,
   not a permanent limit.** Naming the owning tool is not the same as handing the question over: this
-  report lives in `.coyodex-eval/`, which is git-ignored scratch, so a deferral that stops here dies
+  report lives in `.coyomap-eval/`, which is git-ignored scratch, so a deferral that stops here dies
   with it. One retro correctly parked "same code, 50 access rules became 44 — merged or lost?" as the
   quality eval's job; it survived only because somebody read the report before the folder was
   cleaned, and the answer turned out to be neither (the two maps shared 25 % of their enforcement
@@ -911,7 +911,7 @@ narrowed self-checks the report went on to under-count
   operator already refused. Record a rejection's REASON on the row too, so it is answered once and
   goes quiet rather than being re-argued each run. An operator who does not answer leaves the rows
   `proposed`, which is honest and is not the same as a `no`.
-- **Re-check the turn count before you write.** Compare `coyodex-eval transcript <t> --stats` against
+- **Re-check the turn count before you write.** Compare `coyomap-eval transcript <t> --stats` against
   the count you noted in Step 2. If it grew, the operator came back to the build window while you
   read, and every UNBOUNDED number you quoted has drifted — one run went 250.5m to 799.7m wall for
   the same build. `retro-precheck` will not warn you; it passes correctly, because those writes are
@@ -937,7 +937,7 @@ a per-agent transcript is a different piece of work from one that greps the lead
 nobody can implement is a proposal that quietly dies. Tag each with its source.
 
 **Report what the previous proposals did, and update the backlog.** You read
-`COYODEX_HOME/eval/retro/backlog.md` in Step 0; say in `Proposals` which items landed, which did not,
+`COYOMAP_HOME/eval/retro/backlog.md` in Step 0; say in `Proposals` which items landed, which did not,
 and which were overtaken by a fix that arrived in between. Then say what the backlog should become —
 new items to add, items to move to Landed, status lines that are now wrong. **Proposing that edit is
 the deliverable; making it is not** — the report-only rule covers the backlog too.

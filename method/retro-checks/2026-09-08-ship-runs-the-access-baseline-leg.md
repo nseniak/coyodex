@@ -1,7 +1,7 @@
 # `ship` runs `finalize`'s access-baseline leg against the newest archived map
 
-Change (2026-09-08): `tools/coyodex/ship.py` passes `--access-baseline <newest
-.coyodex/dev-rebuilds/NNNN/project-map.json>` to `finalize` when one exists and no baseline was
+Change (2026-09-08): `tools/coyomap/ship.py` passes `--access-baseline <newest
+.coyomap/dev-rebuilds/NNNN/project-map.json>` to `finalize` when one exists and no baseline was
 given; `finalize`'s access-baseline advisory names every lost file instead of 8 and `+N more`.
 On the 2026-09-08 mcpolis build the leg ran 0 times in 537 turns while the `auth-surfaces-no-drop`
 gate beside it failed (68 → 57); run afterwards it named 19 of 60 files that had held access

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Read-only tolerance for maps an older coyodex wrote (`coyodex_eval.legacy_map`).
+"""Read-only tolerance for maps an older coyomap wrote (`coyomap_eval.legacy_map`).
 
-`coyodex-eval score` on the map a rebuild replaced exited 1 with
+`coyomap-eval score` on the map a rebuild replaced exited 1 with
 `$.grounding.claims_grounded: unknown field`, so the comparison a retrospective rests on could not
 run: the archived map is BY DEFINITION older than the tool reading it. Writing paths keep the strict
 loader and the loud refusal; only the eval looks backwards.
@@ -16,13 +16,13 @@ import json
 
 import pytest
 
-from coyodex.model import ModelError
-from coyodex_eval.legacy_map import load_model_tolerating_legacy
+from coyomap.model import ModelError
+from coyomap_eval.legacy_map import load_model_tolerating_legacy
 
 
 def make_map(grounding: dict | None = None) -> str:
     doc: dict = {
-        "format": "coyodex-map", "title": "t", "goal": "g",
+        "format": "coyomap-map", "title": "t", "goal": "g",
         "use_cases": [{"id": "UC1", "name": "Do"}],
         "components": [{"id": "C1", "name": "A", "source": "a.py:1"}],
     }
@@ -63,7 +63,7 @@ def test_the_dropped_block_is_never_translated_into_the_new_counts():
 
 
 def test_a_map_broken_in_some_other_way_still_fails_loudly():
-    broken = json.dumps({"format": "coyodex-map", "title": "t", "goal": "g",
+    broken = json.dumps({"format": "coyomap-map", "title": "t", "goal": "g",
                          "components": [{"id": "NOPE1", "name": "A", "source": "a.py:1"}]})
     with pytest.raises(ModelError):
         load_model_tolerating_legacy(broken)

@@ -1,6 +1,6 @@
 # `finalize` checks the grounding digest at the tier the record was written at
 
-Change (2026-09-08): `tools/coyodex/finalize.py` reads which claim tier the map's grounding record
+Change (2026-09-08): `tools/coyomap/finalize.py` reads which claim tier the map's grounding record
 describes off the record's own digest, runs its audit leg at that tier, and compares the digest
 with the surface it hashed. Before, `grounding write --map` hashed the live surface at the pinned
 worklist's tier while `finalize` re-hashed at the default tier always. The 2026-09-08 mcpolis

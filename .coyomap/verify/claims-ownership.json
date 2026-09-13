@@ -1,0 +1,186 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "ownership",
+ "claims": [
+  {
+   "claim": "C71 reads E39",
+   "anchor": "tools/coyomap/viewer/viewer.js:15114",
+   "detail": "From: C71 = Map search (tools/coyomap/viewer/viewer.js:15119); To: E39 = Graph (tools/coyomap/viewer/build_graph.py:116)",
+   "why_risky": "domain-model ownership edge — verify C71's code actually 'reads' E39; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C72 reads E46",
+   "anchor": "tools/coyomap/viewer/viewer.js:15650",
+   "detail": "From: C72 = Impact explorer (tools/coyomap/viewer/viewer.js:15650); To: E46 = Change impact report (tools/coyomap/viewer/build_graph.py:198)",
+   "why_risky": "domain-model ownership edge — verify C72's code actually 'reads' E46; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C84 reads E39",
+   "anchor": "tools/coyomap/viewer/filetree.py:107",
+   "detail": "From: C84 = File browser (tools/coyomap/viewer/filetree.py:214); To: E39 = Graph (tools/coyomap/viewer/build_graph.py:116)",
+   "why_risky": "domain-model ownership edge — verify C84's code actually 'reads' E39; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C47 writes E56",
+   "anchor": "tools/coyomap/reconcile_build.py:480",
+   "detail": "From: C47 = Assignment rules (tools/coyomap/reconcile.py:692); To: E56 = Reconcile file (tools/coyomap/reconcile.py:215)",
+   "why_risky": "domain-model ownership edge — verify C47's code actually 'writes' E56; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C4 writes E65",
+   "anchor": "tools/coyomap/assemble.py:298",
+   "detail": "From: C4 = Map assembly (tools/coyomap/assemble.py:408); To: E65 = Fragment load (tools/coyomap/assemble.py:226)",
+   "why_risky": "domain-model ownership edge — verify C4's code actually 'writes' E65; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C4 persists E1",
+   "anchor": "tools/coyomap/assemble.py:978",
+   "detail": "From: C4 = Map assembly (tools/coyomap/assemble.py:408); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C4's code actually 'persists' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C22 persists E37",
+   "anchor": "tools/coyomap/grounding.py:1749",
+   "detail": "From: C22 = Grounding record (tools/coyomap/grounding.py:1704); entry points: An operator runs `coyomap grounding lint` to check the skeptics' verdict files are well formed. (tools/coyomap/grounding.py:1514); An operator runs `coyomap grounding refutations` to fail a map still holding a claim the skeptics refuted. (tools/coyomap/grounding.py:1563); An operator runs `coyomap grounding by-element` to see what the review pass decided about each element. (tools/coyomap/grounding.py:1682); An operator runs `coyomap grounding report` to see which claims were refuted, tied or unvoted. (tools/coyomap/grounding.py:1690); An operator runs `coyomap grounding write` to build the map's honesty record from the verdicts. (tools/coyomap/grounding.py:1704); To: E37 = Grounding record (tools/coyomap/model.py:680)",
+   "why_risky": "domain-model ownership edge — verify C22's code actually 'persists' E37; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C6 reads E1",
+   "anchor": "tools/coyomap/validate_model.py:6585",
+   "detail": "From: C6 = Shape checks (tools/coyomap/validate_model.py:195); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C6's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C80 reads E1",
+   "anchor": "tools/coyomap/viewer/render.py:48",
+   "detail": "From: C80 = Map rendering (tools/coyomap/views.py:299); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C80's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C131 reads E1",
+   "anchor": "method/change-impact.md:41",
+   "detail": "From: C131 = Change impact instructions (method/change-impact.md:3); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C131's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C131 writes E46",
+   "anchor": "method/change-impact.md:13",
+   "detail": "From: C131 = Change impact instructions (method/change-impact.md:3); To: E46 = Change impact report (tools/coyomap/viewer/build_graph.py:198)",
+   "why_risky": "domain-model ownership edge — verify C131's code actually 'writes' E46; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C131 reads E46",
+   "anchor": "method/change-impact.md:80",
+   "detail": "From: C131 = Change impact instructions (method/change-impact.md:3); To: E46 = Change impact report (tools/coyomap/viewer/build_graph.py:198)",
+   "why_risky": "domain-model ownership edge — verify C131's code actually 'reads' E46; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C23 writes E1",
+   "anchor": "tools/coyomap/fix.py:119",
+   "detail": "From: C23 = Map editor (tools/coyomap/fix.py:119); entry points: An operator runs `coyomap fix apply-drift` to write each corrected code link back into the map. (tools/coyomap/fix.py:1820); An operator runs `coyomap fix dedup-relation` to drop one of two records of the same data link. (tools/coyomap/fix.py:1820); An operator runs `coyomap fix drop-edge` to remove an arrow the skeptics refuted. (tools/coyomap/fix.py:1820); An operator runs `coyomap fix dedup-edge` to keep one code link where an arrow was recorded twice. (tools/coyomap/fix.py:1821); An operator runs `coyomap fix rows` to apply many wording corrections in one all-or-nothing write. (tools/coyomap/fix.py:1821); An operator runs `coyomap fix security-row` to rewrite a refuted guard's wording and code link. (tools/coyomap/fix.py:1821); +3 more; To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C23's code actually 'writes' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 writes E50",
+   "anchor": "tools/coyomap/preindex_lib.py:249",
+   "detail": "From: C45 = Code survey (tools/coyomap/preindex.py:604); To: E50 = File walk result (tools/coyomap/preindex_lib.py:156)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'writes' E50; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C24 reads E1",
+   "anchor": "tools/coyomap/dump.py:138",
+   "detail": "From: C24 = Map reader (tools/coyomap/dump.py:303); entry points: A skeptic runs `coyomap context` to get one claims batch with its evidence already beside it. (tools/coyomap/context.py:200); An operator runs `coyomap dump` to read the map, or one element's stored record, as data. (tools/coyomap/dump.py:303); An operator runs `coyomap diff` to see which rows two maps of the same work differ on. (tools/coyomap/mapdiff.py:254); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C24's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C23 writes E36",
+   "anchor": "tools/coyomap/record.py:101",
+   "detail": "From: C23 = Map editor (tools/coyomap/fix.py:119); entry points: An operator runs `coyomap fix apply-drift` to write each corrected code link back into the map. (tools/coyomap/fix.py:1820); An operator runs `coyomap fix dedup-relation` to drop one of two records of the same data link. (tools/coyomap/fix.py:1820); An operator runs `coyomap fix drop-edge` to remove an arrow the skeptics refuted. (tools/coyomap/fix.py:1820); An operator runs `coyomap fix dedup-edge` to keep one code link where an arrow was recorded twice. (tools/coyomap/fix.py:1821); An operator runs `coyomap fix rows` to apply many wording corrections in one all-or-nothing write. (tools/coyomap/fix.py:1821); An operator runs `coyomap fix security-row` to rewrite a refuted guard's wording and code link. (tools/coyomap/fix.py:1821); +3 more; To: E36 = Extra section (tools/coyomap/model.py:673)",
+   "why_risky": "domain-model ownership edge — verify C23's code actually 'writes' E36; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C101 reads E1",
+   "anchor": "eval/tools/coyomap_eval/profile.py:595",
+   "detail": "From: C101 = Map profile (eval/tools/coyomap_eval/profile.py:430); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C101's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C103 reads E1",
+   "anchor": "eval/tools/coyomap_eval/judge.py:234",
+   "detail": "From: C103 = Judge report (eval/tools/coyomap_eval/judge.py:257); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C103's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C105 reads E1",
+   "anchor": "eval/tools/coyomap_eval/arrows.py:251",
+   "detail": "From: C105 = Lost arrows (eval/tools/coyomap_eval/arrows.py:152); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C105's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C112 reads E1",
+   "anchor": "eval/tools/coyomap_eval/live_numbers.py:498",
+   "detail": "From: C112 = Live number ledger (eval/tools/coyomap_eval/live_numbers.py:540); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C112's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C106 moves E1",
+   "anchor": "eval/tools/coyomap_eval/archive.py:110",
+   "detail": "From: C106 = Rebuild archive (eval/tools/coyomap_eval/archive.py:110); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C106's code actually 'moves' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C104 reads E55",
+   "anchor": "eval/tools/coyomap_eval/run.py:78",
+   "detail": "From: C104 = Eval run (eval/tools/coyomap_eval/run.py:69); To: E55 = Map profile (eval/tools/coyomap_eval/profile.py:39)",
+   "why_risky": "domain-model ownership edge — verify C104's code actually 'reads' E55; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C104 writes E55",
+   "anchor": "eval/tools/coyomap_eval/run.py:166",
+   "detail": "From: C104 = Eval run (eval/tools/coyomap_eval/run.py:69); To: E55 = Map profile (eval/tools/coyomap_eval/profile.py:39)",
+   "why_risky": "domain-model ownership edge — verify C104's code actually 'writes' E55; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C102 reads E55",
+   "anchor": "eval/tools/coyomap_eval/compare.py:247",
+   "detail": "From: C102 = Baseline comparison (eval/tools/coyomap_eval/compare.py:518); To: E55 = Map profile (eval/tools/coyomap_eval/profile.py:39)",
+   "why_risky": "domain-model ownership edge — verify C102's code actually 'reads' E55; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C110 reads E1",
+   "anchor": "eval/tools/coyomap_eval/retro_precheck.py:185",
+   "detail": "From: C110 = Retro precheck (eval/tools/coyomap_eval/retro_precheck.py:198); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C110's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C109 reads E1",
+   "anchor": "eval/tools/coyomap_eval/process_scorecard.py:1851",
+   "detail": "From: C109 = Process scorecard (eval/tools/coyomap_eval/process_scorecard.py:3318); To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C109's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C83 reads E1",
+   "anchor": "tools/coyomap/viewer/serve.py:509",
+   "detail": "From: C83 = Map server (tools/coyomap/viewer/serve.py:869); entry points: A map page opened in developer mode asks the server every second whether the viewer's files changed. (tools/coyomap/viewer/serve.py:225); Opening the server's home address lists every project folder opened before, each one openable or removable. (tools/coyomap/viewer/serve.py:640); Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened. (tools/coyomap/viewer/serve.py:677); Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map. (tools/coyomap/viewer/serve.py:688); Posting to `/api/open` remembers a folder and starts serving the map inside it. (tools/coyomap/viewer/serve.py:700); Posting to `/api/forget` drops a folder from the remembered list and stops serving its map. (tools/coyomap/viewer/serve.py:708); +14 more; To: E1 = Project map (tools/coyomap/model.py:761)",
+   "why_risky": "domain-model ownership edge — verify C83's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C80 writes E39",
+   "anchor": "tools/coyomap/views.py:1282",
+   "detail": "From: C80 = Map rendering (tools/coyomap/views.py:299); To: E39 = Graph (tools/coyomap/viewer/build_graph.py:116)",
+   "why_risky": "domain-model ownership edge — verify C80's code actually 'writes' E39; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C61 reads E40",
+   "anchor": "tools/coyomap/viewer/viewer.js:1265",
+   "detail": "From: C61 = Element cards (tools/coyomap/viewer/viewer.js:1265); To: E40 = Graph box (tools/coyomap/viewer/build_graph.py:29)",
+   "why_risky": "domain-model ownership edge — verify C61's code actually 'reads' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C60 reads E40",
+   "anchor": "tools/coyomap/viewer/viewer.js:2818",
+   "detail": "From: C60 = Map loader (tools/coyomap/viewer/viewer.js:172); entry points: Opening an interface's address shows who is on the far side and what crosses. (tools/coyomap/viewer/viewer.js:12679); Opening an element's address shows everything the map holds about that one thing. (tools/coyomap/viewer/viewer.js:13011); Opening a feature's address shows that feature's page and its use cases. (tools/coyomap/viewer/viewer.js:13016); Opening an actor's address shows what that person or program does, in order. (tools/coyomap/viewer/viewer.js:13042); Opening a collection's address lists that collection's rows in full. (tools/coyomap/viewer/viewer.js:13059); Opening a rule's address shows that decision and where the code makes it. (tools/coyomap/viewer/viewer.js:13083); +2 more; To: E40 = Graph box (tools/coyomap/viewer/build_graph.py:29)",
+   "why_risky": "domain-model ownership edge — verify C60's code actually 'reads' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  }
+ ]
+}

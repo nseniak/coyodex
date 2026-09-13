@@ -1,0 +1,167 @@
+{
+ "schema": "coyomap/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "BR127 statement",
+   "text": "Grouping is worth doing only once a map passes about fifteen boxes. A smaller map stays flat."
+  },
+  {
+   "where": "BR127 risk",
+   "text": "Groups on a small map add levels the reader must click through to reach a list they could already see."
+  },
+  {
+   "where": "BR1 statement",
+   "text": "A map covers the files a project's version control accounts for, including new files it does not already skip."
+  },
+  {
+   "where": "BR1 risk",
+   "text": "Reading everything on disk instead would pull generated output into the map and describe code nobody wrote."
+  },
+  {
+   "where": "BR2 statement",
+   "text": "Packaged output, copied-in libraries and lock files never count as a project's own code."
+  },
+  {
+   "where": "BR2 risk",
+   "text": "The map would swell with files nobody wrote, burying the code the team actually maintains."
+  },
+  {
+   "where": "BR3 statement",
+   "text": "A project can list committed code that its map must leave out."
+  },
+  {
+   "where": "BR3 risk",
+   "text": "A fixture tree or a copied-in library would count as product code and warp every size and gap number."
+  },
+  {
+   "where": "BR4 statement",
+   "text": "Every run reports what a project's own skip list removed, one pattern at a time."
+  },
+  {
+   "where": "BR4 risk",
+   "text": "A map could read as complete because the proof of a gap was removed before anyone looked."
+  },
+  {
+   "where": "BR5 statement",
+   "text": "One box covers about one folder of code, at most ten files or three thousand lines."
+  },
+  {
+   "where": "BR5 risk",
+   "text": "Drawn too big, a box hides whole modules the reader needed to see."
+  },
+  {
+   "where": "BR6 statement",
+   "text": "Findings about how coarsely a map is drawn are advice, because deliberate abstraction is allowed."
+  },
+  {
+   "where": "BR6 risk",
+   "text": "A build would be stopped over a fold its author chose on purpose and can defend."
+  },
+  {
+   "where": "BR7 statement",
+   "text": "A map can record a deliberate coarse decision, and the advice about that decision then stops."
+  },
+  {
+   "where": "BR7 risk",
+   "text": "Without the record, a defended decision nags at every check and trains the reader to wave advice through."
+  },
+  {
+   "where": "BR8 statement",
+   "text": "The map a build replaces is never an input to the new one."
+  },
+  {
+   "where": "BR8 risk",
+   "text": "A rebuild could copy the old wording, so nobody can tell whether the new map is right."
+  },
+  {
+   "where": "BR140 statement",
+   "text": "Every thing the map records belongs to exactly one screen."
+  },
+  {
+   "where": "BR140 risk",
+   "text": "Two screens claiming one thing send a reader to different places for the same answer."
+  },
+  {
+   "where": "BR141 statement",
+   "text": "A label that would be true of nearly every card is left off."
+  },
+  {
+   "where": "BR141 risk",
+   "text": "A word on every card separates no card from another, so the cards that differ stop standing out."
+  },
+  {
+   "where": "BR142 statement",
+   "text": "A screen leaves off a fact it already shows beside the same thing."
+  },
+  {
+   "where": "BR142 risk",
+   "text": "Saying one fact twice fills the screen with dead words, so the reader stops reading carefully."
+  },
+  {
+   "where": "BR143 statement",
+   "text": "A box drops the type word wherever its colour and mark already say what kind of thing it is."
+  },
+  {
+   "where": "BR143 risk",
+   "text": "Printing the word on every box widens a large picture until it no longer fits a screen."
+  },
+  {
+   "where": "BR144 statement",
+   "text": "A screen is offered only when the map holds something to draw on it."
+  },
+  {
+   "where": "BR144 risk",
+   "text": "A tab opening onto nothing makes a small map look broken rather than small."
+  },
+  {
+   "where": "BR145 statement",
+   "text": "Where the map records nothing, the screen says so instead of leaving empty space."
+  },
+  {
+   "where": "BR145 risk",
+   "text": "Blank space reads as a screen that failed, so a real gap in the map goes unnoticed."
+  },
+  {
+   "where": "BR146 statement",
+   "text": "A line between two things offers no code link, because the place it names is only one example."
+  },
+  {
+   "where": "BR146 risk",
+   "text": "One example presented as the location claims the two things meet only there."
+  },
+  {
+   "where": "BR147 statement",
+   "text": "A picture of one flow draws only the connections that flow itself makes."
+  },
+  {
+   "where": "BR147 risk",
+   "text": "Drawing every known connection makes a reader believe this flow does things it never does."
+  },
+  {
+   "where": "BR180 statement",
+   "text": "A served map is reachable only from the machine that runs the server."
+  },
+  {
+   "where": "BR180 risk",
+   "text": "A map opens every line of a project's source, so a reachable server would let strangers read private code."
+  },
+  {
+   "where": "BR181 statement",
+   "text": "A project folder is served only when it was deliberately added, never because the server found it."
+  },
+  {
+   "where": "BR181 risk",
+   "text": "One careless start could otherwise put every repository on the machine in front of the browser."
+  },
+  {
+   "where": "BR182 statement",
+   "text": "A request for a file can only ever reach inside the mapped project's own folder."
+  },
+  {
+   "where": "BR182 risk",
+   "text": "Any page open in the browser could otherwise read private files anywhere on the machine."
+  }
+ ]
+}

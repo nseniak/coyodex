@@ -1,4 +1,4 @@
-"""Tests for the countable readability checks on the map's reader-facing prose (`coyodex.prose`).
+"""Tests for the countable readability checks on the map's reader-facing prose (`coyomap.prose`).
 
 The module's whole claim is that it COUNTS rather than judges, so these tests pin the boundaries: a
 20-word sentence is fine and a 21-word one is not, a backticked literal is a quotation rather than a
@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coyodex import prose
-from coyodex.model import (
+from coyomap import prose
+from coyomap.model import (
     BusinessRule, Component, Dep, Entity, ExtraSection, GlossaryRow, Group, HappyStep, ProjectModel,
     Role, Stake, Store, UseCase,
 )
-from coyodex.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
+from coyomap.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
 
 
 def make_sentence(words: int) -> str:
@@ -290,12 +290,12 @@ def test_the_read_prompt_forbids_repeating_what_is_already_counted() -> None:
 # it took that map's long-sentence count from 1 to 25.
 
 def _walked(m) -> dict[str, str]:
-    from coyodex.prose import iter_prose_fields
+    from coyomap.prose import iter_prose_fields
     return {where: text for where, text in iter_prose_fields(m)}
 
 
 def test_a_flow_step_phrase_and_note_are_reader_facing():
-    from coyodex.model import Flow, FlowStep, ProjectModel
+    from coyomap.model import Flow, FlowStep, ProjectModel
     m = ProjectModel(title="D", goal="g")
     m.flows = [Flow(uc="UC1", title="Sign in", steps=[
         FlowStep(n=1, src="R1", dst="C1", phrase="opens the sign-in page", note="a note")])]
@@ -306,7 +306,7 @@ def test_a_flow_step_phrase_and_note_are_reader_facing():
 
 
 def test_an_entry_point_trigger_and_an_entity_meaning_are_reader_facing():
-    from coyodex.model import Entity, EntryPoint, ProjectModel
+    from coyomap.model import Entity, EntryPoint, ProjectModel
     m = ProjectModel(title="D", goal="g")
     m.entry_points = [EntryPoint(id="EP1", kind="http-route", trigger="a person opens the page")]
     m.entities = [Entity(id="E1", name="Token", meaning="what a headless agent signs in with")]
@@ -318,7 +318,7 @@ def test_an_entry_point_trigger_and_an_entity_meaning_are_reader_facing():
 def test_an_interfaces_what_is_reader_facing():
     """Its crossing sentences went with `interfaces[].carries[]`. What crosses is a walk step now,
     and step phrases already walk through this checker one block above."""
-    from coyodex.model import Interface, ProjectModel
+    from coyomap.model import Interface, ProjectModel
     m = ProjectModel(title="D", goal="g")
     m.interfaces = [Interface(id="I1", name="The gateway", what="The one address clients use.",
                               side="ours", facing="user")]
@@ -328,8 +328,8 @@ def test_an_interfaces_what_is_reader_facing():
 
 def test_the_long_sentence_gate_now_sees_a_step_phrase():
     """The gate reads the same walk, so widening the walk widens the gate. That is the point."""
-    from coyodex.model import Flow, FlowStep, ProjectModel
-    from coyodex.validate_model import validate_model
+    from coyomap.model import Flow, FlowStep, ProjectModel
+    from coyomap.validate_model import validate_model
     long_phrase = ("writes the answer back to the caller " + "and then " * 8 + "stops")
     m = ProjectModel(title="D", goal="g")
     m.flows = [Flow(uc="UC1", title="Sign in", steps=[
@@ -438,7 +438,7 @@ def test_the_two_dependency_fields_the_viewer_never_draws_are_not_walked():
 def test_the_long_sentence_gate_now_sees_a_recorded_line_and_not_its_key():
     """The gate reads the same walk. A long why under 'Sweep debt' is a finding; its path key is not
     a code name, and a coverage line's template dash is not an em dash."""
-    from coyodex.validate_model import validate_model
+    from coyomap.validate_model import validate_model
     m = ProjectModel(title="D", goal="g")
     long_why = "hands the answer back to the caller " + "and then " * 8 + "stops"
     m.extras = [ExtraSection(heading="Sweep debt", body=f"- tools/x.py:12: {long_why}"),
@@ -537,7 +537,7 @@ def test_a_marketing_word_in_the_goal_is_one_finding_naming_the_words() -> None:
 
 def test_a_plain_description_and_the_need_behind_it_are_not_a_pitch() -> None:
     goal = ("A coding agent can write more code than anyone follows. The code runs fine until the day "
-            "somebody needs to understand it.\n\ncoyodex reads the project and writes a map.")
+            "somebody needs to understand it.\n\ncoyomap reads the project and writes a map.")
     assert prose.goal_pitch_findings(goal) == []
     assert prose.pitch_words("simplicity and uniqueness are not the words") == []   # whole words only
 

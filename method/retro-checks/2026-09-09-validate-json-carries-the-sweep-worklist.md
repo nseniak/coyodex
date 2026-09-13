@@ -1,6 +1,6 @@
 # `validate --json` carries the sweep worklist as rows
 
-Change (2026-09-09): `coyodex validate --json` emits `sweep_worklist`, one row per anchored flow
+Change (2026-09-09): `coyomap validate --json` emits `sweep_worklist`, one row per anchored flow
 step that reads like a decision no rule claims, mirroring `audit --json`'s `worklist`. On the
 2026-09-08 mcpolis build the lead hand-parsed the clipped prose advisory (turn 335), searched the
 JSON for a key containing `sweep` and got nothing (turn 337), and re-ran it searching string values

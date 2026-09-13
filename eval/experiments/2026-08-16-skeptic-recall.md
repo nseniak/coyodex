@@ -10,7 +10,7 @@ claims, originally verdicted 40/40 confirmed), kept the answer key, and ran the 
 under two contracts — the current one, and a variant carrying an explicit falsification mandate plus
 the four shapes named — with two skeptics each. Recall against a fixed ground truth, not a
 comparison of refutation rates, because two rates with no truth behind them cannot say which is
-right. Harness: `coyodex-eval mutate`.
+right. Harness: `coyomap-eval mutate`.
 
 ## Result
 

@@ -1,4 +1,4 @@
-"""`coyodex-eval ledger` — does a row's hand-set `landed` flag agree with the commit it names?"""
+"""`coyomap-eval ledger` — does a row's hand-set `landed` flag agree with the commit it names?"""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from coyodex_eval import ledger
+from coyomap_eval import ledger
 
 
 # --- builders -------------------------------------------------------------------
@@ -37,7 +37,7 @@ def make_repo(tmp: Path) -> tuple[Path, str, str]:
 
 def make_ledger(tmp: Path, rows: list[dict]) -> Path:
     p = tmp / "findings.json"
-    p.write_text(json.dumps({"schema": "coyodex-retro-ledger/v1", "findings": rows}),
+    p.write_text(json.dumps({"schema": "coyomap-retro-ledger/v1", "findings": rows}),
                  encoding="utf-8")
     return p
 

@@ -42,8 +42,8 @@ show/hide toggle. The element-keyed deltas are the data.
   kept only as the reference frame the example below uses: no build emits Tier A files, and
   nothing in the tooling writes one — the served viewer is the diagram. (It described one diagram
   per level with `click`→source, hyperlink drill instead of true zoom.)
-- **Tier B — a live-served interactive viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
-  A generic frontend served by `coyodex serve`; it fetches its data (built straight from
+- **Tier B — a live-served interactive viewer**, available in [`tools/coyomap/viewer/`](../tools/coyomap/viewer/).
+  A generic frontend served by `coyomap serve`; it fetches its data (built straight from
   `project-map.json`) from the server and renders the C4 altitudes —
   Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges; drill a
   subsystem for its components → code) — plus the **Entities** view (the T5 domain model; when grouped

@@ -1,0 +1,1122 @@
+#!/usr/bin/env python3
+"""`coyomap assemble` — structured rows → the canonical model (the parallel-build assembler).
+
+Build agents return STRUCTURED ROWS: each harvest/trace agent's output is saved verbatim as a
+JSON *fragment* — a partial model holding a subset of the top-level arrays (components, edges,
+entities, …) and, in at most one fragment, the header singletons (title / goal / commit /
+committed / built). This command validates every fragment against the schema (one bad fragment
+fails ALONE, with its file and JSON path named — the whole point of assembling with a tool),
+merges them (arrays concatenate in argument order; a duplicate ID across fragments is an ERROR,
+never a silent overwrite), and writes the canonical `project-map.json` plus its generated markdown
+view. No HTML file is written: the interactive diagram is built on demand by `coyomap serve`. The
+LLM never hand-authors the stored format: validity is guaranteed here, by the serializer.
+
+A fragment is the model document minus the strictness that only the WHOLE map needs: `format` is
+optional in a fragment, every top-level field is optional, and cross-fragment references are NOT
+resolved here — that is `coyomap validate`'s job on the assembled result (the usual invariant
+`validate --check-sources → audit → render` still runs after assembly). Stdlib-only.
+"""
+from __future__ import annotations
+
+import json
+import re
+import sys
+from dataclasses import MISSING, dataclass, fields, is_dataclass
+from pathlib import Path
+from typing import get_args, get_origin, get_type_hints
+
+from coyomap import grammar
+from coyomap.model import (
+    FORMAT,
+    ID_ARRAYS,
+    ID_SHAPE,
+    Edge,
+    EntryPoint,
+    ExtraSection,
+    Flow,
+    FlowStep,
+    MessagingRow,
+    ModelError,
+    ProjectModel,
+    guard_wrong_map,
+    resolve_map_path,
+    _build,
+    _normalize_subflow_title,
+    load_model,
+    remap_element_ids,
+    to_canonical_json,
+)
+from coyomap.reporting import shown as _shown
+from coyomap.reconcile import (
+    ReconcileError,
+    apply_reconcile,
+    load_reconcile,
+    validate_reconcile,
+)
+from coyomap.validate_model import rule_identity, unbacked_entity_steps
+
+# Top-level NON-list fields, merged one-per-map with a conflict report. `grounding` belongs here:
+# it is written by the Phase-4 reconcile as its own fragment, and omitting it meant `assemble`
+# silently dropped the field on the only code path that writes a map — so the coverage record could
+# never survive to the committed model, and `validate` then reported the map as never grounded.
+_SINGLETONS = ("title", "goal", "commit", "committed", "built", "tool_commit",
+               "tool_committed", "tests_note", "grounding")
+
+# Phase-4 verdicts files ({"grounding": [...]}) sometimes land in build-fragments/ and get caught by
+# a `*.json` glob — they are NOT fragments. Recognised so `assemble` skips them with a note instead
+# of failing the whole build (the failure a fresh build hit and had to hand-fix mid-run).
+_FRAGMENT_KEYS = {f.name for f in fields(ProjectModel)}
+
+# C→E edge verb inferred from the step's LEADING verb. Entity-step phrases are action-first ("upserts
+# the membership document", "reads the user record"), so the first verb IS the operation — matching it
+# alone avoids the noun traps a substring scan hits ("reads the asset metadata" must not become a WRITE
+# because "asset" contains "set"). A write-family verb ESTABLISHES ownership (the 'owning component'
+# check reads persists/writes), so anything not clearly a write defaults to `reads` — a derived edge
+# never invents ownership (the honest direction: an ownerless entity stays flagged, not falsely owned).
+# The verb families live in `grammar` (the one place backbone-verb meaning is decided — DRY); this
+# derivation and `grammar.edge_role` read the SAME vocabulary, so a new verb is added once.
+
+
+def _infer_ce_verb(phrase: str) -> str:
+    words = re.findall(r"[a-z]+", (phrase or "").lower())
+    lead = words[0] if words else ""
+    if lead in grammar.PERSIST_VERBS:
+        return "persists"
+    if lead in grammar.WRITE_VERBS:
+        return "writes"
+    if lead in grammar.EMIT_VERBS:
+        return "emits"
+    if lead in grammar.ENCRYPT_VERBS:
+        return "encrypts"
+    return "reads"  # a read verb or anything ambiguous → never over-claims ownership
+
+
+def _is_verdicts_file(text: str) -> bool:
+    """A Phase-4 verdicts file ({"grounding": [row, …]}), not a build fragment.
+
+    The discriminator is the TYPE of `grounding`, not its presence: a verdicts file holds a LIST of
+    per-claim rows, the grounding FRAGMENT `grounding write` emits holds the record OBJECT, and both
+    files carry that one key and nothing else. Keying on "shares no fragment field" instead — the
+    first attempt — made this unconditionally False, because `grounding` is itself a `ProjectModel`
+    field and so always intersected `_FRAGMENT_KEYS`: the skip below never once fired, and a verdicts
+    file swept into the glob failed the build with a confusing schema error rather than the note that
+    names it. (A real fragment carrying other sections alongside a stray `grounding` is still caught
+    by the second clause and treated as a fragment.)"""
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        return False
+    return (isinstance(obj, dict) and isinstance(obj.get("grounding"), list)
+            and not (set(obj) - {"grounding"}) & _FRAGMENT_KEYS)
+
+
+def _derive_entity_edges(m: ProjectModel, stats: dict[str, int]) -> list[str]:
+    """Create the C→E backbone edge each unbacked entity flow-step implies. The step already carries
+    the evidence (its C and E endpoints + a `where`); at scale a trace agent authors the entity STEP
+    but forgets the paired edge (both fresh builds shipped ~a dozen such, leaving entities with no
+    'owning component' and no impact reachability). Deriving here is IDEMPOTENT (regenerated from the
+    steps on every assemble, so it survives re-assembly — unlike a post-assemble `fix`) and additive
+    (only pairs no edge already carries). Verb inferred from the phrase; ambiguous → `reads`, so a
+    derived edge never invents ownership. Returns a short `C verb E` log for the assemble note."""
+    unbacked = unbacked_entity_steps(m)
+    if not unbacked:
+        return []
+    ownership = {"persists", "writes"}
+    chosen: dict[tuple[str, str], tuple[str, FlowStep]] = {}
+    for _label, st, c_id, e_id in unbacked:
+        verb = _infer_ce_verb(st.phrase)
+        prev = chosen.get((c_id, e_id))
+        # first step wins, but upgrade to an ownership verb if any step for this pair implies one
+        if prev is None or (verb in ownership and prev[0] not in ownership):
+            chosen[(c_id, e_id)] = (verb, st)
+    for (c_id, e_id), (verb, st) in chosen.items():
+        m.edges.append(Edge(src=c_id, verb=verb, dst=e_id,
+                            why="derived from entity flow-step",
+                            where=st.where, no_call_site=not bool(st.where)))
+    stats["entity_edges_derived"] = len(chosen)
+    return [f"{c} {v} {e}" for (c, e), (v, _st) in chosen.items()]
+
+
+def load_fragment(text: str, label: str) -> ProjectModel:
+    """A fragment parsed + structurally validated as a partial model. `format` defaults to the
+    current one so agents don't have to state it; everything else validates exactly like the map —
+    INCLUDING the id-shape/prefix rule (`S1a` in a fragment must die at the authoring agent's own
+    `lint-fragment`, not a phase later at the lead's validate — the shift-left this module exists
+    for; the rule was previously run only by `load_model`)."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ModelError(f"{label}: not valid JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise ModelError(f"{label}: top level: expected an object")
+    data.setdefault("format", FORMAT)
+    if data["format"] != FORMAT:
+        raise ModelError(f"{label}: format: expected '{FORMAT}', got {data['format']!r}")
+    _normalize_subflow_title(data)  # `subflows[].title` alias — the shape agents guess by analogy
+    # with Flow; five identical lint failures in one live rebuild (see model._normalize_subflow_title)
+    m = _build(data, ProjectModel, label)
+    for attr, prefix in ID_ARRAYS.items():
+        for i, el in enumerate(getattr(m, attr)):
+            eid = el.id
+            good = bool(ID_SHAPE.match(eid)) and re.match(r"[A-Z]+", eid).group(0) == prefix  # type: ignore[union-attr]
+            if not good:
+                raise ModelError(f"{label}: $.{attr}[{i}].id: '{eid}' is not a valid {prefix}-id "
+                                 f"(a schema id is the prefix + digits only, e.g. {prefix}3)")
+    return m
+
+
+def load_map_or_fragment(path: Path) -> tuple[ProjectModel, frozenset[str] | None]:
+    """Load either an assembled map or a build FRAGMENT, and say which it was.
+
+    Returns `(model, present_keys)`; `present_keys` is the fragment's own top-level key set, or None
+    for a full map. Read-only tools (`dump`) can ignore it; a writer (`fix`) must pass it back to
+    `dump_preserving` — see why there.
+
+    A fragment is recognised by having no `format` key: `load_fragment` defaults it, which is the
+    whole reason an agent can author a partial file. This exists because there was NO read path for a
+    fragment at all: `dump` and `fix` both went through `load_model`, which requires `format`, so a
+    build inspecting or editing its own fragments had nothing to use and wrote `python3 - <<'EOF'`
+    heredocs instead — about fifteen times in one live build, against the method's own instruction to
+    use `dump`."""
+    # Through the shared resolver: this is the OTHER path a verb reaches a map by, and a guard on
+    # only one of two doors is not a guard. `fix` and `dump` both come in here.
+    text = resolve_map_path(path).read_text(encoding="utf-8")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ModelError(f"{path.name}: not valid JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise ModelError(f"{path.name}: top level: expected an object")
+    if "format" in data:
+        return load_model(text), None
+    return load_fragment(text, path.name), frozenset(data)
+
+
+def expand_directories(paths: list[Path], notes: list[str]) -> list[Path]:
+    """Replace a bare DIRECTORY argument with its sorted `*.json` children.
+
+    A directory is what an operator types first, and both commands used to die on the raw
+    `[Errno 21] Is a directory` the reader raises. `--help` shows a glob but never says a bare
+    directory is refused, so the failure reads as "this command is broken" rather than "add
+    `/*.json`" — a live build lost a turn to it on `reconcile`, and `assemble` (printed far more
+    often in method.md) had the same edge.
+
+    A path ENDING IN `.json` is never expanded, even when it is a directory: `inner.json/` swept up
+    by the caller's own glob must keep raising, or the glob form and the bare-directory form would
+    silently disagree about the file set while both exit 0.
+
+    `sorted()` is CODEPOINT order and the shell's glob is locale collation, so the two differ on any
+    name leading with an uppercase letter or `_`. Argument order is load-bearing — dedup survivors
+    are first-occurrence-in-argument-order — so the expansion is REPORTED rather than claimed to
+    match the shell."""
+    out: list[Path] = []
+    for p in paths:
+        if p.is_dir() and p.suffix != ".json":
+            children = sorted(p.glob("*.json"))
+            out.extend(children)
+            notes.append(f"note: {p} expanded to {len(children)} fragment(s), in codepoint order — "
+                         f"the shell's glob may order them differently under a non-C locale, and "
+                         f"argument order decides which duplicate id survives")
+        else:
+            out.append(p)
+    return out
+
+
+@dataclass(frozen=True)
+class FragmentLoad:
+    """What reading a set of fragment files produced: the parts, what was SKIPPED, what FAILED.
+
+    A dataclass rather than a tuple, and deliberately not a NamedTuple — the whole point is that it
+    CANNOT be unpacked positionally. `load_fragment_paths` used to return
+    `tuple[list[parts], list[str], list[str]]`, and a caller unpacked the two `list[str]`s the wrong
+    way round: `notes` (files deliberately skipped) landed in the variable checked as fatal, and
+    `errors` (files that failed to load) were assigned to `_` and dropped.
+
+    Both halves of that were bugs, and the dropped-errors half loses data: `fix row`'s safety guard
+    re-assembles the fragments to check that an edit does not change which ids survive, and with the
+    errors discarded a fragment that failed to load was silently absent from the set it checked — so
+    an edit that merged two rules away reported nothing and exited 0.
+
+    NOTHING could catch it. Three positional `list[str]`s type-check in any order, so pyright is
+    happy; and the swap is invisible whenever both lists are empty, which is every test that builds
+    well-formed fragments. Re-introducing the bug and running the whole suite: 1914 passed. Named
+    fields make the mistake unwritable instead of merely testable, which is the only fix that holds.
+    """
+
+    parts: list[tuple[str, ProjectModel]]
+    #: Files deliberately not read (a `*.draft.json`, a Phase-4 verdicts file, a directory expanded).
+    #: ADVISORY — a caller that treats these as failures refuses work `assemble` itself accepts.
+    notes: list[str]
+    #: Files that should have loaded and did not. FATAL — a caller that ignores these is reasoning
+    #: about a fragment set that is missing pieces.
+    errors: list[str]
+
+
+def load_fragment_paths(paths: list[Path]) -> FragmentLoad:
+    """Read fragment FILES into `merge_fragments` parts. See `FragmentLoad` for the three results.
+
+    Every path is attempted before returning, so one malformed fragment does not hide the next four —
+    the lead re-pings all the guilty agents in one round instead of discovering them one build cycle
+    at a time. Printing is the caller's job: `assemble` fails the build on `errors`, `reconcile` does
+    the same, and both surface `notes` unchanged.
+
+    Shared because `reconcile` reads the SAME fragments `assemble` does. It used to demand an
+    assembled map, which cannot exist yet at the moment a build needs the reconcile file — the
+    circular dependency that made every build hand-write `reconcile.json` instead (nine in a row).
+    One loader means the verdicts-file skip and the read errors can never drift between the two."""
+    parts: list[tuple[str, ProjectModel]] = []
+    notes: list[str] = []
+    errors: list[str] = []
+    for p in expand_directories(paths, notes):
+        if p.name.endswith(".draft.json"):
+            # The harvest contract tells agents to write `<path>.draft.json` while a fragment is
+            # half-written, promising "the draft suffix keeps it out of the assemble glob". It did
+            # not: `*.draft.json` matches `*.json`, and nothing here looked at the name. A build was
+            # one mistimed assemble away from merging a truncated fragment.
+            notes.append(f"note: skipping {p.name} — a draft, still being written")
+            continue
+        if not p.exists():
+            errors.append(f"{p} not found")
+            continue
+        try:
+            # Guarded on purpose: a directory swept up by the glob, a permission error or a bad
+            # encoding used to raise straight out of the loop, so every remaining path went
+            # unreported and the promise above ("every path is attempted") was false.
+            text = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            errors.append(f"{p}: cannot read: {e}")
+            continue
+        try:
+            parts.append((p.name, load_fragment(text, p.name)))
+        except ModelError as e:
+            if _is_verdicts_file(text):
+                notes.append(f"note: skipping {p.name} — a Phase-4 verdicts file, not a build "
+                             f"fragment (keep verdicts out of build-fragments/ or feed them to "
+                             f"`anchor-drift` / `fix apply-drift`, not `assemble`)")
+                continue
+            errors.append(str(e))
+    return FragmentLoad(parts=parts, notes=notes, errors=errors)
+
+
+def _element_types() -> dict[str, type]:
+    """`{"components": Component, "edges": Edge, …}` — derived from `ProjectModel`'s annotations, not
+    hard-coded, so a new section joins it automatically instead of silently falling back to "no
+    defaults known" (which would quietly stop pruning that section)."""
+    out: dict[str, type] = {}
+    for name, hint in get_type_hints(ProjectModel).items():
+        args = get_args(hint)
+        if get_origin(hint) is list and args and isinstance(args[0], type) and is_dataclass(args[0]):
+            out[name] = args[0]
+    return out
+
+
+def _prune_defaults(value: object, cls: type | None = None) -> object:
+    """Drop keys whose value is just the dataclass default, recursively.
+
+    Without this a fragment survives its own round-trip but every ELEMENT inside it fattens: a
+    four-key component comes back with all thirteen fields, nulls and empty lists included. No value
+    is lost, but a one-line `fix` then produces a diff across every row it touched, which buries the
+    actual edit — and an author reading the file afterwards cannot tell what the tool changed."""
+    if isinstance(value, list):
+        # `cls` describes the list's ELEMENTS, so it must be carried through the recursion — dropping
+        # it here silently disabled all pruning while every test but one still passed.
+        return [_prune_defaults(v, cls) for v in value]
+    if not isinstance(value, dict):
+        return value
+    defaults: dict[str, object] = {}
+    if cls is not None:
+        for f in fields(cls):                     # type: ignore[arg-type]
+            if f.default is not MISSING:
+                defaults[f.name] = f.default
+            elif f.default_factory is not MISSING:  # type: ignore[misc]
+                defaults[f.name] = f.default_factory()  # type: ignore[misc]
+    out: dict[str, object] = {}
+    for k, v in value.items():
+        if k in defaults and v == defaults[k]:
+            continue
+        out[k] = _prune_defaults(v)
+    return out
+
+
+def dump_preserving(m: ProjectModel, present_keys: frozenset[str] | None) -> str:
+    """Serialise `m`, keeping a fragment a FRAGMENT.
+
+    `to_canonical_json` writes the whole model shape, so round-tripping a one-section fragment
+    through it materialises all 29 sections as empty arrays. That is not cosmetic: a fragment's key
+    set IS its ownership claim, and an agent's file that suddenly declares every section can make the
+    merge attribute sections nobody authored. So for a fragment only the keys it already had are
+    written back, and only the fields that carry a non-default value (`_prune_defaults`) — a fragment
+    edit should read as the edit, not as a rewrite of every row it touched."""
+    text = to_canonical_json(m)
+    if present_keys is None:
+        return text
+    data = json.loads(text)
+    types = _element_types()
+    kept: dict[str, object] = {}
+    for k, v in data.items():
+        if k not in present_keys:
+            continue
+        kept[k] = _prune_defaults(v, types.get(k))
+    return json.dumps(kept, indent=2, ensure_ascii=False) + "\n"
+
+
+def merge_fragments(parts: list[tuple[str, ProjectModel]],
+                    stats: dict[str, int] | None = None) -> tuple[ProjectModel, list[str]]:
+    """Merge validated fragments into one model. Returns (model, problems); problems are merge
+    conflicts (duplicate IDs across fragments, a singleton stated twice with different values) —
+    each names both fragments, so the lead re-pings the right agent instead of hand-fixing JSON.
+
+    Pass a `stats` dict to receive the auto-clean pass counts (actor-endpoint edges stripped,
+    duplicate components merged, duplicate edges collapsed) — `main` reports them; test callers that
+    omit it are unaffected."""
+    out = ProjectModel()
+    problems: list[str] = []
+    id_owner: dict[str, str] = {}
+    singleton_owner: dict[str, str] = {}
+    for label, frag in parts:
+        for name in _SINGLETONS:
+            val = getattr(frag, name)
+            if val in (None, ""):
+                continue
+            prev = getattr(out, name)
+            if prev in (None, ""):
+                setattr(out, name, val)
+                singleton_owner[name] = label
+            elif prev != val:
+                problems.append(f"'{name}' stated by both {singleton_owner[name]} and {label} "
+                                f"with different values — keep it in ONE header fragment")
+        for f in fields(ProjectModel):
+            if f.name in _SINGLETONS or f.name == "format":
+                continue
+            frag_list = getattr(frag, f.name)
+            if not isinstance(frag_list, list) or not frag_list:
+                continue
+            getattr(out, f.name).extend(frag_list)
+        seen_here: set[str] = set()
+        for attr in ID_ARRAYS:
+            for el in getattr(frag, attr):
+                # Inside ONE fragment too: two rows with one id assembled to a map carrying both,
+                # exit 0, while the help promised a refusal. `validate` blocked it downstream.
+                if el.id in seen_here:
+                    problems.append(f"duplicate id {el.id}: defined twice inside {label} — one id, "
+                                    f"one row")
+                seen_here.add(el.id)
+                if el.id in id_owner and id_owner[el.id] != label:
+                    problems.append(f"duplicate id {el.id}: defined by both {id_owner[el.id]} "
+                                    f"and {label} — agents must keep to their pre-allocated ID ranges")
+                id_owner.setdefault(el.id, label)
+    deps_merged = _merge_duplicate_deps(out)
+    actor_stripped = _strip_actor_edges(out)          # actors are never backbone endpoints
+    comp_merged = _merge_duplicate_components(out)     # same module harvested by two slices → one
+    chan_merged = _merge_duplicate_messaging(out, problems)   # two agents, same example row
+    rules_merged = _merge_duplicate_rules(out)         # two block agents, same decision + same lines
+    edges_before_dup = len(out.edges)
+    _merge_duplicate_edges(out)  # LAST: dep-merge / actor-strip / component re-point can create exact dups
+    eps_before_dup = len(out.entry_points)
+    _mint_entry_point_ids(out)   # after every merge, so the minted range has no gaps
+    extras_merged = _merge_extras_headings(out)
+    if stats is not None:
+        stats["deps_merged"] = deps_merged
+        stats["actor_edges_stripped"] = actor_stripped
+        stats["components_merged"] = comp_merged
+        stats["messaging_rows_collapsed"] = chan_merged
+        stats["duplicate_rules_collapsed"] = rules_merged
+        stats["duplicate_edges_collapsed"] = edges_before_dup - len(out.edges)
+        stats["duplicate_entry_points_collapsed"] = eps_before_dup - len(out.entry_points)
+        stats["extras_sections_merged"] = extras_merged
+    return out, problems
+
+
+def _merge_extras_headings(m: ProjectModel) -> int:
+    """One section per heading. Returns how many duplicate sections were folded away.
+
+    Extras arrive one per contributing fragment and were simply concatenated, so a live map shipped
+    five `Entry-point coverage` sections, three `Balance exceptions` and two `Coverage exceptions`,
+    each with different content. That is more than a reading annoyance:
+
+      * `record.append_line` resolves a heading with `next(...)` — the FIRST section. With five
+        sections a `--replace` aimed at a line in the third finds the first, matches no prefix and
+        reports "nothing replaced", so the documented way to correct a record silently does nothing.
+      * a reader of `project-map.md` meets the same heading repeatedly and has no way to know which
+        copy the checks read.
+
+    Bodies are concatenated in fragment-argument order, which is the order the reader already sees,
+    and blank bodies are dropped so a placeholder section cannot leave a stray blank line. Matching
+    is the same case/space-tolerant rule `record` and the readers use — deliberately shared rather
+    than a third implementation of "is this the same heading"."""
+    from coyomap.record import _resolve_heading
+    by_key: dict[str, ExtraSection] = {}
+    order: list[str] = []
+    for sec in m.extras:
+        canonical, _complaint = _resolve_heading(sec.heading)
+        key = canonical.strip().lower()
+        body = sec.body.strip("\n")
+        if key not in by_key:
+            by_key[key] = ExtraSection(heading=canonical, body=body)
+            order.append(key)
+            continue
+        keep = by_key[key]
+        if body:
+            keep.body = f"{keep.body}\n{body}" if keep.body.strip() else body
+    merged = len(m.extras) - len(order)
+    m.extras = [by_key[k] for k in order]
+    return merged
+
+
+def _merge_duplicate_rules(m: ProjectModel) -> int:
+    """Collapse business rules that state the SAME decision at the SAME lines into one, keeping the
+    first, and RE-POINT every reference to the merged-away id (`remap_element_ids`). Returns the
+    count.
+
+    Two block agents stating one rule is correct input, not an error — exactly like two trace agents
+    writing one channel row. Their ids come from disjoint pre-allocated ranges, so the duplicate-ID
+    check sees nothing and the map ships the same decision twice. Merging here rather than blocking
+    at `validate` follows `_merge_duplicate_messaging`, which exists because blocking a legitimate
+    two-agent duplicate made a live build hand-merge.
+
+    Identity is `validate_model.rule_identity` — the normalized statement PLUS the exact site set,
+    one implementation shared with the check that catches a hand-edited map. Neither half alone is
+    safe: two rules can legitimately share a statement at different lines (a decision enforced by
+    two different guards is two rules), and two different decisions routinely share a line."""
+    survivor_of: dict[tuple[str, tuple[str, ...]], str] = {}
+    by_id = {r.id: r for r in m.rules}
+    remap: dict[str, str] = {}
+    kept = []
+    for r in m.rules:
+        ident = rule_identity(r)
+        if not ident[0] or not ident[1]:
+            kept.append(r)                 # no statement, or no anchored site: not a safe identity
+            continue
+        if ident in survivor_of:
+            remap[r.id] = survivor_of[ident]
+            # The survivor keeps its own `risk`/`name` when it has one, and INHERITS the loser's
+            # when it does not: both are authored prose with no other home, so dropping one on a
+            # merge would lose content the two agents between them did write. `name` matters more
+            # than `risk` did — it is MANDATORY, so a survivor that ends up without one does not
+            # merely render a blank, it fails `validate` on a field the map actually contained.
+            keeper = by_id[survivor_of[ident]]
+            if not keeper.risk.strip() and r.risk.strip():
+                keeper.risk = r.risk
+            if not keeper.name.strip() and r.name.strip():
+                keeper.name = r.name
+            continue
+        survivor_of[ident] = r.id
+        kept.append(r)
+    if not remap:
+        return 0
+    m.rules = kept
+    remap_element_ids(m, remap)
+    return len(remap)
+
+
+def _merge_duplicate_messaging(m: ProjectModel, problems: list[str]) -> int:
+    """Collapse `messaging` rows that are unambiguously the SAME channel, unioning their participants.
+
+    Two agents writing the same channel is correct input, not an error: the trace prompts for two
+    different slices embedded the same literal example row, both agents dutifully wrote it, and
+    `validate` then BLOCKED the build on `Duplicate messaging channel name(s)`. (`assemble` itself
+    exits 0 — it is validate that blocks.) The lead hand-merged, and a hand merge picks a survivor
+    where a union keeps what both agents actually found.
+
+    IDENTITY IS `(name, broker)`, not the name alone. Two rows named `jobs` on brokers `D1` and `D9`
+    are almost certainly two channels, and silently collapsing them would resolve a real conflict by
+    fragment-filename order. A row with no broker is compatible with a named one (in-process is the
+    default, so an unset field is "not stated" rather than "different"). Anything genuinely
+    contradictory — two different non-empty `kind`, `payload` or `source` — is reported as a merge
+    PROBLEM, the same way a singleton stated twice with different values already is, rather than
+    guessed at. `_merge_duplicate_components` refuses an ambiguous identity for the same reason.
+
+    Rows are rebuilt rather than mutated: `merge_fragments` extends the FRAGMENTS' own lists into the
+    output, so writing through a survivor would edit the caller's fragment objects and make a second
+    merge of the same parts produce a different map."""
+    order: list[tuple[str, str]] = []
+    groups: dict[tuple[str, str], list[MessagingRow]] = {}
+    for row in m.messaging:
+        name = row.name.strip()
+        key = (name, row.broker.strip())
+        # A broker-less row joins a named-broker group for the same channel when there is exactly one.
+        if not key[1]:
+            candidates = [k for k in groups if k[0] == name]
+            if len(candidates) == 1:
+                key = candidates[0]
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(row)
+    merged: list[MessagingRow] = []
+    collapsed = 0
+    for key in order:
+        rows = groups[key]
+        first = rows[0]
+        if len(rows) == 1:
+            merged.append(first)
+            continue
+        collapsed += len(rows) - 1
+        pubs: list[str] = []
+        cons: list[str] = []
+        scalars: dict[str, str] = {}
+        for row in rows:
+            pubs = _union_ids(pubs, row.publishers)
+            cons = _union_ids(cons, row.consumers)
+            for fname in ("kind", "broker", "payload", "source"):
+                val = (getattr(row, fname, "") or "").strip()
+                if not val:
+                    continue
+                prev = scalars.get(fname)
+                if prev is None:
+                    scalars[fname] = val
+                elif prev != val:
+                    problems.append(
+                        f"messaging channel '{key[0]}' is declared more than once with different "
+                        f"`{fname}` values ({prev!r} vs {val!r}) — either these are two different "
+                        f"channels (give them different names) or one row is wrong. `assemble` unions "
+                        f"participants for the same channel but will not choose between conflicting "
+                        f"{fname} values.")
+        merged.append(MessagingRow(name=key[0], publishers=pubs, consumers=cons,
+                                   **{f: scalars.get(f, "") for f in
+                                      ("kind", "broker", "payload", "source")}))
+    m.messaging = merged
+    return collapsed
+
+
+def _union_ids(first: list[str], second: list[str]) -> list[str]:
+    """First-seen order, no duplicates — a participant list is a set with a stable reading order."""
+    out = list(first)
+    for x in second:
+        if x not in out:
+            out.append(x)
+    return out
+
+
+def _dep_identity(d) -> tuple[str, str]:
+    """A dependency's real identity: its kind + normalized name (or package). The same external dep
+    discovered by several harvest agents (different ids) shares this."""
+    name = (d.name or d.package or "").strip().lower()
+    return ((d.kind or "").strip().lower(), name)
+
+
+def _merge_duplicate_deps(m: ProjectModel) -> int:
+    """Collapse deps that share a real identity (kind + normalized name) into ONE row, and RE-POINT
+    every edge from the merged-away id to the survivor. Multiple agents discovering the same dependency
+    is CORRECT input (not an error), so slicing harvest by directory no longer duplicates deps. Only an
+    exact identity match merges — a differing kind is a different identity, left as two rows (never a
+    wrong merge). Deterministic: the first occurrence is the survivor.
+
+    Returns how many rows were merged AWAY, so the digest can report it. It used to return None and
+    the count reached no reader: a dep merge re-points every C→D edge to the survivor, so a silent
+    merge moves edges under a map the operator is reading. Every other auto-clean pass here reports;
+    this one was the only one that could change the graph and say nothing."""
+    survivor_of: dict[tuple[str, str], str] = {}
+    remap: dict[str, str] = {}
+    kept = []
+    for d in m.deps:
+        ident = _dep_identity(d)
+        if not ident[1]:            # no name/package → not identifiable, keep as-is
+            kept.append(d)
+            continue
+        if ident in survivor_of:
+            remap[d.id] = survivor_of[ident]
+        else:
+            survivor_of[ident] = d.id
+            kept.append(d)
+    if not remap:
+        return 0
+    m.deps = kept
+    for e in m.edges:               # edges are the only refs into a dep id (C→D)
+        e.src = remap.get(e.src, e.src)
+        e.dst = remap.get(e.dst, e.dst)
+    return len(remap)
+
+
+def _entry_point_identity(ep: EntryPoint) -> tuple[str, str, str, str]:
+    """An entry point's CONTENT identity — the FULL anchor (line included), the trigger, the owning
+    component and the kind, all normalized.
+
+    Every part of that is load-bearing, and the first revision of this function had none of it right.
+    It called `strip_anchor`, which DROPS the line (`routes.py:40` -> `routes.py`), so identity was
+    really `(file, trigger)` — while the docstring claimed the trigger was there to separate rows
+    "registered on the same line". Two genuinely different surfaces anywhere in one router file with
+    the same trigger text therefore merged, and the survivor kept only ONE component, kind and
+    activation: a `[cron] POST /jobs @ routes.py:99` on C2 vanished behind a `[http-route] POST /jobs
+    @ routes.py:40` on C1. A deleted row can never be reported as unclaimed, never appears under
+    "Triggered by", and never reaches `--emit-unclaimed`.
+
+    Over-merging is the dangerous direction here — a lost surface is invisible, a duplicated one is
+    merely noisy — so the key is deliberately conservative, the same "only an exact identity match
+    merges" discipline `_dep_identity` uses."""
+    return (ep.source.strip().lower(),
+            " ".join((ep.trigger or "").split()).lower(),
+            ep.component.strip(),
+            " ".join((ep.kind or "").split()).lower())
+
+
+def _mint_entry_point_ids(m: ProjectModel) -> None:
+    """Dedup entry points by content, then assign `EPn` in surviving order.
+
+    Entry points are the one element family whose ids are NOT authored. Harvest agents already juggle
+    pre-allocated C/D/E/SF ranges, and nothing references an entry point until synthesis — the
+    `use_case.entry_points` trigger link is written by `reconcile`, after this runs — so a fifth range
+    would buy nothing and make an overlap a hard build failure. Instead fragments leave `id` empty and
+    assembly mints it here, deterministically from argument order.
+
+    Dedup matters independently: unlike components, deps, messaging and edges, entry points were
+    simply concatenated, so two harvest slices covering the same router shipped the same route twice.
+
+    NUMBERING IS BY CONTENT, NOT ARGUMENT ORDER. The first revision numbered survivors in
+    first-occurrence order like every other dedup, and that made the ids depend on the order the
+    fragments happened to be passed in. Since `use_case.entry_points` is authored SEPARATELY (via
+    `reconcile`, against the ids a previous assemble produced), swapping two fragments silently
+    re-pointed a use case at a different front door — measured: `POST /orders` and
+    `DELETE /admin/wipe-database` traded ids, the use case claimed the wrong one, validate resolved
+    it happily and the warning count did not move. Sorting by the content key removes that whole
+    class: the same set of surfaces gets the same ids however the fragments are ordered.
+
+    NOT ADD-STABLE, and that is now GUARDED rather than merely known: harvesting a new surface that
+    sorts before an existing one still shifts the numbers after it, so a reconcile file authored
+    against an older harvest points a use case at a different front door — with the id resolving, so
+    no other check has anything to object to. The content witness this docstring used to name as the
+    future fix has landed: `reconcile` emits `{"id": "EP1", "source": "orders.py:9"}` and
+    `validate_reconcile` refuses a file whose witness no longer matches, naming both anchors. A bare
+    id stays legal for a hand-authored file and buys no protection."""
+    seen: dict[tuple[str, str, str, str], EntryPoint] = {}
+    kept: list[EntryPoint] = []
+    for ep in m.entry_points:
+        ident = _entry_point_identity(ep)
+        if not ident[0]:            # no source anchor → not identifiable, keep as its own row
+            kept.append(ep)
+            continue
+        if ident in seen:
+            continue                # exact same surface, already recorded
+        seen[ident] = ep
+        kept.append(ep)
+    # Anchorless rows have no content key to sort by, so they keep authored order and go last —
+    # they are the un-identifiable tail, and giving them low numbers would let an unanchored row
+    # shuffle the ids of every real surface.
+    anchored = sorted((ep for ep in kept if ep.source.strip()), key=_entry_point_identity)
+    loose = [ep for ep in kept if not ep.source.strip()]
+    ordered = anchored + loose
+    for n, ep in enumerate(ordered, start=1):
+        ep.id = f"EP{n}"
+    m.entry_points = ordered
+
+
+def _merge_duplicate_edges(m: ProjectModel) -> None:
+    """Collapse backbone edges that are the SAME relationship at the SAME call site — identical
+    `(src, verb, dst, where)` with a CONCRETE `where` — into one, keeping the first (deterministic).
+    Parallel trace agents each independently emit the same `C→E`/`enforces` edge; nothing deduped
+    them, so the stored map + markdown table carried the redundant rows. Merging on a real anchor is
+    SAFE — the exact `file:line` pins the fact, so it is unambiguously one edge; only the `why`
+    rationale varies in wording (both describe the same fact), and the backbone keeps one `why` per
+    edge (the differing prose belongs in the T6 flow steps).
+
+    A `no_call_site` edge (null `where`) is NEVER merged — with no anchor to disambiguate, a differing
+    `why` may be the only signal that two DISTINCT couplings exist (two events on the same C→C pair),
+    so those fall through to `validate`'s duplicate-edge warning for a human to reconcile. Likewise an
+    edge that shares `(src, verb, dst)` but points at a DIFFERENT anchor is left as-is (which call
+    site is the true one — a duplicate once masked a wrong anchor). Mirrors `_merge_duplicate_deps`:
+    only an unambiguous identity merges, never a wrong one."""
+    seen: set[tuple[str, str, str, str]] = set()
+    kept = []
+    for e in m.edges:
+        if not e.where:                        # no concrete anchor → can't safely disambiguate; keep
+            kept.append(e)                     # (validate's duplicate-triple warning surfaces these)
+            continue
+        key = (e.src, e.verb, e.dst, e.where)
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(e)
+    m.edges = kept
+
+
+def _strip_actor_edges(m: ProjectModel) -> int:
+    """Drop backbone edges whose endpoint is an actor (a Role id). The edge list connects
+    components / deps / entities ONLY — an actor's participation lives in a T6 flow STEP, never the
+    backbone (method.md). A trace agent that emits `R3 → C5` is a PROMPT DEFECT, not correct input
+    (unlike the same dep found by two harvest agents), so `main` reports a non-zero count as a
+    WARNING for the lead to fix the trace prompt at the source. Returns the number stripped."""
+    role_ids = {role.id for role in m.roles}
+    if not role_ids:
+        return 0
+    kept = [e for e in m.edges if e.src not in role_ids and e.dst not in role_ids]
+    n = len(m.edges) - len(kept)
+    m.edges = kept
+    return n
+
+
+def _component_identity(c) -> tuple[str, str] | None:
+    """A component's merge identity: `(normalized FILE source anchor, normalized name)`, or None when
+    it can't be safely deduped — no source, a DIRECTORY-anchor source (a shared directory is not
+    identity: two different components legitimately live under one dir), or no name. Only a real file
+    anchor + matching name means "the same module harvested by two overlapping slices" (the transcript
+    case). Deliberately stricter than `_dep_identity`: a component key is far more consequential."""
+    src = (c.source or "").strip()
+    if not src or src.endswith("/"):        # missing, or a directory anchor → not a safe identity
+        return None
+    name = (c.name or "").strip().lower()
+    if not name:
+        return None
+    return (src.lower(), name)
+
+
+def _merge_duplicate_components(m: ProjectModel) -> int:
+    """Collapse components that are the SAME module harvested twice by overlapping slices — identical
+    normalized `(file source, name)` — into ONE, keeping the first (deterministic), and RE-POINT every
+    reference to the merged-away id via `remap_element_ids` (the COMPLETE inbound set — edges, flow/
+    sub-flow steps, entry-point owners, test targets, and `[[Cn]]` prose — so nothing is left dangling
+    for `validate` to block on). Mirrors `_merge_duplicate_deps`; only an unambiguous file+name
+    identity merges (a directory-anchored or nameless component is never merged). Returns the count."""
+    survivor_of: dict[tuple[str, str], str] = {}
+    remap: dict[str, str] = {}
+    kept = []
+    for c in m.components:
+        ident = _component_identity(c)
+        if ident is None:
+            kept.append(c)
+            continue
+        if ident in survivor_of:
+            remap[c.id] = survivor_of[ident]
+        else:
+            survivor_of[ident] = c.id
+            kept.append(c)
+    if not remap:
+        return 0
+    m.components = kept
+    remap_element_ids(m, remap)
+    return len(remap)
+
+
+# Ignored inside `<out>/.gitignore`: per-run scratch, per-run reports, and the developer-only archive
+# of previous maps (`dev-rebuilds/`, written by `coyomap-eval archive` — a coyomap-developer
+# convention, never a user artifact, and never committed). `finalize-report.*` is
+# regenerated by every `coyomap finalize`, so committing it would put a diff on every build; it is a
+# working artifact to READ, not a deliverable. Listed here so the command that creates it also owns
+# its lifecycle, instead of leaving it to be swept up by someone's `git add -A`.
+# `fanout-timings.json` is build telemetry that `timings` keeps beside the map for the NEXT
+# build's dispatch order — cross-build input, never map content, so it stays local like the
+# archive does.
+_GITIGNORE_KEEP: tuple[str, ...] = ("build-fragments/", "finalize-report.json",
+                                   "finalize-report.md", "dev-rebuilds/", "fanout-timings.json")
+# `preindex.json` is a COMMITTED artifact (the viewer's symbol search reads it, pinned to the map's
+# commit), so it must NOT be ignored. Strip any stray ignore line (an older build, a hand edit) so it
+# can't drift back out of version control. Match the plain name and a root-anchored form.
+_GITIGNORE_DROP = {"preindex.json", "/preindex.json"}
+
+
+def ensure_fragments_ignored(out_dir: Path) -> bool:
+    """Normalize `<out>/.gitignore`: ensure every per-run artifact IS ignored (`build-fragments/`, the
+    agents' scratch dir, and `finalize-report.{json,md}`, rewritten on every pre-commit read) so a build
+    never dirties the tree, and ensure `preindex.json` is NOT ignored so the committed pre-index the
+    viewer relies on stays in version control. Any other lines are left untouched. Returns True when
+    the file changed (created, an entry added, or a stray preindex ignore stripped)."""
+    gi = out_dir / ".gitignore"
+    old_lines = gi.read_text(encoding="utf-8").splitlines() if gi.exists() else []
+    new_lines = [ln for ln in old_lines if ln.strip() not in _GITIGNORE_DROP]
+    present = {ln.strip() for ln in new_lines}
+    for entry in _GITIGNORE_KEEP:
+        if entry not in present:
+            new_lines.append(entry)
+    if new_lines == old_lines:
+        return False
+    gi.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    return True
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "-h" in argv or "--help" in argv or not argv:
+        print("usage: coyomap assemble <fragment.json>... --out <dir> [--reconcile <file>]\n\n"
+              "Merge build agents' structured-row fragments into the canonical project-map.json\n"
+              "(+ the generated markdown view; the diagram is served, never written) in <dir>.\n"
+              "Each fragment is a PARTIAL model (any subset of the top-level arrays; one header\n"
+              "fragment may carry title/goal/commit). A malformed fragment or a duplicate ID\n"
+              "fails loudly with the fragment named — nothing is silently fixed up; run\n"
+              "`coyomap validate` on the result to catch anything else wrong.\n\n"
+              "--reconcile <file>: a declarative reconcile input applied AFTER the merge (and after\n"
+              "  entity-edge derivation), BEFORE the write — so a re-assemble always re-applies it.\n"
+              "  `set` bulk-assigns subsystem/subdomain/runs_in/bucket; `drop_edges` removes refuted\n"
+              "  edges and heals the flow steps that rode them. Keep this file OUTSIDE\n"
+              "  build-fragments/ (e.g. .coyomap/reconcile.json) so the fragment glob does not sweep it.\n"
+              "  The shape, in full (generate the `set` half with `coyomap reconcile --rules`):\n"
+              "    {\n"
+              '      "set": [ {"ids": ["C1","C2"], "subsystem": "S3"},\n'
+              '               {"ids": ["C40"], "runs_in": ["worker"]},\n'
+              '               {"ids": ["E7"], "subdomain": "SD2"},\n'
+              '               {"ids": ["D5"], "bucket": "Data & storage"} ],\n'
+              '      "drop_edges": [ {"src": "C21", "verb": "persists", "dst": "E33"},\n'
+              '                      {"src": "C7", "verb": "calls", "dst": "C9",\n'
+              '                       "drop_steps": true},\n'
+              '                      {"src": "C4", "verb": "reads", "dst": "E2",\n'
+              '                       "repoint": "E5"} ]\n'
+              "    }\n"
+              "  A `drop_edges` entry defaults to REPORTING the flow steps that rode the edge; add\n"
+              "  `drop_steps: true` to remove them, or `repoint: <id>` to re-point them. A report-only\n"
+              "  C→E drop leaves the step behind, and the NEXT assemble re-derives the edge from it —\n"
+              "  so heal it, or the drop does not stick. Zero matches WARNS, never fails.\n\n"
+              "<dir>/.gitignore gets a 'build-fragments/' entry so the scratch dir never\n"
+              "dirties the tree. Then run the usual invariant: validate --check-sources → audit → render.")
+        return 0 if ("-h" in argv or "--help" in argv) else 2
+    out_dir: Path | None = None
+    reconcile_path: Path | None = None
+    frags: list[Path] = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--out":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --out needs a directory", file=sys.stderr)
+                return 2
+            out_dir = Path(argv[i])
+        elif a == "--reconcile":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --reconcile needs a file", file=sys.stderr)
+                return 2
+            reconcile_path = Path(argv[i])
+        elif a.startswith("-"):
+            print(f"ERROR: unknown option '{a}'", file=sys.stderr)
+            return 2
+        else:
+            frags.append(Path(a))
+        i += 1
+    if out_dir is None:
+        print("ERROR: --out <dir> is required", file=sys.stderr)
+        return 2
+    if not frags:
+        print("ERROR: no fragments given", file=sys.stderr)
+        return 2
+    loaded = load_fragment_paths(frags)
+    parts, notes, errors = loaded.parts, loaded.notes, loaded.errors
+    for note in notes:
+        print(note, file=sys.stderr)
+    for err in errors:
+        print(f"ERROR: {err}", file=sys.stderr)
+    if errors:
+        print("ASSEMBLY FAILED: fix (or re-request) the fragments above; nothing was written.",
+              file=sys.stderr)
+        return 1
+    stats: dict[str, int] = {}
+    model, problems = merge_fragments(parts, stats)
+    if problems:
+        for pr in problems:
+            print(f"ERROR: {pr}", file=sys.stderr)
+        print("ASSEMBLY FAILED: merge conflicts above; nothing was written.", file=sys.stderr)
+        return 1
+    if stats.get("actor_edges_stripped"):
+        print(f"WARNING: stripped {stats['actor_edges_stripped']} actor-endpoint edge(s) — edges "
+              f"connect components/deps/entities only, never actors. This is a trace-prompt defect: "
+              f"fix the prompt so agents put actor participation in flow STEPS, not the backbone.",
+              file=sys.stderr)
+    if stats.get("components_merged"):
+        print(f"note: merged {stats['components_merged']} duplicate component(s) "
+              f"(same file harvested by overlapping slices)")
+    if stats.get("duplicate_edges_collapsed"):
+        print(f"note: collapsed {stats['duplicate_edges_collapsed']} duplicate backbone edge(s) "
+              f"(same call site)")
+    derived = _derive_entity_edges(model, stats)
+    if derived:
+        shown = _shown(derived, 8)   # via the shared helper, so a report mode can widen it
+        print(f"note: derived {len(derived)} C→E backbone edge(s) from entity flow-steps that had "
+              f"none (verb inferred from the step; ambiguous → reads): {shown}")
+    # `--reconcile` is applied AFTER `_derive_entity_edges` (B1): a `drop_edges` on a C→E edge must run
+    # after the derive, or the derive re-creates the just-dropped edge from its surviving flow step.
+    rec_stats: dict[str, object] = {}
+    if reconcile_path is not None:
+        if not reconcile_path.exists():
+            print(f"ERROR: --reconcile {reconcile_path} not found", file=sys.stderr)
+            return 1
+        try:
+            rec = load_reconcile(reconcile_path.read_text(encoding="utf-8"), reconcile_path.name)
+        except ReconcileError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            print("ASSEMBLY FAILED: bad reconcile file; nothing was written.", file=sys.stderr)
+            return 1
+        rec_problems = validate_reconcile(model, rec)
+        if rec_problems:
+            for pr in rec_problems:
+                print(f"ERROR: {pr}", file=sys.stderr)
+            print("ASSEMBLY FAILED: reconcile directives above are invalid; nothing was written.",
+                  file=sys.stderr)
+            return 1
+        rec_notes = apply_reconcile(model, rec, rec_stats)
+        for note in rec_notes:
+            print(note, file=sys.stderr if note.startswith("WARNING") else sys.stdout)
+        sc = rec_stats.get("reconcile_set", {})
+        set_summary = (", ".join(f"{k}: {v}" for k, v in sc.items() if v)
+                       if isinstance(sc, dict) else "") or "nothing"
+        # The unhealed-riding-step count is repeated here AND carried in `_assemble_digest`'s `ops:`
+        # string. The digest is the one that matters: this note is line 9 of 13 on a fresh assemble,
+        # so `| tail -4` — how a live build actually read this output — cuts it, and the two orphaned
+        # steps only surfaced a round later at validate, costing a fragment edit, a re-assemble and a
+        # re-run of apply-drift. Repeating it costs a clause and covers the reader who sees only the
+        # head as well as the one who sees only the tail.
+        unhealed = rec_stats.get("reconcile_riding_unhealed", 0)
+        unhealed_tail = (
+            f" {unhealed} flow step(s) still attribute a dropped edge and are NOT healed — heal them "
+            f"with `drop_steps` / `repoint` (a report-only C→E drop leaves the step, which the next "
+            f"assemble re-derives into the edge you just dropped)."
+            if isinstance(unhealed, int) and unhealed else "")
+        print(f"note: reconcile applied — set {{{set_summary}}}; "
+              f"drop_edges: {rec_stats.get('reconcile_edges_dropped', 0)} edge(s); "
+              f"keep_edges: {rec_stats.get('duplicate_edges_resolved', 0)} duplicate(s) resolved; "
+              f"set_anchors: {rec_stats.get('anchors_corrected', 0)} anchor(s) "
+              f"corrected.{unhealed_tail}")
+    elif out_dir is not None and (out_dir / "reconcile.json").exists():
+        # S8: a reconcile file is present but was NOT passed — an assemble without it silently reverts
+        # every synthesis/trace assignment. Nudge, don't guess (the lead may have meant to omit it).
+        print(f"note: {out_dir / 'reconcile.json'} exists but --reconcile was not passed — this "
+              f"assemble did NOT apply it, so any subsystem/subdomain/runs_in/bucket/drop it holds is "
+              f"absent from the written map. Re-run with `--reconcile {out_dir / 'reconcile.json'}`.",
+              file=sys.stderr)
+    from coyomap.views import model_to_markdown
+
+    _stamp_tool_build(model)
+
+    # THE WRITE SIDE OF THE SAME GUARD, and the destructive half of the incident it exists for. A
+    # read of the clone's own map produces a wrong answer; a WRITE replaces the clone's committed
+    # map, which is what the 2026-09-02 build did. `assemble` is the only verb that writes one.
+    guard_wrong_map(out_dir / "project-map.json")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "project-map.json").write_text(to_canonical_json(model), encoding="utf-8")
+    (out_dir / "project-map.md").write_text(model_to_markdown(model), encoding="utf-8")
+    # The interactive viewer is served live by `coyomap serve` (built on demand from the model), so no
+    # HTML file is written here — registering the folder is enough for the server to pick it up.
+    from coyomap.viewer.recents import register_project  # registers the project with `coyomap serve` (best-effort)
+    register_project(out_dir)
+    if ensure_fragments_ignored(out_dir):
+        print(f"note: added 'build-fragments/' to {out_dir / '.gitignore'}")
+    for note in _unconsumed_fragment_notes(out_dir, frags):
+        print(note, file=sys.stderr)
+    print(f"Assembled {len(parts)} fragment(s) -> {out_dir / 'project-map.json'} "
+          f"(+ generated markdown view)")
+    # WS-T2: a self-describing one-line digest of WHAT this assemble did, so a transcript audit (builds
+    # alias the CLI) can see the auto-clean + reconcile effects without reverse-engineering a script.
+    print(f"  {_assemble_digest(model, stats, rec_stats)}")
+    print(f"Next: coyomap validate {out_dir / 'project-map.json'} --check-sources")
+    # AND, once the skeptics have voted, the verb that runs the whole close. A build follows these
+    # `Next:` lines literally; the close was hand-typed over 57 turns on a build where `ship` was
+    # named nowhere it would be seen.
+    # TWO LINES, both runnable. The premise of naming the next verb is that a build pastes these
+    # literally, so a parenthetical inside the command (`coyomap ship . (prepare)`) is a shell
+    # parse error dressed as advice. `out_dir.parent` is `.` under the documented `--out .coyomap`.
+    print(f"      then, once the verdicts are in — PREPARE, read the report it ends on:")
+    print(f"        coyomap ship {out_dir.parent}")
+    print(f"      then FINISH, with the note you wrote from that report:")
+    print(f"        coyomap ship {out_dir.parent} --note-file <path>")
+    return 0
+
+
+#: Every mutation counter the assemble can record, in digest display order: the `stats` key and the
+#: phrase the digest prints for it. THIS TABLE IS THE DIGEST — `_assemble_digest` iterates it and
+#: hand-writes nothing, so a counter cannot be computed and then go unreported.
+#:
+#: It WAS a hand-written chain of `if stats.get(...)` branches, and three of the eight counters had no
+#: branch at all: `duplicate_rules_collapsed`, `duplicate_entry_points_collapsed`, and `deps_merged`
+#: (which did not exist — the pass returned None). Two real map changes were traced to that silence:
+#: editing ONE rule's statement in a fragment splits a merged rule and mints an id that did not exist
+#: before, and re-anchoring ONE entry point re-sorts the minted range so a fifth of the EP ids point at
+#: a different surface. Both printed `ops: none`. `tests/test_assemble.py` parses this module for
+#: `stats[...]` writes and fails when one is missing here — the half a comment cannot enforce.
+_STATS_LABELS: tuple[tuple[str, str], ...] = (
+    ("actor_edges_stripped", "actor-edges stripped"),
+    ("deps_merged", "deps merged"),
+    ("components_merged", "components merged"),
+    ("duplicate_rules_collapsed", "dup-rules collapsed"),
+    ("duplicate_edges_collapsed", "dup-edges collapsed"),
+    ("duplicate_entry_points_collapsed", "dup-entry-points collapsed"),
+    ("entity_edges_derived", "C→E edges derived"),
+    ("messaging_rows_collapsed", "messaging rows collapsed"),
+    ("extras_sections_merged", "extras sections merged"),
+)
+
+#: The same contract for the `--reconcile` counters, which live in a second dict built by
+#: `reconcile.apply_reconcile`. `reconcile_set` (per-field counts) and `reconcile_riding_unhealed`
+#: (a warning, not a plain count) are rendered by hand below and are named in `_REC_STATS_CUSTOM` so
+#: the completeness test can see they are accounted for rather than forgotten.
+_REC_STATS_LABELS: tuple[tuple[str, str], ...] = (
+    ("duplicate_edges_resolved", "reconcile keep_edges"),
+    ("reconcile_edges_dropped", "reconcile drop_edges"),
+    ("anchors_corrected", "reconcile set_anchors"),
+    ("reconcile_relations_dropped", "reconcile drop_relations"),
+)
+
+_REC_STATS_CUSTOM: frozenset[str] = frozenset({"reconcile_set", "reconcile_riding_unhealed"})
+
+
+def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict[str, object]) -> str:
+    """One-line, self-describing summary of the assemble: the resulting inventory plus every mutation
+    the auto-clean passes and `--reconcile` made (all zero-suppressed) — the WS-T2 transcript trail."""
+    inv = {"C": len(model.components), "D": len(model.deps), "E": len(model.entities),
+           "edges": len(model.edges), "S": len(model.subsystems), "SD": len(model.subdomains)}
+    parts = [f"model: {', '.join(f'{k}:{v}' for k, v in inv.items() if v)}"]
+    ops: list[str] = []
+    for key, label in _STATS_LABELS:        # the table IS the digest — see _STATS_LABELS
+        if stats.get(key):
+            ops.append(f"{label} {stats[key]}")
+    sc = rec_stats.get("reconcile_set", {})
+    if isinstance(sc, dict) and any(sc.values()):
+        ops.append("reconcile set " + "/".join(f"{k}:{v}" for k, v in sc.items() if v))
+    # `keep_edges` removed 51 edges on a real map and the digest said nothing — the same silent
+    # delta the directive was added to stop. `set_anchors` exists because 14 corrected anchors
+    # were once lost silently; applying them silently is the same failure with the sign flipped.
+    # Both are rows in `_REC_STATS_LABELS` now, so neither can be dropped by editing this loop.
+    for key, label in _REC_STATS_LABELS:
+        value = rec_stats.get(key)
+        if isinstance(value, int) and value:
+            ops.append(f"{label} {value}")
+    # Unhealed riding steps belong HERE, in the digest, not on the reconcile note further up: the
+    # note is line 9 of 13 on a fresh assemble, so `| tail -4` (how a live build read this output)
+    # cuts it, while the digest is always in the last three lines. A report-only `drop_edges` that
+    # leaves steps behind is a pending edit — the next assemble re-derives the C→E edge from the
+    # surviving step — so it has to reach the reader who only sees the tail.
+    if rec_stats.get("reconcile_riding_unhealed"):
+        ops.append(f"UNHEALED riding steps {rec_stats['reconcile_riding_unhealed']} "
+                   f"(heal with drop_steps/repoint)")
+    parts.append("ops: " + ("; ".join(ops) if ops else "none"))
+    return " | ".join(parts)
+
+
+
+def _stamp_tool_build(model: ProjectModel) -> None:
+    """Record WHICH coyomap produced this map, beside the analysed repo's own commit.
+
+    A map is only comparable against another when you know the tool that made each. `compare`
+    once reported REGRESSED for a map that was simply newer: auth surfaces had moved from their
+    own table into business rules — a documented breaking change with no migration — and nothing in
+    either map said which side of it that map was built on. The same blindness makes a retrospective
+    quote a tool bug that was fixed hours earlier.
+
+    Best-effort: a coyomap installed outside a git clone has no commit to report, and a map that
+    predates this stamp carries nothing. Both read as unknown, never as equal.
+    """
+    from coyomap.provenance import git_value
+    home = Path(__file__).resolve().parents[2]
+    if not (home / ".git").exists():
+        # An ordinary install puts the package under `site-packages/`, so there is no clone and
+        # nothing honest to record. Left as None, which `compare` reports as unknown.
+        return
+    # `--dirty` because a development clone is the NORMAL case, and without it a map built from
+    # modified working-tree code is stamped with a commit that does not contain that code. That is
+    # a false provenance record, and a false one is worse than none: the whole point is to tell a
+    # reader which tool produced the map.
+    model.tool_commit = git_value(home, "describe", "--always", "--dirty", "--abbrev=7")
+    model.tool_committed = git_value(home, "log", "-1", "--format=%cd", "--date=short")
+
+def _unconsumed_fragment_notes(out_dir: Path, consumed: list[Path]) -> list[str]:
+    """Warn about fragments sitting in `<out>/build-fragments/` that were NOT passed to assemble — a
+    sub-agent that wrote to the wrong folder (`voice/.coyomap/…`) or a stale file the lead forgot. A
+    silently-dropped fragment reads as "assembled everything" when a whole slice is missing."""
+    frag_dir = out_dir / "build-fragments"
+    if not frag_dir.is_dir():
+        return []
+    consumed_resolved = {p.resolve() for p in consumed}
+    strays = [f for f in sorted(frag_dir.glob("*.json")) if f.resolve() not in consumed_resolved]
+    return [f"note: {frag_dir / f.name} is in build-fragments/ but was NOT assembled — a sub-agent may "
+            "have written to the wrong path, or it is stale; pass it, delete it, or move a "
+            "superseded raw fragment into build-fragments/raw/ (subdirectories are not scanned)."
+            for f in strays]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

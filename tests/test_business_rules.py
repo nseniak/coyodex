@@ -23,16 +23,16 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import grammar
-from coyodex.dump import _group_member_ids, legend_of, resolve_id
-from coyodex.anchors import strip_anchor
-from coyodex.assemble import _merge_duplicate_rules
-from coyodex.impact_git import ImpactCore, ImpactFile, compute_impact, load_map_extents
-from coyodex.audit_model import _THEMES, l2_worklist_model
-from coyodex.impact_lib import _CALL_SITE_KINDS, DirectHit, anchor_index
-from coyodex.impact_ripple import RippleOptions, build_impact_result, type_of
-from coyodex.balance_lib import next_free_group_id
-from coyodex.model import (
+from coyomap import grammar
+from coyomap.dump import _group_member_ids, legend_of, resolve_id
+from coyomap.anchors import strip_anchor
+from coyomap.assemble import _merge_duplicate_rules
+from coyomap.impact_git import ImpactCore, ImpactFile, compute_impact, load_map_extents
+from coyomap.audit_model import _THEMES, l2_worklist_model
+from coyomap.impact_lib import _CALL_SITE_KINDS, DirectHit, anchor_index
+from coyomap.impact_ripple import RippleOptions, build_impact_result, type_of
+from coyomap.balance_lib import next_free_group_id
+from coyomap.model import (
     ID_ARRAYS,
     ID_SHAPE,
     BusinessRule,
@@ -59,18 +59,18 @@ from coyodex.model import (
     remap_element_ids,
     to_canonical_json,
 )
-from coyodex.lint_fragment import lint_fragment_problems
-from coyodex.record import KNOWN_HEADINGS
-from coyodex.reconcile_build import coverage_report, expand
-from coyodex.reconcile import (
+from coyomap.lint_fragment import lint_fragment_problems
+from coyomap.record import KNOWN_HEADINGS
+from coyomap.reconcile_build import coverage_report, expand
+from coyomap.reconcile import (
     _SET_FIELD_OWNER,
     SetDirective,
     apply_reconcile,
     load_reconcile,
     validate_reconcile,
 )
-from coyodex.views import auth_surface_rows, model_to_graph, model_to_markdown
-from coyodex.validate_model import (
+from coyomap.views import auth_surface_rows, model_to_graph, model_to_markdown
+from coyomap.validate_model import (
     _referenced_ids,
     call_site_anchors,
     component_file_owners,
@@ -309,7 +309,7 @@ def test_dump_members_cli_accepts_a_block() -> None:
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / "project-map.json"
         path.write_text(to_canonical_json(make_ruled_model()), encoding="utf-8")
-        r = subprocess.run([sys.executable, "-m", "coyodex.dump", str(path), "--members", "BLK1"],
+        r = subprocess.run([sys.executable, "-m", "coyomap.dump", str(path), "--members", "BLK1"],
                            capture_output=True, text=True, cwd=REPO)
         assert r.returncode == 0, r.stderr
         assert [row["id"] for row in json.loads(r.stdout)] == ["BR1"]
@@ -447,12 +447,12 @@ def test_reconcile_refuses_a_block_on_a_non_rule() -> None:
 # not disjoint, and the step join is weak on byte equality.
 
 #: A FROZEN copy of this repo's own map (the 2026-08-25 commit the ambiguity was measured on),
-#: with its pre-index beside it. It used to be `.coyodex/project-map.json` itself, live. That made
+#: with its pre-index beside it. It used to be `.coyomap/project-map.json` itself, live. That made
 #: these tests depend on a file another session rewrites: a map rebuild in progress turned three of
 #: them red while the code they test had not moved, and the failure said nothing about the code.
 #:
 #: The live-map question these once doubled as — "is OUR map still good after a rebuild" — belongs
-#: to the map's own gates: `coyodex-eval compare`'s `auth-surfaces-no-drop` hard gate, and the
+#: to the map's own gates: `coyomap-eval compare`'s `auth-surfaces-no-drop` hard gate, and the
 #: retro's Step 1, which scores the new map against the previous one and reads the auth-surface
 #: agreement note. Both compare against the accepted map instead of hardcoding a count.
 FROZEN_MAP = REPO / "tests" / "fixtures" / "own-map" / "project-map.json"
@@ -1158,16 +1158,16 @@ def test_a_declared_absence_site_survives_a_json_round_trip() -> None:
 
 def test_record_accepts_every_heading_the_tools_read() -> None:
     """The bug class the 'Sweep debt' entry fixed, swept: 'Coverage exceptions' and 'Persistence
-    exceptions' were read by `validate` and rejected by `coyodex record` — exit 2 in a live build,
+    exceptions' were read by `validate` and rejected by `coyomap record` — exit 2 in a live build,
     pinned by nothing."""
-    src = "\n".join((REPO / "tools" / "coyodex" / f).read_text(encoding="utf-8")
+    src = "\n".join((REPO / "tools" / "coyomap" / f).read_text(encoding="utf-8")
                      for f in ("validate_model.py", "balance_lib.py", "audit_model.py",
                                "anchor_drift.py"))
     read = {h.lower() for h in re.findall(
         r'(?:extras_bodies\(m,|_recorded_ids\(m,|_recorded_line_keys\(m,)\s*"([^"]+)"', src)}
     read |= {h.lower() for h in re.findall(r'_EXCEPTIONS_HEADING\s*=\s*"([^"]+)"', src)}
     known = {h.lower() for h in KNOWN_HEADINGS}
-    assert read <= known, f"read by a tool, refused by `coyodex record`: {sorted(read - known)}"
+    assert read <= known, f"read by a tool, refused by `coyomap record`: {sorted(read - known)}"
 
 
 def test_assemble_merges_two_block_agents_stating_one_rule() -> None:
@@ -1256,7 +1256,7 @@ def test_a_ruleless_map_renders_no_business_logic_section() -> None:
 
 def test_all_three_committed_md_views_are_byte_identical() -> None:
     """There is no CI — nothing catches a forgotten regeneration but this."""
-    for rel in (".coyodex/project-map", "tests/fixtures/mcpolis-project-map",
+    for rel in (".coyomap/project-map", "tests/fixtures/mcpolis-project-map",
                 "eval/fixtures/trapdoor/golden/project-map"):
         m = load_model((REPO / f"{rel}.json").read_text(encoding="utf-8"))
         assert (REPO / f"{rel}.md").read_text(encoding="utf-8") == model_to_markdown(m), rel
@@ -1266,7 +1266,7 @@ def test_the_preamble_and_generated_notice_are_untouched() -> None:
     """Touching either churns all three committed `.md` files at once."""
     md = model_to_markdown(make_rendered_model())
     assert md.index("## T7") > md.index("Behavioral layer first")
-    assert "Generated with coyodex from `project-map.json`" in md
+    assert "Generated with coyomap from `project-map.json`" in md
 
 
 def test_a_site_renders_every_owner_of_a_shared_file() -> None:
@@ -1356,7 +1356,7 @@ def test_owners_of_a_shared_file_render_in_element_order() -> None:
 
 
 def test_a_contradictory_site_is_rendered_as_contradictory_not_as_a_clean_claim() -> None:
-    """`validate` blocks it, but `coyodex render` never runs validate — showing one half and
+    """`validate` blocks it, but `coyomap render` never runs validate — showing one half and
     dropping the other turns a contradiction into a claim."""
     m = make_checkable_model()
     m.rules[0].sites = [RuleSite(where="src/guard.py:3", why="w", no_call_site=True)]
@@ -1551,8 +1551,8 @@ def test_apply_drift_reaches_the_rule_site_writer_and_persists_it() -> None:
     the `cadence` failure that set is documented as having fixed. And the write gate hand-listed
     three counters, so once a fourth writer existed the correction applied in memory, printed, and
     was never persisted."""
-    from coyodex import fix
-    from coyodex.audit_model import rule_site_claim
+    from coyomap import fix
+    from coyomap.audit_model import rule_site_claim
     with tempfile.TemporaryDirectory() as td:
         make_rule_repo(td)
         m = make_checkable_model()
@@ -1568,8 +1568,8 @@ def test_apply_drift_reaches_the_rule_site_writer_and_persists_it() -> None:
 
 
 def test_a_skeptic_corrected_site_anchor_is_writable() -> None:
-    from coyodex import fix
-    from coyodex.audit_model import apply_anchor_corrections, rule_site_claim
+    from coyomap import fix
+    from coyomap.audit_model import apply_anchor_corrections, rule_site_claim
     assert "rule" in fix._WRITABLE_THEMES
     m = make_checkable_model()
     claim = rule_site_claim(m.rules[0].statement, "src/guard.py:3", "rejects a non-owner")
@@ -1579,7 +1579,7 @@ def test_a_skeptic_corrected_site_anchor_is_writable() -> None:
 
 def test_two_sites_matching_one_claim_are_refused_not_blind_written() -> None:
     m = make_checkable_model()
-    from coyodex.audit_model import apply_anchor_corrections, rule_site_claim
+    from coyomap.audit_model import apply_anchor_corrections, rule_site_claim
     m.rules.append(BusinessRule(id="BR2", name="Test rule", statement=m.rules[0].statement, sites=[
         RuleSite(where="src/guard.py:3", why="rejects a non-owner")]))
     claim = rule_site_claim(m.rules[0].statement, "src/guard.py:3", "rejects a non-owner")
@@ -1752,7 +1752,7 @@ def test_the_granularity_advisory_is_recordable() -> None:
 # The frontend cannot call Python, so the ONLY guard against a second derivation in JS is that the
 # transport carries the answer and the JS never recomputes it. These tests hold both halves.
 
-VIEWER = REPO / "tools" / "coyodex" / "viewer"
+VIEWER = REPO / "tools" / "coyomap" / "viewer"
 VIEWER_JS = (VIEWER / "viewer.js").read_text(encoding="utf-8")
 
 
@@ -1823,7 +1823,7 @@ def test_blocks_and_rules_are_graph_nodes() -> None:
 
 
 def test_the_bundle_gates_the_tab_on_the_map_having_rules() -> None:
-    from coyodex.viewer import gen_viewer
+    from coyomap.viewer import gen_viewer
     assert gen_viewer.build_view_bundle(model_to_graph(make_viewer_model()), None,
                                         VIEWER)["hasBusinessRules"] is True
     assert gen_viewer.build_view_bundle(model_to_graph(make_base_model()), None,
@@ -1923,7 +1923,7 @@ def test_the_readme_names_the_viewer_groups_and_no_tab() -> None:
     tabs = set(re.findall(r'<button data-view="[a-z]+" data-group="[a-z]+">([^<]+)</button>', html))
 
     readme = (REPO / "README.md").read_text(encoding="utf-8")
-    body = readme[readme.index("## What coyodex shows"):readme.index("## Why not just ask my agent")]
+    body = readme[readme.index("## What coyomap shows"):readme.index("## Why not just ask my agent")]
     named = [l.split("**")[1] for l in body.splitlines() if l.startswith("**")]
     assert named == groups, (named, groups)
     stale = set(re.findall(r"\*\*([^*]+)\*\*", body)) & tabs
@@ -1968,7 +1968,7 @@ def test_the_security_table_has_no_column_that_is_always_empty() -> None:
     """`auth_surface_rows` writes `who: ""` for every RULE-derived row — only a legacy `security[]`
     row ever carried one — so "Who can reach" was blank on every row of every rebuilt map. A legacy
     row's `who` rides in the Surface cell instead, the way the markdown view has always written it."""
-    from coyodex.views import auth_surface_rows
+    from coyomap.views import auth_surface_rows
     m = make_checkable_model()
     m.rules[0].access = True
     assert [r["who"] for r in auth_surface_rows(m)] == [""]     # the reason the column went
@@ -2027,9 +2027,9 @@ def test_a_rule_with_no_title_blocks_the_fragment_AND_validate() -> None:
 def test_the_title_is_schema_required_but_the_model_still_LOADS_without_it() -> None:
     """The two questions a required field answers are different. The schema asks "must new authored
     content carry this" — yes. The dataclass default asks "can an already-written map still be
-    read" — and it must be: with no default a pre-`name` map fails to LOAD, so `coyodex serve`
+    read" — and it must be: with no default a pre-`name` map fails to LOAD, so `coyomap serve`
     could not open it to show the reader what is wrong and `validate` could not report it either."""
-    from coyodex.json_schema import generate_schema
+    from coyomap.json_schema import generate_schema
     rule = generate_schema()["$defs"]["BusinessRule"]
     assert "name" in rule["required"]
     doc = json.loads(to_canonical_json(make_base_model()))
@@ -2082,7 +2082,7 @@ def test_a_nameless_rule_still_resolves_through_dump() -> None:
 
 
 def test_how_far_the_analysis_got_is_reported_on_the_map_tab_not_on_a_rule() -> None:
-    """Sweep debt and unverified call sites are facts about coyodex's ANALYSIS, not about the product.
+    """Sweep debt and unverified call sites are facts about coyomap's ANALYSIS, not about the product.
     They were chips on every rule, on the list and on the rule's own page. A reader asking what the
     product decides never asked how thoroughly the map was built, so they moved to System › About this
     map, beside functional coverage and every other such number. Nothing is lost: both are still
@@ -2205,7 +2205,7 @@ def test_the_flow_step_pane_uses_a_new_class_and_keys_by_container() -> None:
 def test_the_impact_summary_names_every_bucket_the_ripple_can_produce() -> None:
     """`showImpactSummary` iterates a closed list, so a bucket it cannot name is a row that
     vanishes while the direct/ripple counts still include it."""
-    from coyodex.impact_ripple import _KIND_BY_PREFIX, _KIND_BY_SYNTH
+    from coyomap.impact_ripple import _KIND_BY_PREFIX, _KIND_BY_SYNTH
     labels = VIEWER_JS[VIEWER_JS.index("const IMP_TYPE_LABEL = {"):]
     labels = labels[:labels.index("};")]
     missing = [k for k in set(_KIND_BY_PREFIX.values()) | set(_KIND_BY_SYNTH.values())
@@ -2242,7 +2242,7 @@ def test_a_block_is_never_a_files_primary_in_the_browser() -> None:
     FIRST. A block with a `source` then took over the file browser's selection for that file and
     landed the reader on the Dependencies tab instead of the component that owns it. A capability —
     the same never-drawn shape — passes None for exactly this reason."""
-    from coyodex.viewer.filetree import node_path_index
+    from coyomap.viewer.filetree import node_path_index
     m = make_checkable_model()
     m.blocks[0].source = "src/guard.py:1"
     g = model_to_graph(m)
@@ -2341,13 +2341,13 @@ def test_a_declared_absence_access_rule_says_so_in_the_table() -> None:
 def test_risk_is_authored_and_published() -> None:
     """The one thing a `security[]` row carried that a statement, a site and a `why` between them
     cannot say: what the decision's LIMIT costs."""
-    from coyodex.json_schema import generate_schema
+    from coyomap.json_schema import generate_schema
     props = generate_schema()["$defs"]["BusinessRule"]["properties"]
     assert "risk" in props and "AT STAKE" in props["risk"]["description"]
 
 
 def test_the_shape_line_counts_rules_and_names_a_legacy_row_as_legacy() -> None:
-    from coyodex.finalize import _shape_line
+    from coyomap.finalize import _shape_line
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / "project-map.json"
         m = make_checkable_model()
@@ -2365,7 +2365,7 @@ def test_the_legacy_fixtures_are_not_folded_and_cannot_be() -> None:
 
     This test used to open with the other half: our own LIVE map is folded, with 14 access rules.
     That half is gone. A hardcoded count of a file another session rebuilds is not a test of this
-    code, and the same question is already asked where it belongs — `coyodex-eval compare` holds an
+    code, and the same question is already asked where it belongs — `coyomap-eval compare` holds an
     `auth-surfaces-no-drop` hard gate, and the retro's Step 1 reads the auth-surface agreement
     between the new map and the previous one. Both beat a literal 14."""
     for rel in ("tests/fixtures/mcpolis-project-map", "eval/fixtures/trapdoor/golden/project-map"):
@@ -2421,7 +2421,7 @@ def test_the_rule_payload_carries_risk() -> None:
 def test_a_fragment_authoring_security_rows_is_told_they_are_legacy() -> None:
     """Nothing REJECTS a security row — a pre-fold map still loads. This is where a NEW build finds
     out, in the authoring agent's own turn rather than never."""
-    from coyodex.lint_fragment import lint_fragment_warnings
+    from coyomap.lint_fragment import lint_fragment_warnings
     m = make_checkable_model()
     m.security = [SecurityRow(surface="s", who="w", source="src/guard.py:3", risk="r")]
     assert any("legacy storage" in w for w in lint_fragment_warnings(m))

@@ -1,6 +1,6 @@
 # `grounding lint` finds this session's per-agent transcripts without the flag
 
-Change (2026-09-09): `coyodex grounding lint` defaults `--agent-transcripts` to
+Change (2026-09-09): `coyomap grounding lint` defaults `--agent-transcripts` to
 `~/.claude/projects/<repo slug>/<$CLAUDE_CODE_SESSION_ID>/subagents/` when that directory exists,
 and says on stderr which directory it read. The flag was advertised by the tool's own output and
 passed 0 times across four builds; on the 2026-09-08 mcpolis build the retro ran the check after

@@ -17,8 +17,8 @@ from __future__ import annotations
 import collections
 from pathlib import Path
 
-from coyodex import validate_model as vm
-from coyodex.model import (
+from coyomap import validate_model as vm
+from coyomap.model import (
     Flow,
     FlowStep,
     Group,
@@ -198,7 +198,7 @@ def test_completeness_counts_on_the_fixture() -> None:
     check to capability altitude means six real use cases — "Remove a team member", "Edit or remove
     an upstream" among them — no longer warn. Counting them is what keeps that a trade rather than a
     silent loss."""
-    from coyodex import validate_model as v
+    from coyomap import validate_model as v
     c = v.completeness_counts(load_fixture())
     assert c["use_cases"] == 25 and c["use_cases_traced"] == 15 and c["use_cases_untraced"] == 10
     assert c["capabilities"] == 7 and c["capabilities_untraced"] == 1
@@ -211,7 +211,7 @@ def test_graph_carries_the_overlay_data() -> None:
     """`capability_touch` and `completeness` ride in the graph because `viewer.js` cannot call the
     Python helper — and a second implementation in JS is exactly the drift this repo pays for
     elsewhere."""
-    from coyodex.views import model_to_graph
+    from coyomap.views import model_to_graph
     m = load_fixture()
     g = model_to_graph(m)
     assert g["capability_touch"] and g["completeness"]
@@ -223,7 +223,7 @@ def test_graph_carries_the_overlay_data() -> None:
 def test_use_case_nodes_carry_their_capability_as_parent() -> None:
     """Membership rides the EXISTING parent channel, exactly as a component's parent is its
     subsystem — so grouping by capability needs no second lookup table beside the nodes."""
-    from coyodex.views import model_to_graph
+    from coyomap.views import model_to_graph
     g = model_to_graph(load_fixture())
     assert g["nodes"]["UC1"]["parent"] == "CAP1"
     assert g["nodes"]["CAP1"]["kind"] == "capability"

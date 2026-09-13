@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex.records` — the ONE reader for recorded-exception lines.
+"""Tests for `coyomap.records` — the ONE reader for recorded-exception lines.
 
 Four families used to parse that one line shape with four regexes, and three of them carry a comment
 describing a real incident where the regex mis-read a key and OVER-suppressed. These tests pin the
@@ -15,8 +15,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from coyodex import records
-from coyodex.model import ExtraSection, ProjectModel
+from coyomap import records
+from coyomap.model import ExtraSection, ProjectModel
 
 
 def make_model(heading: str, body: str) -> ProjectModel:
@@ -113,7 +113,7 @@ def make_two_section_model() -> ProjectModel:
 
 
 def test_the_graph_tells_the_viewer_which_sections_are_the_build_record():
-    from coyodex.views import model_to_graph
+    from coyomap.views import model_to_graph
     flags = {x["heading"]: x["maintenance"] for x in model_to_graph(make_two_section_model())["extras"]}
     assert flags == {"Persistence exceptions": True, "Coverage exceptions": False}
 
@@ -122,8 +122,8 @@ def test_an_id_in_authored_prose_is_resolved_against_the_MODEL_not_the_diagram()
     """The bug this pins: resolving in the browser against the diagram's node map read `R3` as the
     FOURTH role, because the Context diagram used to mint its own zero-based `R0, R1, …` actor nodes,
     whose id space collided with the model's roles."""
-    from coyodex.model import Component, Role
-    from coyodex.views import model_to_graph
+    from coyomap.model import Component, Role
+    from coyomap.views import model_to_graph
     m = ProjectModel(title="T", goal="g")
     m.roles = [Role(id="R1", name="Tracker", kind="human", wants="x", drives="UC1"),
                Role(id="R2", name="Superadmin", kind="human", wants="y", drives="UC2"),
@@ -137,7 +137,7 @@ def test_an_id_in_authored_prose_is_resolved_against_the_MODEL_not_the_diagram()
 
 
 def test_an_id_the_map_does_not_define_is_left_alone():
-    from coyodex.views import model_to_graph
+    from coyomap.views import model_to_graph
     m = ProjectModel(title="T", goal="g")
     m.extras = [ExtraSection(heading="Balance exceptions", body="C99: long gone.")]
     assert model_to_graph(m)["extras"][0]["refs"] == {}
@@ -146,7 +146,7 @@ def test_an_id_the_map_does_not_define_is_left_alone():
 def test_the_markdown_puts_notes_before_the_build_record():
     """A reader scrolling the map should reach facts about their system before the adjudication log
     about the map."""
-    from coyodex.views import model_to_markdown
+    from coyomap.views import model_to_markdown
     md = model_to_markdown(make_two_section_model())
     assert md.index("## Coverage exceptions") < md.index("Map maintenance records")
     assert md.index("Map maintenance records") < md.index("### Persistence exceptions")
@@ -158,10 +158,10 @@ def test_every_element_named_in_a_committed_map_resolves_to_a_name():
     already know. Scanned with a DELIBERATELY BROADER pattern than `views._PROSE_ID` and filtered by
     the map's own element table, so dropping a prefix from that pattern — which is exactly how the
     role ids went unresolved — fails here instead of shipping raw ids to the screen."""
-    from coyodex.model import all_elements, load_model
-    from coyodex.views import model_to_graph
+    from coyomap.model import all_elements, load_model
+    from coyomap.views import model_to_graph
     repo = Path(__file__).resolve().parent.parent
-    maps = [repo / ".coyodex" / "project-map.json",
+    maps = [repo / ".coyomap" / "project-map.json",
             repo / "tests" / "fixtures" / "mcpolis-project-map.json",
             repo / "eval" / "fixtures" / "trapdoor" / "golden" / "project-map.json"]
     checked = 0
@@ -207,7 +207,7 @@ def test_line_repeats_so_one_process_records_a_batch():
     failed. They are independent appends under one heading — there was never a reason to separate
     them."""
     import json, tempfile
-    from coyodex.record import main
+    from coyomap.record import main
     with tempfile.TemporaryDirectory() as tmp:
         p = _extras(tmp)
         assert main(["--map", p, "--heading", "Entry-point coverage",
@@ -222,7 +222,7 @@ def test_line_repeats_so_one_process_records_a_batch():
 def test_lines_from_reads_a_file_and_skips_comments_and_blanks():
     """So the lead can paste a batch together, annotate it, and hand it over as-is."""
     import json, os, tempfile
-    from coyodex.record import main
+    from coyomap.record import main
     with tempfile.TemporaryDirectory() as tmp:
         src = os.path.join(tmp, "lines.txt")
         with open(src, "w") as fh:
@@ -239,7 +239,7 @@ def test_a_bad_line_in_a_batch_leaves_the_fragment_untouched():
     """Every line is shape-checked BEFORE anything is written. A partial append would leave the
     fragment holding some of a batch, and the caller cannot tell which without re-reading it."""
     import tempfile
-    from coyodex.record import main
+    from coyomap.record import main
     from pathlib import Path
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(_extras(tmp))
@@ -256,7 +256,7 @@ def test_replace_refuses_a_batch():
     """`--replace` corrects ONE record by prefix; a batch has no single target, and guessing which
     one it meant is the silent mis-write this command exists to prevent."""
     import tempfile
-    from coyodex.record import main
+    from coyomap.record import main
     with tempfile.TemporaryDirectory() as tmp:
         assert main(["--map", _extras(tmp), "--heading", "Entry-point coverage",
                      "--replace", "job", "--line", "a: x", "--line", "b: y"]) == 2
@@ -267,9 +267,9 @@ def test_every_heading_an_advisory_names_is_one_the_tools_read():
     not know X is a trap: `record` refuses the line and the finding ships as carried with no
     escape, under a message that promised one. One shipped exactly so ('Walk jumps'), and a
     docstring went on naming a heading that had been renamed. So every heading named as an escape
-    anywhere under `tools/coyodex/` must be registered — read straight off the source, so a
+    anywhere under `tools/coyomap/` must be registered — read straight off the source, so a
     renamed or newly minted heading fails here and not on a build."""
-    src_dir = Path(__file__).resolve().parents[1] / "tools" / "coyodex"
+    src_dir = Path(__file__).resolve().parents[1] / "tools" / "coyomap"
     texts = {p: p.read_text(encoding="utf-8") for p in sorted(src_dir.glob("*.py"))}
     # A heading reaches an advisory either as a literal or through a `*_HEADING` constant; the
     # constants are collected first so `'{WALK_JUMPS_HEADING}' extras heading` resolves too.

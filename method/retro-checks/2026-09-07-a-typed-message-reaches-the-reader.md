@@ -1,6 +1,6 @@
 # A message the operator types reaches the transcript reader
 
-Change (2026-09-07): `read_turns` in `eval/tools/coyodex_eval/transcript.py` accepts a plain-string
+Change (2026-09-07): `read_turns` in `eval/tools/coyomap_eval/transcript.py` accepts a plain-string
 `content` as one text block instead of dropping the record; `<task-notification` joins
 `_HARNESS_TEXT` so background chatter stays hidden; and `operator_text` no longer prepends a slash
 the `<command-name>` tag already carries. Tools only. No method text changed and no map was edited.
@@ -12,7 +12,7 @@ transcript with the people removed, and every "nobody noticed" finding it report
 
 **The reader kept `content` only when it was a LIST of blocks.** Every record the harness writes as
 a bare string was dropped whole, and those are exactly the records that are a person talking. On the
-2026-09-06 mcpolis build that was **77 of 336 user records**: the `/coyodex build` that started the
+2026-09-06 mcpolis build that was **77 of 336 user records**: the `/coyomap build` that started the
 build, 75 task-notifications, and the one word the operator typed to unblock a safety guard.
 
 The scorecard's own assertion asked whether anyone noticed the guard, read **0 operator lines on a
@@ -21,13 +21,13 @@ read the raw JSONL to see the turn at all.
 
 Two smaller faults came with it. Accepting string content alone would have rendered 75 background
 notifications as an operator speaking, which the reader's own docstring calls a worse answer than no
-answer. And the command that started the build rendered as `//coyodex build`, because this harness
+answer. And the command that started the build rendered as `//coyomap build`, because this harness
 version writes the slash inside the tag and the unwrapping added another.
 
 ## Checks
 
 1. expect: on the next build's transcript, `operator_text` over the user turns returns at least the
-   slash command that started the build. Measured on 2026-09-06: **2 records, `/coyodex build` and
+   slash command that started the build. Measured on 2026-09-06: **2 records, `/coyomap build` and
    `A`, against 0 before.**
    regression sign: 0 operator records on a session where a person demonstrably typed something.
    Check the raw JSONL for `"content": "` on a user record before believing the reader.

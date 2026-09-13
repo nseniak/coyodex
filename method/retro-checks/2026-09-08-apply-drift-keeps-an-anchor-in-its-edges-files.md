@@ -1,6 +1,6 @@
 # `apply-drift` refuses a correction into a file neither end of the edge lists
 
-Change (2026-09-08): `tools/coyodex/audit_model.py` gains `cross_file_refusals`, run by
+Change (2026-09-08): `tools/coyomap/audit_model.py` gains `cross_file_refusals`, run by
 `fix apply-drift` before both of its write paths (in place and `--to-reconcile`). A corrected
 anchor whose file is listed in neither endpoint's `files` is not written and is named on stderr.
 On the 2026-09-08 mcpolis build `apply-drift` rewrote 22 anchors with no file opened; one put

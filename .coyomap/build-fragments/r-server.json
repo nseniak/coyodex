@@ -1,0 +1,185 @@
+{
+  "rules": [
+    {
+      "id": "BR180",
+      "name": "Local machine only",
+      "statement": "A served map is reachable only from the machine that runs the server.",
+      "access": true,
+      "risk": "A map opens every line of a project's source, so a reachable server would let strangers read private code.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/serve.py:885",
+          "why": "Opens the listening address on this machine alone, so a connection from another machine never arrives."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:634",
+          "why": "Refuses a page request whose address names any host other than this machine."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:655",
+          "why": "Refuses the same way for a request that changes the remembered project list."
+        }
+      ]
+    },
+    {
+      "id": "BR181",
+      "name": "Deliberately added projects only",
+      "statement": "A project folder is served only when it was deliberately added, never because the server found it.",
+      "access": true,
+      "risk": "One careless start could otherwise put every repository on the machine in front of the browser.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/serve.py:883",
+          "why": "Builds the served set from the remembered folder list alone, with no search of the disk."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:697",
+          "why": "Refuses to add a folder that holds no coyomap data folder inside it."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:878",
+          "why": "Applies the same check to a folder named when the server is started."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:658",
+          "why": "Refuses a change to the remembered list unless the request came from this server's own start page."
+        }
+      ]
+    },
+    {
+      "id": "BR182",
+      "name": "No path leaves the project",
+      "statement": "A request for a file can only ever reach inside the mapped project's own folder.",
+      "access": true,
+      "risk": "Any page open in the browser could otherwise read private files anywhere on the machine.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/serve.py:778",
+          "why": "Rejects a file request whose path is absolute or climbs above the project folder."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:380",
+          "why": "Rejects a working copy read that escapes the project or names the version history folder."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:387",
+          "why": "Refuses a file whose real location, after following a shortcut, sits outside the project folder."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:849",
+          "why": "Hands back a shared page asset only when the requested name is one of the two allowed names."
+        }
+      ]
+    },
+    {
+      "id": "BR183",
+      "name": "Ignored files stay hidden",
+      "statement": "A file that version history deliberately ignores is never handed back to the browser.",
+      "access": true,
+      "risk": "A local settings file holding passwords is kept out of version history, and would otherwise be readable in the map.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/serve.py:391",
+          "why": "Allows a working copy read when version history already tracks the file."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:393",
+          "why": "Allows an untracked file only when no ignore rule covers it."
+        }
+      ]
+    },
+    {
+      "id": "BR184",
+      "name": "Frozen at the map's commit",
+      "statement": "Code shown beside the map is the version the map was built from, not whatever sits on disk now.",
+      "access": false,
+      "risk": "A reader comparing a box against edited code would blame the map for a mismatch the map never made.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/serve.py:782",
+          "why": "Answers a file request at the map's own commit unless the address asks for another version."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:491",
+          "why": "Builds the file list from version history at the map's commit rather than from the folder on disk."
+        },
+        {
+          "where": "method.md:3108",
+          "why": "The instructions tell the reader that data and source both come from history at the map's commit."
+        }
+      ]
+    },
+    {
+      "id": "BR185",
+      "name": "Plain version names only",
+      "statement": "A version name arriving in a web address is refused unless it reads as an ordinary commit name.",
+      "access": true,
+      "risk": "A crafted name could otherwise be taken as an instruction and make the history reader do something else.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/serve.py:790",
+          "why": "Refuses a requested version that is not a plain commit identifier."
+        },
+        {
+          "where": "tools/coyomap/viewer/serve.py:301",
+          "why": "Skips the history read entirely when the map's own recorded commit is not plain."
+        },
+        {
+          "where": "tools/coyomap/impact_git.py:60",
+          "why": "Refuses a version name from a web address that does not read as an ordinary one.",
+          "no_call_site": false
+        }
+      ]
+    },
+    {
+      "id": "BR186",
+      "name": "Fingerprint-checked outside code",
+      "statement": "Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.",
+      "access": true,
+      "risk": "A tampered drawing or highlighting library would run inside a page that already shows every line of the project's source.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/viewer.html:17",
+          "why": "Pins the expected fingerprint of the picture panning library."
+        },
+        {
+          "where": "tools/coyomap/viewer/viewer.html:20",
+          "why": "Pins the expected fingerprint of the diagram drawing library."
+        },
+        {
+          "where": "tools/coyomap/viewer/viewer.js:14094",
+          "why": "Pins the expected fingerprint of the styling that colours source code."
+        },
+        {
+          "where": "tools/coyomap/viewer/viewer.js:14097",
+          "why": "Pins the expected fingerprint of the code colouring library itself."
+        }
+      ]
+    },
+    {
+      "id": "BR187",
+      "name": "Known editors only",
+      "statement": "A source link may open only through an address belonging to a known code editor.",
+      "access": true,
+      "risk": "A hand-typed link pattern could otherwise run script in the page or send the reader somewhere unexpected.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyomap/viewer/viewer.js:14880",
+          "why": "Offers no link when the built address is not one a known editor answers."
+        },
+        {
+          "where": "tools/coyomap/viewer/viewer.js:15011",
+          "why": "Refuses to save a hand-typed link pattern whose address is not a known editor one."
+        }
+      ]
+    }
+  ]
+}

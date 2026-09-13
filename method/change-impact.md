@@ -1,6 +1,6 @@
 # Change-impact analysis
 
-After you change code, coyodex reports the impact on the existing baseline map — what is
+After you change code, coyomap reports the impact on the existing baseline map — what is
 **modified / added / deleted** — so you understand the new code grounded in the model you
 already learned. No special machinery: the same skill as building the baseline (read code →
 meaning), scoped to the diff.
@@ -9,8 +9,8 @@ meaning), scoped to the diff.
 
 | Step | Action | Writes | Committed? |
 |---|---|---|---|
-| **1 Build** | map the repo | `.coyodex/project-map.json` (+ the generated `project-map.md` view + `preindex.json`; the diagram is served, never written) | yes — pinned to the code commit it describes |
-| **2 Analyze** | diff the code against the baseline | `.coyodex/analysis-changes/<date>.md` (the report) | **no** — written to disk, uncommitted |
+| **1 Build** | map the repo | `.coyomap/project-map.json` (+ the generated `project-map.md` view + `preindex.json`; the diagram is served, never written) | yes — pinned to the code commit it describes |
+| **2 Analyze** | diff the code against the baseline | `.coyomap/analysis-changes/<date>.md` (the report) | **no** — written to disk, uncommitted |
 | **3 Accept** | fold the report into the baseline | patches `project-map.json`, regenerates the markdown view + pre-index | yes — all committed |
 
 The change-impact report is a **file from the moment it's generated** (step 2) — just
@@ -120,29 +120,29 @@ clean baseline.
 
 ## Accept — the four actions
 
-1. Apply the report's `was → now` blocks to the MODEL, `.coyodex/project-map.json` (mechanical —
+1. Apply the report's `was → now` blocks to the MODEL, `.coyomap/project-map.json` (mechanical —
    surgical field/array edits; the report's `was → now` text names the fields).
 2. Bump its commit pin (the model's `commit` and `committed` fields) to the code commit it now
    describes — the same
-   **pin gate** as Build applies (`method.md`): the *code* must be committed (the `.coyodex/` report
+   **pin gate** as Build applies (`method.md`): the *code* must be committed (the `.coyomap/` report
    and map you are accepting are expected to be dirty — that's what this step commits), else give the
    user the A/B choice and record the pin `-dirty` only if they pick B.
 3. Regenerate the committed derived artifacts at the new pin — deterministic, no new inference:
-   (a) re-render the markdown view (`.venv/bin/coyodex render .coyodex/project-map.json
-   .coyodex/project-map.md`); (b) **if the map has a pre-index** (`.coyodex/preindex.json` exists),
-   rebuild it at the now-current commit (`.venv/bin/coyodex preindex --root <repo>`) so its
+   (a) re-render the markdown view (`.venv/bin/coyomap render .coyomap/project-map.json
+   .coyomap/project-map.md`); (b) **if the map has a pre-index** (`.coyomap/preindex.json` exists),
+   rebuild it at the now-current commit (`.venv/bin/coyomap preindex --root <repo>`) so its
    `file:line` anchors match the re-pinned map — the viewer's symbol search reads it, so a pin bump
    without this leaves the committed index stale (wrong lines for the files the change touched). (The
    interactive diagram is served live from the model; there is no `.html` file to re-render.)
-4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
+4. The draft `.coyomap/analysis-changes/<date>.md` becomes the committed record (no rewrite).
 5. git-commit all (map + markdown view + pre-index + report) — so baseline-commit stays aligned with
    code-commit. The commit IS the acceptance.
-6. **Finish by reporting the URL to open the diagram** in the coyodex map server (where the file
-   browser + code viewer work): if the server isn't already running, start it from the coyodex clone
-   with `make start` (or `.venv/bin/coyodex serve`), then open
-   `http://127.0.0.1:8765/coyodex/<repo-folder-name>/` — or the landing page `http://127.0.0.1:8765/` and
+6. **Finish by reporting the URL to open the diagram** in the coyomap map server (where the file
+   browser + code viewer work): if the server isn't already running, start it from the coyomap clone
+   with `make start` (or `.venv/bin/coyomap serve`), then open
+   `http://127.0.0.1:8765/coyomap/<repo-folder-name>/` — or the landing page `http://127.0.0.1:8765/` and
    click this project. For the address of ONE element (a use case the report names, say),
-   `.venv/bin/coyodex url <ID> --repo <repo>` prints it, port included.
+   `.venv/bin/coyomap url <ID> --repo <repo>` prints it, port included.
 
 ## Deliberately out of scope (for now)
 

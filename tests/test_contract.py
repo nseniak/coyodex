@@ -1,4 +1,4 @@
-"""Tests for `coyodex contract <name>` — the verb that hands an agent its half of a contract.
+"""Tests for `coyomap contract <name>` — the verb that hands an agent its half of a contract.
 
 The bug this verb exists to remove was silent: a build filled the skeptic template with one text
 replacement and sent the whole file, so ten skeptics received the LEAD's instructions as their own
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from coyodex import contract
+from coyomap import contract
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -119,7 +119,7 @@ def test_no_argument_prints_usage_and_fails_so_a_typo_is_never_silent() -> None:
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         assert contract.main([]) == 2
-    assert "usage: coyodex contract" in out.getvalue()
+    assert "usage: coyomap contract" in out.getvalue()
 
 
 def test_the_verb_prints_the_contract_to_stdout() -> None:
@@ -154,7 +154,7 @@ def test_the_skeleton_lists_only_slots_the_agent_actually_receives() -> None:
     those would ask the lead to fill words that reach nobody."""
     keys = contract.slots("rules")
     assert "angle-bracket" not in keys
-    assert set(keys) == {"REPO", "PROJECT", "COYODEX_HOME", "MAP", "BLOCK", "AGENT_ID"}
+    assert set(keys) == {"REPO", "PROJECT", "COYOMAP_HOME", "MAP", "BLOCK", "AGENT_ID"}
 
 
 def test_the_skeleton_is_json_with_every_slot_empty() -> None:
@@ -302,7 +302,7 @@ def test_an_unreadable_slots_file_is_refused_by_name(tmp_path: Path) -> None:
 
 def _fill_to(tmp: Path, out: Path, extra: list[str] | None = None) -> tuple[int, str]:
     import contextlib, io, json as _json
-    from coyodex.contract import main, slots
+    from coyomap.contract import main, slots
     values = {k: "x" for k in slots("skeptic")}
     src = tmp / "slots.json"
     src.write_text(_json.dumps(values), encoding="utf-8")
@@ -353,14 +353,14 @@ def test_a_fresh_path_still_writes():
 # a positional fill is silent when it is wrong. `trace` already used bare tokens.
 
 def test_no_shipped_contract_has_a_prose_slot_key():
-    from coyodex.contract import CONTRACTS, slots
+    from coyomap.contract import CONTRACTS, slots
     for name in CONTRACTS:
         slots(name)          # raises ValueError naming the offending keys
 
 
 def test_a_prose_slot_key_is_refused_with_the_key_it_objects_to(tmp_path):
     import re
-    from coyodex import contract
+    from coyomap import contract
     home = tmp_path / "home"
     (home / "method" / "templates").mkdir(parents=True)
     (home / "method" / "templates" / "toy-contract.md").write_text(
@@ -377,8 +377,8 @@ def test_a_prose_slot_key_is_refused_with_the_key_it_objects_to(tmp_path):
 def test_the_doors_contract_ships_and_names_its_own_slots():
     """The doors rule is ~9 KB of method.md and was hand-paraphrased into every brief; the argus
     build's was 9,031 bytes with no gate on the paraphrase."""
-    from coyodex.contract import render, slots
-    assert set(slots("doors")) == {"FLOWS", "MAP", "REPO", "SURFACES", "AGENT_ID", "COYODEX_HOME"}
+    from coyomap.contract import render, slots
+    assert set(slots("doors")) == {"FLOWS", "MAP", "REPO", "SURFACES", "AGENT_ID", "COYOMAP_HOME"}
     text = render("doors")
     # The rule the hand-written brief dropped.
     assert "kind: service" in text and "audience: internal" in text
@@ -389,22 +389,22 @@ def test_the_doors_contract_ships_and_names_its_own_slots():
 
 # --- the cd rule must travel in the BRIEF (retro 2026-09-02, mcpolis N4) --------------------------
 # The rule lived only in `method.md`, which no sub-agent reads. On the 2026-09-02 build 8 of 75
-# agents stepped into the coyodex clone, 33 times, and one build before that the same slip edited
+# agents stepped into the coyomap clone, 33 times, and one build before that the same slip edited
 # the clone's committed map. A rule an agent never sees is not a rule.
 
 def test_every_dispatched_contract_carries_the_cd_rule():
-    from coyodex.contract import CONTRACTS, render
+    from coyomap.contract import CONTRACTS, render
     # `harvest-t5` is an ADDENDUM appended to one harvest brief, which carries the rule itself.
     for name in CONTRACTS:
         if name == "harvest-t5":
             continue
-        assert "NEVER `cd` into the coyodex clone" in render(name), name
+        assert "NEVER `cd` into the coyomap clone" in render(name), name
 
 
 def test_the_cd_rule_says_it_persists_BEYOND_this_command():
     """"across `;` and `&&`" was the whole sentence, and the expensive half is the rest of the
     session — a later command that mentions no clone at all still reads the wrong map."""
-    from coyodex.contract import render
+    from coyomap.contract import render
     text = render("trace")
     assert "rest of your session" in text, text[:400]
 
@@ -413,7 +413,7 @@ def test_the_cd_rule_says_it_persists_BEYOND_this_command():
 # A filled slot is a filled slot, so no other check could see either of these.
 
 def _harvest_values(**over) -> dict[str, str]:
-    from coyodex.contract import slots
+    from coyomap.contract import slots
     base = {k: "x" for k in slots("harvest")}
     base.update({"SERVES": "UC7 rename a page, R1 the owner", "SLICE_KIND": "structural",
                  "EXPECTED_COMPONENTS": "6"})
@@ -424,13 +424,13 @@ def _harvest_values(**over) -> dict[str, str]:
 def test_a_SERVES_naming_no_behavioural_id_is_refused():
     """All 14 harvest briefs on one build filled it with a map-section name. Assertion 31 went
     1.00 -> 0.00 and the harvest returned components with no backbone edge at all."""
-    from coyodex.contract import fill
+    from coyomap.contract import fill
     with pytest.raises(ValueError, match="names no behavioural id"):
         fill("harvest", _harvest_values(SERVES="T5 domain model"))
 
 
 def test_a_SERVES_naming_any_behavioural_id_passes():
-    from coyodex.contract import fill
+    from coyomap.contract import fill
     for value in ("UC7 rename a page", "R1 the owner", "CAP2 billing", "HP3 the third step"):
         fill("harvest", _harvest_values(SERVES=value))
 
@@ -441,7 +441,7 @@ def test_a_component_budget_is_NOT_judged_by_the_slice_kind_text():
     slices, and the remedy it demanded (write `0`) put "Expect roughly 0 components" in front of a
     slice that really had seven. Catching the real fault needs an enum of slice kinds, which the
     contract does not have."""
-    from coyodex.contract import fill
+    from coyomap.contract import fill
     for kind in ("config loading and startup", "HTTP routing and config parsing",
                  "deployment scripts and the CI workflow", "the entity store adapters",
                  "T5 entities"):
@@ -452,7 +452,7 @@ def test_a_path_in_a_batch_id_slot_is_refused() -> None:
     """The contract composes `claims-«CLAIMS».json` and `verdicts-«BATCH».json` itself; a path in
     either slot names a file that exists nowhere, in every brief — 38 of 38 on one build."""
     values = make_slot_values("skeptic")
-    values["CLAIMS"] = ".coyodex/verify/claims-backbone-1.json"
+    values["CLAIMS"] = ".coyomap/verify/claims-backbone-1.json"
     with pytest.raises(ValueError, match="looks like a path"):
         contract.fill("skeptic", values)
     values["CLAIMS"], values["BATCH"] = "backbone-1", "backbone-1a"
@@ -481,7 +481,7 @@ def _batches_dir(tmp: Path) -> Path:
 
 def _skeptic_slots_file(tmp: Path, **over: str) -> Path:
     import json as _json
-    from coyodex.contract import slots
+    from coyomap.contract import slots
     values = {k: "x" for k in slots("skeptic") if k not in ("BATCH", "CLAIMS")}
     values.update(over)
     src = tmp / "slots.json"
@@ -491,7 +491,7 @@ def _skeptic_slots_file(tmp: Path, **over: str) -> Path:
 
 def _from_batches(tmp: Path, extra: list[str] | None = None) -> tuple[int, str]:
     import contextlib, io
-    from coyodex.contract import main
+    from coyomap.contract import main
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
         rc = main(["skeptic", "--from-batches", str(tmp / "verify"), "--fill",
@@ -540,7 +540,7 @@ def test_a_harvest_fill_records_its_component_budget(tmp_path: Path) -> None:
     """`lint-fragment --expect` holds one slice to its budget; nothing summed them (60 budgeted,
     114 shipped). The fill records each brief's budget where `finalize` adds them up."""
     import contextlib, io, json as _json
-    from coyodex.contract import main
+    from coyomap.contract import main
     repo = tmp_path / "repo"
     repo.mkdir()
     values = _harvest_values(REPO_ABS=str(repo), **{"agent-id": "t1"}, EXPECTED_COMPONENTS="~6")
@@ -550,7 +550,7 @@ def test_a_harvest_fill_records_its_component_budget(tmp_path: Path) -> None:
     with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
         rc = main(["harvest", "--fill", str(src), "--out", str(tmp_path / "t1.md")])
     assert rc == 0, buf.getvalue()
-    doc = _json.loads((repo / ".coyodex" / "verify" / "budgets.json").read_text(encoding="utf-8"))
+    doc = _json.loads((repo / ".coyomap" / "verify" / "budgets.json").read_text(encoding="utf-8"))
     assert doc["harvest"] == {"t1": 6}, doc      # `session` is present only inside a build session
 
 
@@ -559,7 +559,7 @@ def test_a_harvest_fill_records_its_component_budget(tmp_path: Path) -> None:
 def test_budget_of_reads_the_first_number_only() -> None:
     """Real briefs wrote `**4–6**`, `~10 (8–12)` and `five`; a digit-scrape made 46 and 10812 of
     the first two. The first number is the budget; a range records its low end; a word, None."""
-    from coyodex.contract import budget_of
+    from coyomap.contract import budget_of
     assert [budget_of(v) for v in ("~8", "**4–6**", "~10 (8–12)", "5 to 7", "five", "")] == \
         [8, 4, 10, 5, None, None]
 
@@ -568,13 +568,13 @@ def test_a_budgets_file_belongs_to_one_build(tmp_path: Path) -> None:
     """A rebuild names its agents afresh; merging across builds would sum two harvests against
     one map. Another session's file is started over; a word-valued slot is kept as None."""
     import json as _json
-    from coyodex.contract import record_budget
+    from coyomap.contract import record_budget
     record_budget(tmp_path, "h1", "6", session="s1")
     record_budget(tmp_path, "h2", "five", session="s1")
-    doc = _json.loads((tmp_path / ".coyodex" / "verify" / "budgets.json").read_text(encoding="utf-8"))
+    doc = _json.loads((tmp_path / ".coyomap" / "verify" / "budgets.json").read_text(encoding="utf-8"))
     assert doc == {"harvest": {"h1": 6, "h2": None}, "session": "s1"}, doc
     record_budget(tmp_path, "h-entry", "4-6", session="s2")
-    doc = _json.loads((tmp_path / ".coyodex" / "verify" / "budgets.json").read_text(encoding="utf-8"))
+    doc = _json.loads((tmp_path / ".coyomap" / "verify" / "budgets.json").read_text(encoding="utf-8"))
     assert doc == {"harvest": {"h-entry": 4}, "session": "s2"}, doc
 
 

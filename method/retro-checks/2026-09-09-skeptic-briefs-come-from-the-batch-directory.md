@@ -1,6 +1,6 @@
 # The skeptic briefs are written from the batch directory, never by a hand loop
 
-Change (2026-09-09): `coyodex contract skeptic --from-batches .coyodex/verify --fill <slots>
+Change (2026-09-09): `coyomap contract skeptic --from-batches .coyomap/verify --fill <slots>
 --out-dir <dir> [--votes security=3]` writes one brief per `claims-*.json`, filling «BATCH» and
 «CLAIMS» from the file names, writes N voters (`-a`, `-b`, `-c`) over one claims file for a voted
 theme, SKIPS any brief that already exists, and prints the pointer prompts to send. On the

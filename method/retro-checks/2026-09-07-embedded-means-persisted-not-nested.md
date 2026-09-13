@@ -1,15 +1,15 @@
 # `embedded` means persisted inside a saved parent, not nested inside anything
 
 Change (2026-09-07): `method/model.md` gives `embedded` the definition `projection` already had;
-`tools/coyodex/json_schema.py` says PERSISTED in the store-mode description an agent actually reads,
-and `method/project-map.schema.json` is regenerated from it; `tools/coyodex/validate_model.py` gains
+`tools/coyomap/json_schema.py` says PERSISTED in the store-mode description an agent actually reads,
+and `method/project-map.schema.json` is regenerated from it; `tools/coyomap/validate_model.py` gains
 an advisory for a record marked `embedded` that nothing saved holds, escaped by a SCOPED token.
 
 Escalation: none on its own.
 
 ## What this change is answering
 
-**The word was defined in exactly one file no map-building agent opens** — `tools/coyodex/
+**The word was defined in exactly one file no map-building agent opens** — `tools/coyomap/
 grammar.py`, "persisted INSIDE a parent entity's row/document". What the agent read said
 "embedded (inside a parent's row)", with PERSISTED missing, so it read the word as **nested**.
 
@@ -48,7 +48,7 @@ A waiver written for one question must not answer a different one.
 
 1. **`method/domain-cards.md` lists the seven modes and defines none**, and it is the entity agent's
    own spec page.
-2. **`method/templates/t5-addendum.md` ships `«COYODEX_HOME»` unsubstituted**, in both builds, so
+2. **`method/templates/t5-addendum.md` ships `«COYOMAP_HOME»` unsubstituted**, in both builds, so
    the only pointer to that spec page is a dead path.
 3. **68 of 82 records go unchallenged on where they live.** The reader worklist could carry one
    claim per `embedded` row.

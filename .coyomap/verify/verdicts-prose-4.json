@@ -1,0 +1,11 @@
+{
+  "schema": "coyomap/prose-batch/v1",
+  "instructions": "For each field you flag, return its `where` exactly as given in the input, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+  "verdicts": [
+    {
+      "where": "BLK5 purpose",
+      "issue": "unknown word",
+      "note": "partial pass"
+    }
+  ]
+}

@@ -2,8 +2,8 @@
 
 Change (2026-09-07): the interface sweep in `method.md` gains its REVERSE arm — answer every walk
 report that says no surface fitted — with a **"Missing surfaces"** extras heading as its escape.
-`tools/coyodex/validate_model.py` gains the advisory that makes it checkable, and
-`tools/coyodex/records.py` registers the heading.
+`tools/coyomap/validate_model.py` gains the advisory that makes it checkable, and
+`tools/coyomap/records.py` registers the heading.
 
 Escalation: none on its own.
 
@@ -32,14 +32,14 @@ Eight other flow reports landed in the four minutes after that one.
 
 **Measured, and CORRECTED after an adversarial review.** Person-facing walks whose person is left
 acting with nothing handed back: **0 of 50 on the 2026-09-02 map and 4 of 43 on the 2026-09-07 map**,
-one of them UC3. Also 3 of argus's 18 person-facing walks and 3 of coyodex's own 18. **Every
+one of them UC3. Also 3 of argus's 18 person-facing walks and 3 of coyomap's own 18. **Every
 denominator here is person-facing walks, not flows** — an earlier draft of this line said "3 of 40"
 for a map that has 38 flows, having borrowed the 40 from the sibling check's own denominator.
 
 The first shipped version was wrong in both directions and a reviewer reproduced each on a live map:
 
 - it took the last step touching ANY actor and then asked whether that one was a person, so **one
-  machine step after a person's dead end hid it** — silent on argus UC3 and coyodex UC38, the exact
+  machine step after a person's dead end hid it** — silent on argus UC3 and coyomap UC38, the exact
   defect it exists for;
 - it read a walk's OWN steps, so a reply handed back inside a shared sub-flow read as no
   reply. **This one has no live instance**: expanded and own steps give identical rows on all four

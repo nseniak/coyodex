@@ -1,0 +1,219 @@
+{
+  "components": [
+    {
+      "id": "C80",
+      "name": "Map rendering",
+      "purpose": "Turns a stored map into the readable file kept beside the code. Also builds the boxes and arrows the browser draws.",
+      "source": "tools/coyomap/views.py:299",
+      "entry_point": "tools/coyomap/viewer/render.py:22",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/views.py",
+        "tools/coyomap/viewer/render.py"
+      ]
+    },
+    {
+      "id": "C81",
+      "name": "Feature facts",
+      "purpose": "Works out what each feature owns: its people, its decisions, its records and the doors reaching it.",
+      "source": "tools/coyomap/features.py:410",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/features.py"
+      ]
+    },
+    {
+      "id": "C82",
+      "name": "Diagram builder",
+      "purpose": "Draws every diagram, timeline and flow of one map, ready for the browser page to show.",
+      "source": "tools/coyomap/viewer/gen_viewer.py:3322",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/viewer/gen_viewer.py"
+      ]
+    },
+    {
+      "id": "C83",
+      "name": "Map server",
+      "purpose": "Serves every map on this machine at a local web address. Reads a project's own code from its version history.",
+      "source": "tools/coyomap/viewer/serve.py:869",
+      "entry_point": "tools/coyomap/viewer/serve.py:919",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/viewer/serve.py",
+        "tools/coyomap/viewer/diffmap.py"
+      ]
+    },
+    {
+      "id": "C84",
+      "name": "File browser",
+      "purpose": "Lists a project's folders and files, marking each one by how far the map covers it.",
+      "source": "tools/coyomap/viewer/filetree.py:214",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/viewer/filetree.py"
+      ]
+    },
+    {
+      "id": "C85",
+      "name": "Remembered projects",
+      "purpose": "Keeps the list of project folders a person has opened, so each map is one click away next time.",
+      "source": "tools/coyomap/viewer/recents.py:22",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/viewer/recents.py"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "kind": "ui-route",
+      "trigger": "Opening the server's home address lists every project folder opened before, each one openable or removable.",
+      "source": "tools/coyomap/viewer/serve.py:640",
+      "activation": "external"
+    },
+    {
+      "kind": "ui-route",
+      "trigger": "Opening a project's own address returns the browser page that draws that project's map.",
+      "source": "tools/coyomap/viewer/serve.py:730",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened.",
+      "source": "tools/coyomap/viewer/serve.py:677",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map.",
+      "source": "tools/coyomap/viewer/serve.py:688",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Posting to `/api/open` remembers a folder and starts serving the map inside it.",
+      "source": "tools/coyomap/viewer/serve.py:700",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Posting to `/api/forget` drops a folder from the remembered list and stops serving its map.",
+      "source": "tools/coyomap/viewer/serve.py:708",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Posting to `/api/reorder` saves a new order for the remembered project folders.",
+      "source": "tools/coyomap/viewer/serve.py:717",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/static` returns the shared script or stylesheet every map page is drawn with.",
+      "source": "tools/coyomap/viewer/serve.py:851",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/view` returns every diagram, flow and colour the page needs for one map.",
+      "source": "tools/coyomap/viewer/serve.py:752",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/rawmap` returns the stored map exactly as its file holds it, byte for byte.",
+      "source": "tools/coyomap/viewer/serve.py:763",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/tree` returns the project's folders and files, each marked by how far the map covers it.",
+      "source": "tools/coyomap/viewer/serve.py:769",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/symbols` returns every function and class name found in the project at the map's commit.",
+      "source": "tools/coyomap/viewer/serve.py:775",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/src` returns one file's text, read at the map's commit or at another one named in the request.",
+      "source": "tools/coyomap/viewer/serve.py:797",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/health` says the server is answering and names the commit this map is pinned to.",
+      "source": "tools/coyomap/viewer/serve.py:746",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/impact` says what a code change between two commits does to the map.",
+      "source": "tools/coyomap/viewer/serve.py:807",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/impactcommits` lists the commits before and after the one this map is pinned to.",
+      "source": "tools/coyomap/viewer/serve.py:815",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/impactsrcdiff` returns one file's line-by-line changes between two commits.",
+      "source": "tools/coyomap/viewer/serve.py:822",
+      "activation": "external"
+    },
+    {
+      "kind": "http-route",
+      "trigger": "Asking `/api/dev-reload` says whether the viewer's own files changed, so a map page can reload itself.",
+      "source": "tools/coyomap/viewer/serve.py:744",
+      "activation": "external"
+    },
+    {
+      "kind": "startup-hook",
+      "trigger": "Starting the server reads the remembered folders and loads every map still found there.",
+      "source": "tools/coyomap/viewer/serve.py:883",
+      "activation": "self",
+      "cadence": "on-boot",
+      "cadence_source": "tools/coyomap/viewer/serve.py:885"
+    },
+    {
+      "kind": "poller",
+      "trigger": "A map page opened in developer mode asks the server every second whether the viewer's files changed.",
+      "source": "tools/coyomap/viewer/serve.py:225",
+      "activation": "self",
+      "cadence": "every 1s",
+      "cadence_source": "tools/coyomap/viewer/serve.py:222"
+    }
+  ],
+  "deps": [],
+  "observability": [
+    {
+      "signal": "Stale-code warning on the server's console",
+      "where_emitted": "Printed to the terminal running the map server, at most once every two seconds, when the tool's own code has changed since the server started.",
+      "where_viewed": "The terminal the person started the server in.",
+      "alerts": "Nothing is configured; nobody is notified."
+    },
+    {
+      "signal": "Web request log",
+      "where_emitted": "Nothing is emitted. The server's own per-request log line is deliberately switched off.",
+      "where_viewed": "Nowhere.",
+      "alerts": "Nothing is configured."
+    }
+  ],
+  "config": [
+    {
+      "key": "COYOMAP_NO_SERVE_REGISTER",
+      "purpose": "Stops a finished build from adding its project to the remembered list.",
+      "default": "Not set, so every build registers its project.",
+      "per_env": "Nothing is set per environment. The map-quality scoring run sets it so its throwaway maps never appear."
+    }
+  ],
+  "deployment": [],
+  "run_commands": []
+}

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Every `coyodex-eval` subcommand, through the real CLI, against committed fixtures — with a
+"""Every `coyomap-eval` subcommand, through the real CLI, against committed fixtures — with a
 completeness gate so a new command cannot ship without joining the sweep.
 
 The sibling of `tests/test_cli_sweep.py`, for the eval half of the toolchain, and it exists for the
 same reason: the per-command tests here build their own minimal inputs, so nothing ever ran these
-commands over a realistic map and a realistic transcript. The first sweep on the `coyodex` side
+commands over a realistic map and a realistic transcript. The first sweep on the `coyomap` side
 found a live crash on its first run — `grounding report` on the bare-list worklist that
 `audit --json | jq .worklist` produces — which every unit test had missed because none of them fed
 it that shape.
@@ -55,7 +55,7 @@ _FIXTURES_AT_START = _fixture_state()
 def cli(*args: str, cwd: Path = REPO, timeout: int = 120) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "-c",
-         "import sys;from coyodex_eval.cli import main;sys.exit(main(sys.argv[1:]))", *args],
+         "import sys;from coyomap_eval.cli import main;sys.exit(main(sys.argv[1:]))", *args],
         capture_output=True, text=True, cwd=cwd, stdin=subprocess.DEVNULL, timeout=timeout,
         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
 
@@ -65,7 +65,7 @@ def _advertised() -> set[str]:
 
     A hand-maintained copy is how a completeness gate quietly stops being complete: it passes while
     the tool grows past it."""
-    src = (REPO / "eval" / "tools" / "coyodex_eval" / "cli.py").read_text(encoding="utf-8")
+    src = (REPO / "eval" / "tools" / "coyomap_eval" / "cli.py").read_text(encoding="utf-8")
     import re
     return set(re.findall(r'cmd == "([a-z-]+)"', src))
 
@@ -95,7 +95,7 @@ def _ledger_file(t) -> "Path":
     """A minimal retro ledger. One row, no `landed_in`, so the sweep exercises the command without
     depending on any sha existing in this clone."""
     p = t / "findings.json"
-    p.write_text(json.dumps({"schema": "coyodex-retro-ledger/v1",
+    p.write_text(json.dumps({"schema": "coyomap-retro-ledger/v1",
                              "findings": [{"id": "x-1", "title": "t", "landed": False}]}),
                  encoding="utf-8")
     return p
@@ -144,7 +144,7 @@ RECIPES: dict[str, tuple] = {
     # A map against ITSELF: nothing can be lost, so the sweep exercises the whole path (load,
     # source check, match, report) on a pair that is guaranteed to exit 0.
     "arrows":         (lambda t: ["arrows", str(MAP), str(MAP), "--repo", str(FIXTURE)], OK),
-    # THIS repo, so the ledger's own sentences are found and the coyodex map is the one in-tree.
+    # THIS repo, so the ledger's own sentences are found and the coyomap map is the one in-tree.
     # argus and mcpolis live outside the checkout, so their rows skip. Exit 1 whenever a row is
     # stale — the normal state between a rebuild and the rewrite that follows it. NOT 2, which is
     # the ledger itself being broken; accepting that here would let a run where every row crashed
@@ -162,7 +162,7 @@ def test_every_advertised_eval_command_has_a_sweep_recipe():
     assert advertised, "could not read the dispatch table — the gate would pass vacuously"
     missing = sorted(advertised - set(RECIPES))
     stale = sorted(set(RECIPES) - advertised)
-    assert not missing, f"{missing} advertised by coyodex-eval with no sweep recipe"
+    assert not missing, f"{missing} advertised by coyomap-eval with no sweep recipe"
     assert not stale, f"{stale} in RECIPES but no longer advertised — delete the recipe"
 
 
@@ -203,5 +203,5 @@ def test_the_transcript_fixture_still_exercises_what_it_was_built_for():
     for sub in ("assemble", "validate", "audit", "preindex"):
         assert sub in r.stdout, f"`{sub}` vanished from the fixture's command index"
     assert "validate" in r.stdout, (
-        "the chained `&& coyodex validate` must stay visible to --commands — a retrospective once "
+        "the chained `&& coyomap validate` must stay visible to --commands — a retrospective once "
         "published that a command 'never ran' from the one-line index, which truncates at 100 chars")

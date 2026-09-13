@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex score` — the deterministic MapProfile (the eval's reusable heart).
+"""Tests for `coyomap score` — the deterministic MapProfile (the eval's reusable heart).
 
 Fixtures are JSON model documents (generated once from the retired md test notation
 at the Phase-3 boundary — see git history for the original markdown shorthand).
@@ -16,10 +16,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.model import ModelError
-from coyodex_eval.profile import MapProfile, build_profile
+from coyomap.model import ModelError
+from coyomap_eval.profile import MapProfile, build_profile
 
-SCORE = [sys.executable, "-m", "coyodex_eval.cli", "score"]
+SCORE = [sys.executable, "-m", "coyomap_eval.cli", "score"]
 
 
 # --- fixtures (JSON model documents) -----------------------------------
@@ -27,7 +27,7 @@ def make_counts_map() -> str:
     """A map with KNOWN element counts, so the profile's structural numbers are exact:
     UC 2 · S 1 · SD 1 · C 3 · D 1 · E 2 · edges 3 · GP 3 · flows 2 · auth-surfaces 2."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -238,7 +238,7 @@ def make_roles_then_usecases_map() -> str:
     the Use-cases table. This is the layout that made `_use_case_names` return [] (review Finding 1):
     iter_tables emits the Roles table first, so a `startswith('use case')`-only predicate read it."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -331,7 +331,7 @@ def make_roles_then_usecases_map() -> str:
 def make_broken_map() -> str:
     """References an undefined component C9 — a blocking validation problem (validate_ok is False)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -403,7 +403,7 @@ def make_broken_map() -> str:
 def make_backward_whyref_map() -> str:
     """HP1's `why:` cites HP2, which comes after it — a backward reference (audit CONTRADICTION)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -500,7 +500,7 @@ def make_read_before_create_map() -> str:
     """UC1 reads the order before UC2 writes it on the Happy Path — an audit ADVISORY (the
     component-granularity attribution is lossy, so this ordering signal never blocks)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -633,7 +633,7 @@ def make_read_before_create_map() -> str:
 def make_single_use_case_map() -> str:
     """A single use case, no components — used where the profile must show density as None."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -954,7 +954,7 @@ def test_a_pre_rename_profile_is_refused_with_an_explanation():
     loading as 0 or dying on a bare TypeError."""
     import json
     import pytest
-    from coyodex_eval.profile import MapProfile
+    from coyomap_eval.profile import MapProfile
     old = {"advisories": 3, "components": 10, "contradictions": 0}
     with pytest.raises(ValueError) as e:
         MapProfile.from_json(json.dumps(old))
@@ -965,7 +965,7 @@ def make_replicated_shapes_map() -> str:
     """Three deployment units hosting the IDENTICAL component set — a monolith in three shapes —
     plus one unit hosting nothing, and one component placed nowhere."""
     return json.dumps({
-        "format": "coyodex-map", "title": "", "goal": "", "commit": None, "committed": None,
+        "format": "coyomap-map", "title": "", "goal": "", "commit": None, "committed": None,
         "built": None, "roles": [], "glossary": [], "use_cases": [], "happy_path": [],
         "subsystems": [], "deps": [], "entry_points": [], "subdomains": [], "entities": [],
         "flows": [], "subflows": [], "edges": [], "messaging": [], "environments": [],
@@ -1018,7 +1018,7 @@ def make_auth_sites_map() -> str:
     single site is `no_call_site` (enforced by construction, so it has no line to compare), plus a
     legacy `security[]` row carrying its own anchor. A NON-access rule's site must not appear."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "", "goal": "", "commit": null, "committed": null, "built": null,
   "roles": [], "glossary": [], "use_cases": [], "subsystems": [], "subdomains": [],
   "components": [], "deps": [], "entities": [], "edges": [], "happy_path": [], "flows": [],
@@ -1077,7 +1077,7 @@ def test_old_baseline_without_auth_sites_loads_as_none() -> None:
 # actor definition passed the whole suite because of it.
 
 def _door_map(steps: str, roles: str) -> str:
-    return ("""{"format": "coyodex-map", "title": "D", "goal": "g",
+    return ("""{"format": "coyomap-map", "title": "D", "goal": "g",
   "roles": [%s],
   "use_cases": [{"id": "UC1", "name": "Do it", "actors": ["R1"]}],
   "happy_path": [{"id": "HP1", "uc": "UC1"}],
@@ -1143,8 +1143,8 @@ def test_the_profile_places_each_access_site_in_its_function_from_the_preindex_b
     import json as _json
     import tempfile
     from pathlib import Path as _P
-    from coyodex.model import FORMAT
-    from coyodex_eval.profile import build_profile
+    from coyomap.model import FORMAT
+    from coyomap_eval.profile import build_profile
     doc = {"format": FORMAT, "title": "t", "goal": "g",
            "components": [{"id": "C1", "name": "A", "purpose": "a", "source": "a.py:1"}],
            "rules": [{"id": "BR1", "statement": "Only admins delete", "block": "BLK1", "access": True,

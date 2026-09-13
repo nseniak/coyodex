@@ -344,24 +344,24 @@ validates clean and the Domain `classDiagram` renders with a working click-bridg
 browser: clicking a class shows its fields + source, clicking a relation shows its kind +
 cardinality).
 
-1. **`tools/coyodex/model.py`** — `Entity` / `EntityField` / `EntityRelation` / `Store` are the
+1. **`tools/coyomap/model.py`** — `Entity` / `EntityField` / `EntityRelation` / `Store` are the
    model's own typed fields (`fields`, `relations`, `store`), not a parsed card; `grammar.py` holds
    the shared relation vocabulary (`REL_KIND`, the backing resolver `resolve_backing` +
    `fk_targets`, token-exact `FK→` matching) and the closed `STORE_MODES`.
-2. **`tools/coyodex/validate_model.py`** — `_check_domain_cards` (MEANING/SOURCE/FIELDS present, every
+2. **`tools/coyomap/validate_model.py`** — `_check_domain_cards` (MEANING/SOURCE/FIELDS present, every
    field typed, every relation well-formed, single-side); plus a non-blocking warning for a
    field-less, note-less association. Card ids ride the generic duplicate/undefined-reference
    checks; `_check_stores` (shape/mode/folded-dep) and `_persistence_coverage_warnings` (the
    adoption-gated coverage advisory) guard the structured store; `views._store_str` is the one
    store renderer (card parens + entity pane).
-3. **`tools/coyodex/views.py`** — `model_to_graph` builds each entity's `Node.attrs` and each
+3. **`tools/coyomap/views.py`** — `model_to_graph` builds each entity's `Node.attrs` and each
    relation's `Edge.kind` / `src_card` / `dst_card` straight from the model, resolving each
    relation's backing field into `Edge.fk_field` / `Edge.fk_side` and carrying the `{how}` note as
    `Edge.how`.
-4. **`tools/coyodex/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; `_relation_label`
+4. **`tools/coyomap/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; `_relation_label`
    formats the resolved `fk_field` / `fk_side` into the arrow label (plain forward, `↩` reverse); a
    **Entities** view button (internal view kind stays `domain`; hidden when the map has no entities).
-5. **`tools/coyodex/viewer/viewer.js`** — a classDiagram click-bridge (`bindDomain` / `eachClassEdge`):
+5. **`tools/coyomap/viewer/viewer.js`** — a classDiagram click-bridge (`bindDomain` / `eachClassEdge`):
    class group id `…-classId-E1-N` resolves via the id regex, relation path id `…-id_E1_E2_N`
    encodes its endpoints; the panel renders entity `attrs`, relation cardinality, and an **Implemented
    by** line (the backing field, or the authored `{how}` note for a field-less relation).

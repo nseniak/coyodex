@@ -5,7 +5,7 @@ entity-level override for the one record whose owning feature differs from its a
 touches — which features' flows reach which saved records — ship beside it as evidence, and
 `validate` reports grounding / split / dominance / missing / redundant-override disagreements. The
 Features page draws a third column of data areas from the same derivation · method.md,
-method/model.md, method/project-map.schema.json, tools/coyodex/model.py, grammar.py, areas.py,
+method/model.md, method/project-map.schema.json, tools/coyomap/model.py, grammar.py, areas.py,
 features.py, validate_model.py, records.py, viewer.
 
 Escalation: if check 1 fails as "every area single-owned including the shared core", the instruction
@@ -34,7 +34,7 @@ unchanged and come due again on the next build — the change is to the method t
    regression sign: no `owners` anywhere (the instruction was not read); all 8 areas single-owned,
    the shared core included (authored to complete the diagram rather than decided); or `owners`
    authored on a subsystem, a capability or a block, which `validate` blocks.
-2. expect: `coyodex validate` reports zero shape errors from `owners`, and any grounding advisory
+2. expect: `coyomap validate` reports zero shape errors from `owners`, and any grounding advisory
    it does report ("names owner(s) whose flows touch none of its saved records") points at an area
    the named feature genuinely never reaches.
    regression sign: a dangling owner id or an empty `owners` list reaching the built map; or a

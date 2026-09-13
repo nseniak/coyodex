@@ -16,9 +16,9 @@ import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from coyodex.impact_git import ImpactCore, ImpactFile
-from coyodex.impact_lib import DirectHit
-from coyodex.impact_ripple import (
+from coyomap.impact_git import ImpactCore, ImpactFile
+from coyomap.impact_lib import DirectHit
+from coyomap.impact_ripple import (
     R_BEHAVIORAL,
     R_CALLGRAPH,
     R_DATA,
@@ -27,7 +27,7 @@ from coyodex.impact_ripple import (
     build_impact_result,
     type_of,
 )
-from coyodex.model import (
+from coyomap.model import (
     Component,
     Dep,
     Edge,
@@ -41,8 +41,8 @@ from coyodex.model import (
     SubFlow,
     UseCase,
 )
-from coyodex.viewer.recents import RecentsStore
-from coyodex.viewer.serve import Handler, build_projects
+from coyomap.viewer.recents import RecentsStore
+from coyomap.viewer.serve import Handler, build_projects
 
 from test_impact import EXTENTS, GUILD_V1, commit, make_model
 
@@ -242,11 +242,11 @@ def test_api_impact_endpoint_end_to_end() -> None:
         model.use_cases = [UseCase(id="UC1", name="Do")]
         model.flows = [Flow(uc="UC1", title="Do", steps=[
             FlowStep(n=2, src="C1", dst="D1", phrase="stores", where="svc/guild.py:8")])]
-        from coyodex.model import to_canonical_json
-        (root / ".coyodex").mkdir()
-        (root / ".coyodex" / "project-map.json").write_text(to_canonical_json(model),
+        from coyomap.model import to_canonical_json
+        (root / ".coyomap").mkdir()
+        (root / ".coyomap" / "project-map.json").write_text(to_canonical_json(model),
                                                             encoding="utf-8")
-        (root / ".coyodex" / "preindex.json").write_text(
+        (root / ".coyomap" / "preindex.json").write_text(
             json.dumps({"symbols": {"extents": {
                 p: [list(e) for e in rows] for p, rows in EXTENTS.items()}}}),
             encoding="utf-8")
@@ -261,7 +261,7 @@ def test_api_impact_endpoint_end_to_end() -> None:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
             conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=10)
-            conn.request("GET", f"/coyodex/{slug}/api/impact?target=WORKTREE")
+            conn.request("GET", f"/coyomap/{slug}/api/impact?target=WORKTREE")
             resp = conn.getresponse()
             assert resp.status == 200
             payload = json.loads(resp.read())
@@ -271,7 +271,7 @@ def test_api_impact_endpoint_end_to_end() -> None:
             assert "step:UC1:2" in payload["byType"]["flow_steps"]
             assert payload["spec"]["target"] == "WORKTREE"
             # bad ref → 400, not a 500/crash
-            conn.request("GET", f"/coyodex/{slug}/api/impact?base=--upload-pack=x")
+            conn.request("GET", f"/coyomap/{slug}/api/impact?base=--upload-pack=x")
             assert conn.getresponse().status == 400
         finally:
             httpd.shutdown()

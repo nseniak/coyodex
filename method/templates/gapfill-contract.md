@@ -1,7 +1,7 @@
 # Gap-fill contract — the eleventh trace slice
 
 **Lead half.** Fill every `«SLOT»` before dispatch. The slots are
-`«COYODEX_HOME»`, `«REPO»`, `«AGENT_ID»`, `«LEGEND»`, `«GAPS»` — each spelled the same way everywhere.
+`«COYOMAP_HOME»`, `«REPO»`, `«AGENT_ID»`, `«LEGEND»`, `«GAPS»` — each spelled the same way everywhere.
 
 WHY THIS TEMPLATE EXISTS. `method/templates/` shipped four contracts and no fifth, so the gap-fill
 slice was hand-composed from prose on every build — and a hand-composed brief loses the shared
@@ -23,11 +23,11 @@ already cost a re-run.
 
 ---
 
-> You are closing named gaps in a coyodex codebase map — the rows the sliced fan-outs could not own,
+> You are closing named gaps in a coyomap codebase map — the rows the sliced fan-outs could not own,
 > because each one sits between two slices.
 >
-> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
-> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> **NEVER `cd` into the coyomap clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyomap/...` path silently reads
 > the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
 > 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
 > and no agent had read it.
@@ -44,7 +44,7 @@ already cost a re-run.
 >
 > ## What you return
 >
-> **ONE JSON fragment** at `«REPO»/.coyodex/build-fragments/«AGENT_ID».json`, holding only the arrays
+> **ONE JSON fragment** at `«REPO»/.coyomap/build-fragments/«AGENT_ID».json`, holding only the arrays
 > your jobs name. **Never inline the fragment in your reply** — reply with the path and a one-line
 > summary per job, including any job you could NOT close and why. A gap you leave open and NAME is a
 > result; a gap you leave open silently is a defect the lead finds at the gate.
@@ -55,7 +55,7 @@ already cost a re-run.
 > ## Fields you must NOT author
 >
 > `runs_in`, `subsystem`, `subdomain`, `capability`, `block`, `entry_points` — every one of these is
-> ASSIGNED by the lead through `coyodex reconcile` after this fan-out. A value you write here is
+> ASSIGNED by the lead through `coyomap reconcile` after this fan-out. A value you write here is
 > overwritten at best and contradicts the assignment at worst.
 >
 > ## Name every scratch file after your agent id
@@ -72,8 +72,8 @@ already cost a re-run.
 > ## Before you return
 >
 > ```
-> «COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «REPO» --ids «LEGEND» \
->     «REPO»/.coyodex/build-fragments/«AGENT_ID».json
+> «COYOMAP_HOME»/.venv/bin/coyomap lint-fragment --repo «REPO» --ids «LEGEND» \
+>     «REPO»/.coyomap/build-fragments/«AGENT_ID».json
 > ```
 >
 > Fix every row it reports until it exits clean. **Read the output whole — do not pipe it through
@@ -91,8 +91,8 @@ already cost a re-run.
 > If the lint prints `warning:` lines, either FIX them or **repeat them verbatim in your reply with
 > one line of justification each**; never shrug an advisory off silently.
 
-> **Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+> **Do not open a previous map.** Not one under `.coyomap/dev-rebuilds/`, not a
 > `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
 > its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
 > more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
-> copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.
+> copying. If you need an element's record, it is in THIS map — `coyomap dump` reads it.

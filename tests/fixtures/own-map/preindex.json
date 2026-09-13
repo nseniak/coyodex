@@ -1,5 +1,5 @@
 {
-  "tool": "coyodex preindex",
+  "tool": "coyomap preindex",
   "root": "<frozen fixture>",
   "symbols": {
     "extents": {
@@ -913,7 +913,7 @@
           "function"
         ]
       ],
-      "eval/tools/coyodex_eval/cli.py": [
+      "eval/tools/coyomap_eval/cli.py": [
         [
           26,
           58,
@@ -921,7 +921,7 @@
           "function"
         ]
       ],
-      "eval/tools/coyodex_eval/compare.py": [
+      "eval/tools/coyomap_eval/compare.py": [
         [
           91,
           126,
@@ -1007,7 +1007,7 @@
           "function"
         ]
       ],
-      "eval/tools/coyodex_eval/judge.py": [
+      "eval/tools/coyomap_eval/judge.py": [
         [
           56,
           62,
@@ -1147,7 +1147,7 @@
           "function"
         ]
       ],
-      "eval/tools/coyodex_eval/profile.py": [
+      "eval/tools/coyomap_eval/profile.py": [
         [
           37,
           111,
@@ -1191,7 +1191,7 @@
           "function"
         ]
       ],
-      "eval/tools/coyodex_eval/run.py": [
+      "eval/tools/coyomap_eval/run.py": [
         [
           37,
           41,
@@ -1459,7 +1459,7 @@
         [
           167,
           171,
-          "test_a_missing_coyodex_dir_reports_instead_of_crashing",
+          "test_a_missing_coyomap_dir_reports_instead_of_crashing",
           "function"
         ]
       ],
@@ -5373,7 +5373,7 @@
         [
           255,
           268,
-          "test_list_dirs_flags_coyodex_and_parent",
+          "test_list_dirs_flags_coyomap_and_parent",
           "function"
         ],
         [
@@ -6715,7 +6715,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/anchor_drift.py": [
+      "tools/coyomap/anchor_drift.py": [
         [
           26,
           43,
@@ -6759,7 +6759,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/anchors.py": [
+      "tools/coyomap/anchors.py": [
         [
           24,
           26,
@@ -6815,7 +6815,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/assemble.py": [
+      "tools/coyomap/assemble.py": [
         [
           70,
           81,
@@ -6907,7 +6907,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/audit_model.py": [
+      "tools/coyomap/audit_model.py": [
         [
           51,
           57,
@@ -7047,7 +7047,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/balance.py": [
+      "tools/coyomap/balance.py": [
         [
           32,
           61,
@@ -7079,7 +7079,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/balance_lib.py": [
+      "tools/coyomap/balance_lib.py": [
         [
           52,
           65,
@@ -7255,7 +7255,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/cli.py": [
+      "tools/coyomap/cli.py": [
         [
           55,
           66,
@@ -7269,7 +7269,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/dump.py": [
+      "tools/coyomap/dump.py": [
         [
           42,
           44,
@@ -7319,7 +7319,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/fix.py": [
+      "tools/coyomap/fix.py": [
         [
           34,
           38,
@@ -7369,7 +7369,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/grammar.py": [
+      "tools/coyomap/grammar.py": [
         [
           39,
           41,
@@ -7509,7 +7509,7 @@
           "class"
         ]
       ],
-      "tools/coyodex/impact_git.py": [
+      "tools/coyomap/impact_git.py": [
         [
           42,
           43,
@@ -7619,7 +7619,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/impact_lib.py": [
+      "tools/coyomap/impact_lib.py": [
         [
           36,
           47,
@@ -7747,7 +7747,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/impact_ripple.py": [
+      "tools/coyomap/impact_ripple.py": [
         [
           48,
           52,
@@ -7803,7 +7803,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/json_schema.py": [
+      "tools/coyomap/json_schema.py": [
         [
           211,
           237,
@@ -7829,7 +7829,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/lint_fragment.py": [
+      "tools/coyomap/lint_fragment.py": [
         [
           44,
           54,
@@ -7867,7 +7867,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/model.py": [
+      "tools/coyomap/model.py": [
         [
           31,
           32,
@@ -8163,7 +8163,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/preindex.py": [
+      "tools/coyomap/preindex.py": [
         [
           51,
           56,
@@ -8237,7 +8237,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/preindex_lib.py": [
+      "tools/coyomap/preindex_lib.py": [
         [
           141,
           142,
@@ -8413,7 +8413,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/pysrc.py": [
+      "tools/coyomap/pysrc.py": [
         [
           15,
           20,
@@ -8421,7 +8421,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/reconcile.py": [
+      "tools/coyomap/reconcile.py": [
         [
           40,
           42,
@@ -8501,7 +8501,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/reconcile_build.py": [
+      "tools/coyomap/reconcile_build.py": [
         [
           50,
           51,
@@ -8563,7 +8563,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/validate_analysis.py": [
+      "tools/coyomap/validate_analysis.py": [
         [
           23,
           24,
@@ -8673,7 +8673,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/validate_model.py": [
+      "tools/coyomap/validate_model.py": [
         [
           77,
           94,
@@ -9137,7 +9137,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/build_graph.py": [
+      "tools/coyomap/viewer/build_graph.py": [
         [
           28,
           61,
@@ -9229,7 +9229,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/diffmap.py": [
+      "tools/coyomap/viewer/diffmap.py": [
         [
           15,
           22,
@@ -9243,7 +9243,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/filetree.py": [
+      "tools/coyomap/viewer/filetree.py": [
         [
           38,
           52,
@@ -9311,7 +9311,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/gen_viewer.py": [
+      "tools/coyomap/viewer/gen_viewer.py": [
         [
           53,
           61,
@@ -10171,7 +10171,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/recents.py": [
+      "tools/coyomap/viewer/recents.py": [
         [
           22,
           89,
@@ -10227,7 +10227,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/render.py": [
+      "tools/coyomap/viewer/render.py": [
         [
           22,
           58,
@@ -10235,7 +10235,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/serve.py": [
+      "tools/coyomap/viewer/serve.py": [
         [
           65,
           84,
@@ -10257,7 +10257,7 @@
         [
           102,
           109,
-          "_has_coyodex",
+          "_has_coyomap",
           "function"
         ],
         [
@@ -10495,7 +10495,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/viewer/viewer.js": [
+      "tools/coyomap/viewer/viewer.js": [
         [
           64,
           93,
@@ -12885,7 +12885,7 @@
           "function"
         ]
       ],
-      "tools/coyodex/views.py": [
+      "tools/coyomap/views.py": [
         [
           55,
           58,
@@ -13167,7 +13167,7 @@
         [
           179,
           183,
-          "_resolve_coyodex_dir",
+          "_resolve_coyomap_dir",
           "function"
         ],
         [

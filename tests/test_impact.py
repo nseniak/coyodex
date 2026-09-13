@@ -13,8 +13,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from coyodex.impact_git import WORKTREE, compute_impact, diff_changes, rename_map, u0_diff
-from coyodex.impact_lib import (
+from coyomap.impact_git import WORKTREE, compute_impact, diff_changes, rename_map, u0_diff
+from coyomap.impact_lib import (
     AnchorRef,
     FileFrame,
     Hunk,
@@ -26,7 +26,7 @@ from coyodex.impact_lib import (
     parse_u0,
     resolve_hits,
 )
-from coyodex.model import (
+from coyomap.model import (
     Component,
     Dep,
     Edge,

@@ -5,7 +5,7 @@ Change (2026-09-03): `Role.kind` gains `ai-agent` beside `human` and `service`
 reader uses. It draws as a bot — antenna, square head, a person's body, no face — on all four
 surfaces that draw an actor · grammar.py, model.py, validate_model.py, json_schema.py,
 viewer/build_graph.py, viewer/gen_viewer.py, the viewer, method.md, method/model.md, the schema.
-Three live roles move: coyodex "Coding agent", argus "Assistant", mcpolis "Headless agent".
+Three live roles move: coyomap "Coding agent", argus "Assistant", mcpolis "Headless agent".
 
 Escalation: if check 1 fails — a map's authored `ai-agent` reaching a screen as `human` — a
 coercion has come back and the map is being contradicted by its own viewer. Stop and find it before
@@ -58,7 +58,7 @@ distinction, and neither asks a reader to see something under a pixel across.
    no gate can see.
 
 2. expect: a rebuild AUTHORS `ai-agent` on the AI actors without being told which they are. On
-   mcpolis that is "Headless agent"; on argus "Assistant"; on coyodex "Coding agent".
+   mcpolis that is "Headless agent"; on argus "Assistant"; on coyomap "Coding agent".
    regression sign: they come back `service`. The instruction in method.md did not reach the worker
    that authors the roles table, and the three corrected rows in this change were masking that.
 
@@ -89,5 +89,5 @@ it · 3 actor kinds over 6 roles and no fourth spelling anywhere.
 
 One thing the reader found that does NOT reopen the file: the SEQUENCE DIAGRAM this check names
 as the third drawing surface no longer exists. `styleSeqActor` and `botHeadActor` are defined
-and called by nothing (`tools/coyodex/viewer/viewer.js`); the Happy Path gutter replaced it and
+and called by nothing (`tools/coyomap/viewer/viewer.js`); the Happy Path gutter replaced it and
 draws the bot. Dead viewer code, filed separately, not a failure of this change.

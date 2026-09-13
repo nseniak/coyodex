@@ -1,6 +1,6 @@
-# Contributing to coyodex
+# Contributing to coyomap
 
-Thanks for taking a look. coyodex is **alpha** — experimental, early, and moving
+Thanks for taking a look. coyomap is **alpha** — experimental, early, and moving
 fast. That means feedback is worth a lot right now, and the bar to contribute is
 low: a clear bug report or a sharp idea is a real contribution. The version
 number lives in one place, the [`VERSION`](VERSION) file at the repo root;
@@ -28,11 +28,11 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
   it; it is not a mirror of the code. Changes to behavior usually start here.
 - **`method/`** — the supporting method docs (`model.md`, `domain-cards.md`,
   `change-impact.md`, `diagrams.md`) and templates.
-- **`skill/coyodex/`** — the agent skill (`SKILL.md`) that drives the method; works on
+- **`skill/coyomap/`** — the agent skill (`SKILL.md`) that drives the method; works on
   Claude Code, Codex, and Cursor.
-- **`tools/coyodex/`** — the Python package behind the `coyodex` CLI: the pre-index, schema
+- **`tools/coyomap/`** — the Python package behind the `coyomap` CLI: the pre-index, schema
   validation, the analysis validator, and the **`viewer/`** (builds the map's view data and
-  serves the interactive viewer via `coyodex serve`). `cli.py` is the subcommand dispatcher.
+  serves the interactive viewer via `coyomap serve`). `cli.py` is the subcommand dispatcher.
 - **`tests/`** — the tool tests, plus the two contract layers: `test_method_contract.py`
   (does the method name tools that exist?) and `test_trapdoor_tools.py` (do the tools say the
   right thing about a real tree?). Stdlib runners; also run under `pytest`.
@@ -101,9 +101,9 @@ So, when you write one:
 
 - **Past tense, naming the build** — "the 2026-09-07 mcpolis map read 4 of 43" — is a record, and
   records do not rot. Two thirds of the number-claims in `tools/` already do this. Prefer it.
-- **Present tense about a live map** needs a row in `eval/tools/coyodex_eval/live_numbers.py`: the
-  sentence, the maps it needs, and a `measure` that regenerates it. `coyodex-eval live-numbers`
-  then re-measures it whenever someone asks, and `coyodex-eval live-numbers --list` shows what is
+- **Present tense about a live map** needs a row in `eval/tools/coyomap_eval/live_numbers.py`: the
+  sentence, the maps it needs, and a `measure` that regenerates it. `coyomap-eval live-numbers`
+  then re-measures it whenever someone asks, and `coyomap-eval live-numbers --list` shows what is
   already tracked.
 
 Nothing reads your prose to work this out — you write the sentence in both places on purpose, and
@@ -117,14 +117,14 @@ skills home — `~/.claude/skills` (Claude Code) and `~/.agents/skills` (the cro
 standard read by Codex and Cursor):
 
 ```
-make install       # the USER skill: skill/coyodex -> ~/.claude/skills + ~/.agents/skills
-make install-dev   # both DEVELOPER skills: coyodex-eval + coyodex-retro
+make install       # the USER skill: skill/coyomap -> ~/.claude/skills + ~/.agents/skills
+make install-dev   # both DEVELOPER skills: coyomap-eval + coyomap-retro
 make uninstall     # removes the user skill from both homes
 make uninstall-dev # removes both developer skills
 ```
 
-`install-dev` is the one a contributor wants: `coyodex-eval` answers "did my change make the maps
-worse?" and `coyodex-retro` answers "what did that run reveal?" — two halves of one feedback loop.
+`install-dev` is the one a contributor wants: `coyomap-eval` answers "did my change make the maps
+worse?" and `coyomap-retro` answers "what did that run reveal?" — two halves of one feedback loop.
 They are deliberately NOT part of `make install`, so installing the developer surface is never a
 side effect of setting the tool up. (`make install-eval` / `make install-retro` still install one
 at a time.)
@@ -135,7 +135,7 @@ which is how the main skill spent weeks telling agents to read a method doc that
 `tests/test_skill_pointers.py` keeps the copies thin enough that drift is nearly harmless, but it
 cannot see the installed files.
 
-The `coyodex` package is tested with `pytest` and type-checked with `pyright` (see
+The `coyomap` package is tested with `pytest` and type-checked with `pyright` (see
 `pyrightconfig.json`). `make dev` builds the repo-local venv and installs both into it
 (alongside the editable package), so the gates run against the installed CLI:
 
@@ -154,7 +154,7 @@ Working on the **viewer** (the browser page a map is read in), use `make dev-sta
 `make start`. It serves this repo's own map with live reload, so an edit to `viewer.js` / `.css` /
 `.html` — or to the server's Python, which restarts it — reaches the page with nothing pressed. Off
 in `make start` on purpose: a person reading a map must not get a page that reloads under them. See
-`tools/coyodex/viewer/README.md` → **Working on the viewer** for how the two halves fit together.
+`tools/coyomap/viewer/README.md` → **Working on the viewer** for how the two halves fit together.
 
 ## How to test a change
 
@@ -164,16 +164,16 @@ questions. What you changed decides how far up you need to go.
 | tier | command | answers |
 |---|---|---|
 | **1. The gates** | `.venv/bin/pytest` · `.venv/bin/pyright tools` | Is anything broken? Do the tools do the right thing, and does the method still name commands and flags that exist? |
-| **2. Process corpus** | `COYODEX_L3_CORPUS=1 .venv/bin/pytest eval/tests/test_process_corpus.py -q -s` | Do the transcript detectors still read saved builds the same way? |
-| **3. A real build** | `claude -p "/coyodex from scratch"` in a repo, then `coyodex-eval process <transcript>` | Did the agent actually *do* the thing? |
-| **4. Map quality** | `/coyodex-eval` in a project with a committed map | Is the map any good — grounding, rubric, coverage? |
+| **2. Process corpus** | `COYOMAP_L3_CORPUS=1 .venv/bin/pytest eval/tests/test_process_corpus.py -q -s` | Do the transcript detectors still read saved builds the same way? |
+| **3. A real build** | `claude -p "/coyomap from scratch"` in a repo, then `coyomap-eval process <transcript>` | Did the agent actually *do* the thing? |
+| **4. Map quality** | `/coyomap-eval` in a project with a committed map | Is the map any good — grounding, rubric, coverage? |
 
 ### Working on the viewer
 
 Serve one or more maps and look at them:
 
 ```
-PYTHONPATH=tools .venv/bin/python -m coyodex.cli serve . ~/somewhere/else --port 8871 --dev
+PYTHONPATH=tools .venv/bin/python -m coyomap.cli serve . ~/somewhere/else --port 8871 --dev
 ```
 
 Two things that will otherwise cost you an hour:
@@ -187,14 +187,14 @@ Two things that will otherwise cost you an hour:
 
 **Hold Ctrl+Shift** to ask what the map SAYS about anything on screen: every element the map
 stores lights up under the cursor, and Ctrl+Shift+click opens its stored record — the slot in
-`.coyodex/project-map.json` it came from, and the record itself. An id inside the record opens that
+`.coyomap/project-map.json` it came from, and the record itself. An id inside the record opens that
 record. A click on something the map does not store says so, and prints the DOM handles it looked
 at, which is what extending the resolver needs. While both keys are down the page itself is
 deaf — no pan, no wheel-zoom, no hover, no drill, and no browser context menu — and nothing at
 all is armed until they are.
 
 The viewer's own tests need a real browser and are slower than the rest: `tests/test_viewer_browser.py`.
-`node --check tools/coyodex/viewer/viewer.js` catches a syntax error in a second, so run it first.
+`node --check tools/coyomap/viewer/viewer.js` catches a syntax error in a second, so run it first.
 
 **Tier 1 is required for every PR.** It is fast (~20s) and deterministic. It covers three
 layers:
@@ -202,7 +202,7 @@ layers:
 - the tool tests — what the code does when it is called;
 - **`tests/test_method_contract.py`** — the prose↔tool contract, checked statically: every
   command and flag `method.md` names really exists, and every advisory the validator prints
-  can be answered. This layer exists because `coyodex reconcile` once shipped fully working
+  can be answered. This layer exists because `coyomap reconcile` once shipped fully working
   and fully tested while appearing nowhere in the method, so no build could reach it;
 - **`tests/test_trapdoor_tools.py`** — the tools run against `eval/fixtures/trapdoor/`, a
   synthetic codebase that deliberately plants every defect class real builds produced. Its
@@ -219,8 +219,8 @@ and the behaviour did not move at all, and nobody could tell. So: make a real bu
 transcript, and diff it against a build from before your change.
 
 ```
-.venv/bin/coyodex-eval process <transcript.jsonl>        # writes a scorecard next to it
-.venv/bin/coyodex-eval process --diff before.json after.json
+.venv/bin/coyomap-eval process <transcript.jsonl>        # writes a scorecard next to it
+.venv/bin/coyomap-eval process --diff before.json after.json
 ```
 
 The scorecard is **never a gate**. It reports `observed / of` with turn numbers attached, not
@@ -235,7 +235,7 @@ it when your change should alter what a map *contains*, not which commands get r
 
 | you changed | run |
 |---|---|
-| `tools/coyodex/` | tier 1, plus tier 2 if you touched the transcript detectors |
+| `tools/coyomap/` | tier 1, plus tier 2 if you touched the transcript detectors |
 | `method.md` or `method/` | tier 1, then **tier 3** — nothing else can tell you it landed |
 | `eval/` | tier 1 + tier 2 |
 | something you expect to improve map quality | tier 1 + tier 4 |
@@ -273,6 +273,6 @@ than assumed.
 
 ## Licensing of contributions
 
-coyodex is licensed under the [Apache License 2.0](LICENSE). By contributing, you
+coyomap is licensed under the [Apache License 2.0](LICENSE). By contributing, you
 agree that your contributions are licensed under the same terms, including the
 patent grant in section 3 of that license.

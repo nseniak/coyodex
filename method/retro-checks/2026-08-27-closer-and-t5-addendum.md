@@ -1,12 +1,12 @@
 # The refutation re-read is a fresh-context closer, and the T5 spec reaches the owner alone
 
 Change: two Phase-4/Phase-1 wiring changes from the 2026-08-27 method assessment · method.md,
-method/templates/harvest-contract.md, method/templates/t5-addendum.md, tools/coyodex/contract.py.
+method/templates/harvest-contract.md, method/templates/t5-addendum.md, tools/coyomap/contract.py.
 
 1. The re-verify-every-refutation step is now dispatched to ONE fresh-context "closer" agent
    (refuted claims + repo only; returns uphold/reject with the line it read); the lead applies,
    and overruling the closer takes a recorded read of the lead's own (item S3).
-2. The T5 entity-card spec moved out of the shared harvest contract into `coyodex contract
+2. The T5 entity-card spec moved out of the shared harvest contract into `coyomap contract
    harvest-t5`, appended to the owner's brief alone; the shared contract keeps one sentence
    forbidding everyone else (item H3).
 

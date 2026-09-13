@@ -1,7 +1,7 @@
 # `mcp` is the twelfth interface kind, and the only protocol name in the list
 
 Change (2026-09-03): `mcp` joins `grammar.INTERFACE_KIND_SEEDS` as an `either`-side seed, drawn with
-the wrench and printed "MCP" · tools/coyodex/grammar.py, the viewer, method.md, method/model.md,
+the wrench and printed "MCP" · tools/coyomap/grammar.py, the viewer, method.md, method/model.md,
 method/project-map.schema.json. Five live rows move from `agent-tools` to `mcp`: mcpolis I3, I4, I6,
 I11 and argus I4.
 
@@ -13,7 +13,7 @@ the vocabulary is drifting off its own axis. Say so in the report; do not fold t
 **The word "MCP" could not be put on screen any other way.** Three routes were tried and measured:
 
 1. *Rename the shape.* Display every `agent-tools` interface as MCP. WRONG on 2 of 6 across the
-   three maps: coyodex's "Agent skill" and "Developer skills" are skill FILES an agent reads, whose
+   three maps: coyomap's "Agent skill" and "Developer skills" are skill FILES an agent reads, whose
    ways in say `agent-skill`, not `mcp-tool`.
 2. *Derive it from the ways in.* Label an interface MCP when any way in is an `mcp-tool`. Right on
    the four we publish and SILENT on the one we call: a `theirs` surface has no ways in by
@@ -29,14 +29,14 @@ FOURTH-BIGGEST way-in kind across the live maps (63, behind only `http-route` 16
 
 **The guard is the tie-break, not good intentions.** "The most specific seed that fits wins" already
 orders `mcp` above `agent-tools` above `api`. `agent-tools` keeps a real job: agent-facing tools
-carried some other way, which is what coyodex's own skill files are.
+carried some other way, which is what coyomap's own skill files are.
 
 ## Checks
 
 1. expect: a rebuild of mcpolis authors `mcp` on the Gateway, the Administration MCP, the Operator
-   MCP and the Upstream MCP servers, and `agent-tools` on nothing; a rebuild of coyodex authors
+   MCP and the Upstream MCP servers, and `agent-tools` on nothing; a rebuild of coyomap authors
    `agent-skill`-backed surfaces as `agent-tools`, NOT `mcp`.
-   regression sign: coyodex's "Agent skill" comes back as `mcp`. The seed was read as "anything an
+   regression sign: coyomap's "Agent skill" comes back as `mcp`. The seed was read as "anything an
    agent talks to", which is the mistake route 1 above was rejected for.
 
 2. expect: NO second protocol name appears as an interface kind — not `a2a`, `graphql`, `grpc`,

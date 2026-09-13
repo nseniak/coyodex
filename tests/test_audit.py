@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex audit` — the adversarial pass (L1 self-contradiction + L2 worklist).
+"""Tests for `coyomap audit` — the adversarial pass (L1 self-contradiction + L2 worklist).
 
 The scenario maps are authored directly as JSON model documents — the format the audit
 actually reads — so these tests exercise the LIVE pipeline (model audit), not the retired markdown
@@ -19,8 +19,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import audit_model
-from coyodex.model import (
+from coyomap import audit_model
+from coyomap.model import (
     BusinessRule,
     ExtraSection,
     Group,
@@ -45,7 +45,7 @@ from coyodex.model import (
     load_model,
 )
 
-AUDIT = [sys.executable, "-m", "coyodex.audit_model"]
+AUDIT = [sys.executable, "-m", "coyomap.audit_model"]
 
 
 def audit_md(json_text: str) -> list[audit_model.Finding]:
@@ -132,7 +132,7 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
   ]"""
     )
     return f"""{{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -263,7 +263,7 @@ def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
         f'{{"id": "{i}", "name": "{n}", "kind": "human", "wants": "", "drives": "UC1"}}'
         for i, n in roles)
     return f"""{{
-  "format": "coyodex-map", "title": "", "goal": "",
+  "format": "coyomap-map", "title": "", "goal": "",
   "commit": null, "committed": null, "built": null,
   "roles": [{roles_json}],
   "glossary": [],
@@ -285,7 +285,7 @@ def make_shared_read_map() -> str:
     """Three use cases whose flows all read E1 (via a component that reads it); E1 is never written on
     the path. Exercises per-entity dedup: exactly ONE read-never-created advisory, not three."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -463,7 +463,7 @@ def make_cc_routed_read_map() -> str:
     at HP2. Audit CANNOT see the read (only C→E edges of flow-named components count) — a documented
     false negative that pins the limitation."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -614,7 +614,7 @@ def make_cc_routed_read_map() -> str:
 def make_backward_whyref_map() -> str:
     """HP1's `why:` cites HP2, which comes after it (a backward reference)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -710,7 +710,7 @@ def make_backward_whyref_map() -> str:
 def make_read_never_created_map() -> str:
     """A single step reads E9, which no step ever creates (an external/config entity) — advisory."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -801,7 +801,7 @@ def make_read_never_created_map() -> str:
 def make_whyless_map() -> str:
     """HP1 has a `why:`, HP2 does not — a non-initial step missing its precondition (warning)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -897,7 +897,7 @@ def make_whyless_map() -> str:
 def make_l2_map() -> str:
     """A Security & auth entry plus an `enforces` edge — the two L2-worklist sources."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -979,7 +979,7 @@ def make_l2_dep_map() -> str:
     and a plain `C→C` `calls` (remaining). The `emits`-into-a-log-dep row is the audit→Elastic
     false-edge class."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1103,7 +1103,7 @@ def make_duplicated_edge_map() -> str:
     """`make_l2_dep_map` with its C→D `emits` row DUPLICATED — the G4 dedupe shape (a repeated edge
     row must not become two skeptic tasks)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1234,7 +1234,7 @@ def make_described_map() -> str:
     """Named components with file anchors, a named dep, and an entity card with SOURCE — so worklist
     claims can carry self-describing From/To detail (G1)."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1448,7 +1448,7 @@ def test_read_never_created_is_advisory_not_blocking() -> None:
 
 
 def make_dependency_phrasing_model(step_phrase: str, edge_why: str) -> audit_model.ProjectModel:
-    from coyodex.model import Edge, Flow, FlowStep, ProjectModel
+    from coyomap.model import Edge, Flow, FlowStep, ProjectModel
     return ProjectModel(
         flows=[Flow(uc="UC1", title="t", steps=[FlowStep(n=1, src="C1", dst="C2", phrase=step_phrase)])],
         edges=[Edge(src="C1", verb="uses", dst="C2", why=edge_why)])
@@ -1472,7 +1472,7 @@ def test_hp_whyref_ignores_word_with_embedded_hp() -> None:
     # An HP<n> EMBEDDED in a longer word ("PHP7", "BHP2") must NOT read as a Happy-Path cross-reference.
     # The missing word boundary used to make the audit BLOCK (dangling/backward why-ref) on prose like this.
     # (A standalone "HP15" is still ref-shaped and correctly matches — that residual needs typed refs.)
-    from coyodex.model import HappyStep, ProjectModel
+    from coyomap.model import HappyStep, ProjectModel
     m = ProjectModel(happy_path=[
         HappyStep(id="HP1", uc="UC1"),
         HappyStep(id="HP2", uc="UC2", why="runs on PHP7 runtime (not BHP2)"),
@@ -1481,7 +1481,7 @@ def test_hp_whyref_ignores_word_with_embedded_hp() -> None:
 
 
 def test_hp_whyref_reads_whole_token() -> None:
-    from coyodex.model import HappyStep, ProjectModel
+    from coyomap.model import HappyStep, ProjectModel
     m = ProjectModel(happy_path=[
         HappyStep(id="HP1", uc="UC1"),
         HappyStep(id="HP2", uc="UC2", why="needs the org from HP1"),
@@ -1493,7 +1493,7 @@ def test_slash_role_name_yields_no_actor_mismatch() -> None:
     # A role NAME containing "/" ("Host LLM / MCP client") is now referenced by its id, so the old
     # string-splitting can't misfire: the use case's actor id and the flow's opening actor id are the
     # same role, so no advisory. (Role ids make the "/"-split bug structurally impossible.)
-    from coyodex.model import Flow, FlowStep, ProjectModel, Role, UseCase
+    from coyomap.model import Flow, FlowStep, ProjectModel, Role, UseCase
     m = ProjectModel(
         roles=[Role(id="R1", name="Host LLM / MCP client", kind="service")],
         use_cases=[UseCase(id="UC1", name="x", actors=["R1"])],
@@ -1736,7 +1736,7 @@ if __name__ == "__main__":
 
 def make_walk(*rows: tuple[str, str, str | None]) -> ProjectModel:
     """rows = (hp_id, uc_id, why) in walk order, with the matching use cases declared."""
-    from coyodex.model import HappyStep, ProjectModel, UseCase
+    from coyomap.model import HappyStep, ProjectModel, UseCase
     ucs = sorted({uc for _, uc, _ in rows})
     return ProjectModel(
         use_cases=[UseCase(id=u, name=u, trigger_outcome="t") for u in ucs],
@@ -1765,7 +1765,7 @@ def test_uc_why_ref_to_an_unknown_use_case_dangles():
 
 
 def test_uc_why_ref_to_an_offspine_use_case_is_advisory_not_blocking():
-    from coyodex.model import UseCase
+    from coyomap.model import UseCase
     m = make_walk(("HP1", "UC1", None), ("HP2", "UC2", "needs UC3"))
     m.use_cases.append(UseCase(id="UC3", name="off-spine", trigger_outcome="t"))
     found = audit_model.check_why_refs(m)
@@ -1782,7 +1782,7 @@ def test_positional_why_ref_silently_retargets_when_the_walk_is_renumbered():
     reference is still well-formed and still backward. A `UCn` citation names the prerequisite
     itself, so neither failure mode can reach it.
     """
-    from coyodex.model import HappyStep, ProjectModel, UseCase
+    from coyomap.model import HappyStep, ProjectModel, UseCase
 
     def walk(rows: list[tuple[str, str, str | None]]) -> ProjectModel:
         return ProjectModel(
@@ -1842,7 +1842,7 @@ def test_access_and_rule_tiers_do_not_interleave():
 
 def _roles_map(relations: list[dict]) -> str:
     return json.dumps({
-        "format": "coyodex-map", "title": "T", "goal": "g",
+        "format": "coyomap-map", "title": "T", "goal": "g",
         "roles": [{"id": "R1", "name": "Organization admin", "kind": "human",
                    "relations": relations},
                   {"id": "R2", "name": "Team member", "kind": "human"},
@@ -2032,13 +2032,13 @@ def _theme_batches_carry_the_anchor(tmp_path: str) -> None:
     else, so 360 of 408 dispatched claims reached the skeptics as a bare `C140 calls C78` — while
     the prompt promised them the claim would end with its `path:line` anchor in square brackets.
     The tool held an anchor for 400 of 404 items the whole time."""
-    from coyodex.audit_model import BATCH_SCHEMA, l2_worklist_model, write_theme_batches
+    from coyomap.audit_model import BATCH_SCHEMA, l2_worklist_model, write_theme_batches
 
-    own_map = Path(__file__).resolve().parents[1] / ".coyodex" / "project-map.json"
+    own_map = Path(__file__).resolve().parents[1] / ".coyomap" / "project-map.json"
     m = load_model(own_map.read_text(encoding="utf-8"))
     worklist = l2_worklist_model(m)
     written = write_theme_batches(worklist, Path(tmp_path), cap=40)
-    assert written, "coyodex's own map must produce at least one theme batch"
+    assert written, "coyomap's own map must produce at least one theme batch"
     total = anchored = 0
     for name, n in written:
         payload = json.loads((Path(tmp_path) / name).read_text(encoding="utf-8"))
@@ -2059,7 +2059,7 @@ def test_a_renamed_use_case_that_left_its_flow_title_behind_is_flagged():
     while the stale flow title went unnoticed by anything. Measured before writing: across three
     live maps name and title agree 39/40, 26/27 and everywhere else, and both exceptions were
     exactly this defect."""
-    from coyodex.audit_model import check_flow_title
+    from coyomap.audit_model import check_flow_title
     m = ProjectModel(title="t", goal="g")
     m.use_cases = [UseCase(id="UC1", name="Rebuild the company knowledge graph", actors=["R1"])]
     m.flows = [Flow(uc="UC1", title="Build the knowledge graph from connected sources", steps=[])]
@@ -2072,7 +2072,7 @@ def test_a_flow_title_record_does_not_silence_a_different_check_on_the_same_use_
     """A record adjudicates one (check, id) PAIR, never a whole family. Reading every UC id under
     'Audit exceptions' — rather than the pairs — let an unrelated `actor-attribution` record
     silence this check on the same use case, which hid the very case it was written for."""
-    from coyodex.audit_model import audit_exceptions
+    from coyomap.audit_model import audit_exceptions
     m = ProjectModel(title="t", goal="g")
     m.extras = [ExtraSection(heading="Audit exceptions",
                              body="actor-attribution UC1: the scheduler opens it, deliberate.")]
@@ -2122,7 +2122,7 @@ def test_json_findings_carry_where_as_well_as_location(capsys):
     grepping the text report. Both keys ship now: renaming `location` alone would break anything
     already reading it.
     """
-    from coyodex import audit_model
+    from coyomap import audit_model
     m = make_precedence_map(bad=True)
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "map.json"
@@ -2144,10 +2144,10 @@ def test_a_components_own_description_is_a_grounding_claim():
     had been challenged and corrected. The sentence next to it was in no worklist, no prose batch
     that anyone dispatched, and no gate.
     """
-    from coyodex import audit_model
-    from coyodex.model import load_model
+    from coyomap import audit_model
+    from coyomap.model import load_model
     m = load_model(json.dumps({
-        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
         "components": [
             {"id": "C1", "name": "Sign-in providers", "purpose": "Signs a person in. The picker "
              "refuses to be built when the service runs for many organizations.",
@@ -2173,7 +2173,7 @@ def test_a_components_own_description_is_a_grounding_claim():
 def test_description_claims_sort_above_the_backbone_tier():
     """A backbone edge is anchor-checked by `validate` and nudged by `anchor-drift`. A description
     is read by no gate at all, so it is the more dangerous of the two to leave unchallenged."""
-    from coyodex import audit_model
+    from coyomap import audit_model
     themes = list(audit_model._THEMES)
     assert themes.index("description") < themes.index("backbone")
 
@@ -2185,13 +2185,13 @@ def test_description_claims_sort_above_the_backbone_tier():
 # skeptic holds; it was never a target to fill before starting the next one.
 
 def test_a_theme_splits_into_even_batches_not_a_full_one_and_a_stub() -> None:
-    from coyodex.audit_model import _even_chunks
+    from coyomap.audit_model import _even_chunks
     assert [len(c) for c in _even_chunks(list(range(42)), 40)] == [21, 21]
     assert [len(c) for c in _even_chunks(list(range(41)), 40)] == [21, 20]
 
 
 def test_the_cap_is_still_a_ceiling() -> None:
-    from coyodex.audit_model import _even_chunks
+    from coyomap.audit_model import _even_chunks
     for n in (1, 40, 41, 81, 120, 199):
         chunks = _even_chunks(list(range(n)), 40)
         assert all(len(c) <= 40 for c in chunks), (n, [len(c) for c in chunks])
@@ -2200,7 +2200,7 @@ def test_the_cap_is_still_a_ceiling() -> None:
 
 def test_the_split_uses_the_fewest_batches_that_respect_the_cap() -> None:
     """Balancing must not buy evenness with an extra agent — each batch costs a whole context."""
-    from coyodex.audit_model import _even_chunks
+    from coyomap.audit_model import _even_chunks
     assert len(_even_chunks(list(range(42)), 40)) == 2
     assert len(_even_chunks(list(range(98)), 40)) == 3
     assert len(_even_chunks(list(range(120)), 40)) == 3
@@ -2208,7 +2208,7 @@ def test_the_split_uses_the_fewest_batches_that_respect_the_cap() -> None:
 
 def test_a_theme_under_the_cap_is_one_batch_and_order_is_kept() -> None:
     """The worklist is ranked most-dangerous-first within a theme; a shuffle spends the ranking."""
-    from coyodex.audit_model import _even_chunks
+    from coyomap.audit_model import _even_chunks
     items = list(range(31))
     assert _even_chunks(items, 40) == [items]
     assert [x for c in _even_chunks(list(range(42)), 40) for x in c] == list(range(42))
@@ -2223,7 +2223,7 @@ def test_a_theme_under_the_cap_is_one_batch_and_order_is_kept() -> None:
 
 def _interface_model(*, evidence_file: str | None, source: str = "",
                      dep_configured: str = "src/settings.py:9"):
-    from coyodex.model import Dep, EvidenceItem, Interface, ProjectModel
+    from coyomap.model import Dep, EvidenceItem, Interface, ProjectModel
     m = ProjectModel(title="D", goal="g")
     m.deps = [Dep(id="D1", name="Their service", kind="service",
                   where_configured=dep_configured, interfaces=["I7"])]
@@ -2236,7 +2236,7 @@ def _interface_model(*, evidence_file: str | None, source: str = "",
 
 
 def _interface_claims(m):
-    from coyodex.audit_model import l2_worklist_model
+    from coyomap.audit_model import l2_worklist_model
     return [i for i in l2_worklist_model(m) if i.theme == "interface"]
 
 
@@ -2271,7 +2271,7 @@ def test_the_far_side_of_a_claim_is_the_dependency_standing_on_the_surface():
 # 42 flow titles and 517 step phrases and no skeptic could be sent at any of them.
 
 def _flow_model():
-    from coyodex.model import Flow, FlowStep, ProjectModel
+    from coyomap.model import Flow, FlowStep, ProjectModel
     m = ProjectModel(title="D", goal="g")
     m.flows = [Flow(uc="UC1", title="Sign in", steps=[
         FlowStep(n=1, src="R1", dst="C1", phrase="opens the sign-in page", where="src/ui.py:12"),
@@ -2282,12 +2282,12 @@ def _flow_model():
 def test_the_behavioural_tier_is_off_by_default():
     """Every other caller of `l2_worklist_model` is pinned to the default surface — the grounding
     record's digest, its supersession arithmetic, and `profile`'s `l2_claims`."""
-    from coyodex.audit_model import l2_worklist_model
+    from coyomap.audit_model import l2_worklist_model
     assert not [w for w in l2_worklist_model(_flow_model()) if w.theme == "behaviour"]
 
 
 def test_with_behavioural_mints_a_claim_per_phrased_step():
-    from coyodex.audit_model import l2_worklist_model
+    from coyomap.audit_model import l2_worklist_model
     items = [w for w in l2_worklist_model(_flow_model(), behavioural=True)
              if w.theme == "behaviour"]
     assert len(items) == 1, items          # the empty phrase is not a claim
@@ -2299,7 +2299,7 @@ def test_a_behaviour_claim_is_report_only():
     """Like `interface`: a phrase that misdescribes what happens is re-authored, not nudged onto
     another line. A writable theme with no writer is how `cadence` and `lifecycle` each spent months
     having their confirmed drifts re-typed by hand."""
-    from coyodex.audit_model import l2_worklist_model
+    from coyomap.audit_model import l2_worklist_model
     items = [w for w in l2_worklist_model(_flow_model(), behavioural=True)
              if w.theme == "behaviour"]
     assert all(not w.drift_eligible for w in items), items
@@ -2311,7 +2311,7 @@ def test_a_behaviour_claim_is_report_only():
 # second, because no skeptic could be sent at it.
 
 def _behavioural_map():
-    from coyodex.model import (Flow, FlowStep, Interface, ProjectModel, UseCase)
+    from coyomap.model import (Flow, FlowStep, Interface, ProjectModel, UseCase)
     m = ProjectModel(title="t", goal="g")
     m.use_cases = [UseCase(id="UC1", name="Rename a page",
                            trigger_outcome="owner submits a new name → the page is renamed")]
@@ -2328,7 +2328,7 @@ def _behavioural_map():
 
 
 def _claims(behavioural: bool) -> list[str]:
-    from coyodex.audit_model import l2_worklist_model
+    from coyomap.audit_model import l2_worklist_model
     return [w.claim for w in l2_worklist_model(_behavioural_map(), behavioural=behavioural)]
 
 
@@ -2341,8 +2341,8 @@ def test_who_is_on_the_far_side_is_a_CLAIM_anchored_at_the_evidence_that_made_it
     JOIN and has no line of its own, but each arm of the join does. Here the role is put at the
     surface by the DOOR its flow draws there (`R1 → I1`); the door carries no line of its own, so
     the anchor is the source of the way in that use case drives."""
-    from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import EntryPoint, Flow, FlowStep, Interface, ProjectModel, Role, UseCase
+    from coyomap.audit_model import l2_worklist_model
+    from coyomap.model import EntryPoint, Flow, FlowStep, Interface, ProjectModel, Role, UseCase
     m = ProjectModel(title="t", goal="g")
     m.roles = [Role(id="R1", name="Admin", kind="human", audience="user", wants="in")]
     m.use_cases = [UseCase(id="UC1", name="Do it", actors=["R1"], entry_points=["EP1"],
@@ -2367,8 +2367,8 @@ def test_a_far_side_with_nothing_to_anchor_is_reported_UNANCHORED_not_dropped():
     """mcpolis's "Visitor's mail program" is the live case: a `theirs` surface with no ways in and no
     dependency, so there is genuinely no line. Dropping it would put the claim back where it started,
     which is unchallenged."""
-    from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import (EvidenceItem, Flow, FlowStep, Interface, ProjectModel, Role, UseCase)
+    from coyomap.audit_model import l2_worklist_model
+    from coyomap.model import (EvidenceItem, Flow, FlowStep, Interface, ProjectModel, Role, UseCase)
     m = ProjectModel(title="t", goal="g")
     m.roles = [Role(id="R1", name="Reader", kind="human", audience="user", wants="the page")]
     m.use_cases = [UseCase(id="UC1", name="Open it", actors=["R1"], trigger_outcome="a -> b")]
@@ -2388,8 +2388,8 @@ def test_a_far_side_with_nothing_to_anchor_is_reported_UNANCHORED_not_dropped():
 def test_a_far_side_claim_names_the_way_in_THAT_ROLE_drives_not_the_first_one():
     """Taking the surface's first way in put a dev-stub sign-in line under "who is on the far side of
     the Dashboard" — a real file, and not the one that puts that person there."""
-    from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import EntryPoint, Flow, FlowStep, Interface, ProjectModel, Role, UseCase
+    from coyomap.audit_model import l2_worklist_model
+    from coyomap.model import EntryPoint, Flow, FlowStep, Interface, ProjectModel, Role, UseCase
     m = ProjectModel(title="t", goal="g")
     m.roles = [Role(id="R1", name="Admin", kind="human", audience="user", wants="in")]
     m.use_cases = [UseCase(id="UC1", name="Do it", actors=["R1"], entry_points=["EP2"],
@@ -2409,12 +2409,12 @@ def test_a_far_side_claim_names_the_way_in_THAT_ROLE_drives_not_the_first_one():
 def test_a_SUB_FLOW_step_phrase_is_challenged_too_and_exactly_once():
     """The hole an adversarial review found: the step loop read `f.steps`, so a phrase living inside
     a shared sub-use case reached readers — in the flow picture and at an interface — with no skeptic on it.
-    195 phrases across the three live maps (coyodex 59, argus 65, mcpolis 71).
+    195 phrases across the three live maps (coyomap 59, argus 65, mcpolis 71).
 
     ONCE, under its OWN container id, however many walks run it. Expanding instead would raise one
     claim per referencing walk and send several skeptics at one line."""
-    from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import Flow, FlowStep, SubFlow
+    from coyomap.audit_model import l2_worklist_model
+    from coyomap.model import Flow, FlowStep, SubFlow
     m = _behavioural_map()
     m.subflows = [SubFlow(id="SF1", name="Check the token",
                           steps=[FlowStep(n=1, src="C1", dst="C2", phrase="checks the token",
@@ -2461,8 +2461,8 @@ def test_a_behavioural_worklist_is_recognised_from_its_own_themes():
     import json
     import tempfile
     from pathlib import Path
-    from coyodex.audit_model import l2_worklist_model
-    from coyodex.grounding import worklist_is_behavioural
+    from coyomap.audit_model import l2_worklist_model
+    from coyomap.grounding import worklist_is_behavioural
     with tempfile.TemporaryDirectory() as td:
         for behavioural, expect in ((True, True), (False, False)):
             p = Path(td) / f"wl-{behavioural}.json"
@@ -2483,8 +2483,8 @@ def test_a_behavioural_worklist_is_recognised_from_its_own_themes():
 
 
 def test_the_behavioural_note_does_not_repeat_a_limit_that_is_gone(capsys):
-    from coyodex import audit_model
-    from coyodex.grounding import worklist_is_behavioural
+    from coyomap import audit_model
+    from coyomap.grounding import worklist_is_behavioural
 
     # A flow with a phrased step is all the behavioural tier needs: the claim it emits is that
     # phrase, checked at the step's own call site.
@@ -2524,7 +2524,7 @@ def test_small_themes_share_one_batch_and_security_never_does(tmp_path) -> None:
     whole fresh-context skeptic. Themes under the floor share `claims-small.json`; the security
     theme never shares, because its batches are three-voted by name."""
     import json as _json
-    from coyodex.audit_model import SMALL_BATCH, WorkItem, write_theme_batches
+    from coyomap.audit_model import SMALL_BATCH, WorkItem, write_theme_batches
     def item(theme: str, n: int) -> WorkItem:
         return WorkItem(claim=f"{theme} claim {n}", anchor="a.py:1", why_risky="r", theme=theme)
     wl = [item("security", 1), item("lifecycle", 1), item("messaging", 1)] + [item("backbone", i) for i in range(8)]
@@ -2542,7 +2542,7 @@ def test_prose_batches_are_minted_only_on_request_and_stale_ones_go(capsys) -> N
     """Four builds in a row minted the prose batches and dispatched none; one deleted 13 files it
     had just written. `--batches` writes none unless `--with-prose` is passed, and clears any left
     from an earlier run, so a stale batch cannot trip finalize's unread-prose check."""
-    from coyodex import audit_model
+    from coyomap import audit_model
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "map.json"
         p.write_text(make_precedence_map(bad=False), encoding="utf-8")
@@ -2560,8 +2560,8 @@ def test_prose_batches_are_minted_only_on_request_and_stale_ones_go(capsys) -> N
 def test_the_shared_small_batch_is_cut_at_the_cap_and_a_floor_above_the_cap_is_refused(tmp_path) -> None:
     """Each merged theme is under the floor; their sum is not. Eleven 4-claim themes are 44 claims,
     over the default cap of 40, so the shared batch is chunked like any theme."""
-    from coyodex.audit_model import WorkItem, write_theme_batches
-    from coyodex.audit_model import _THEMES
+    from coyomap.audit_model import WorkItem, write_theme_batches
+    from coyomap.audit_model import _THEMES
     themes = [t for t in _THEMES if t != "security"]      # the 11 mergeable themes, real names
     assert len(themes) == 11, themes
     wl = [WorkItem(claim=f"{t} {i}", anchor="a.py:1", why_risky="r", theme=t)

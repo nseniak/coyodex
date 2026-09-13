@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex access-surface` + `finalize --access-baseline` — a security claim that disappeared.
+"""`coyomap access-surface` + `finalize --access-baseline` — a security claim that disappeared.
 
 A from-scratch rebuild is deliberately blind to its predecessor, and that independence is the point.
 The cost is that a claim can vanish between two maps of UNCHANGED code with nothing noticing. On the
@@ -14,12 +14,12 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.access_surface import access_files, load_surface, lost_files, write_surface
-from coyodex.assemble import load_map_or_fragment
+from coyomap.access_surface import access_files, load_surface, lost_files, write_surface
+from coyomap.assemble import load_map_or_fragment
 
 
 def _map(rules: list[dict[str, object]]) -> dict[str, object]:
-    return {"format": "coyodex-map", "title": "t", "goal": "g", "commit": "abc1234",
+    return {"format": "coyomap-map", "title": "t", "goal": "g", "commit": "abc1234",
             "rules": rules}
 
 

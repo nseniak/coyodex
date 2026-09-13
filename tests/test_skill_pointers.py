@@ -4,9 +4,9 @@
 nothing re-runs it when the repo moves on. So every sentence in a SKILL.md is a claim frozen at
 install time. Three of them had already gone stale in the tree:
 
-  * `skill/coyodex/SKILL.md` told agents to read `method/schema-v1.md`, renamed in e14be77 — an
+  * `skill/coyomap/SKILL.md` told agents to read `method/schema-v1.md`, renamed in e14be77 — an
     installed skill pointing at a file that does not exist;
-  * `eval/retro/SKILL.md` described previous maps as `.coyodex/.old-ignore*/`, renamed in 6e4bfed;
+  * `eval/retro/SKILL.md` described previous maps as `.coyomap/.old-ignore*/`, renamed in 6e4bfed;
   * `eval/SKILL.md` was missing the "developer, not user" framing the repo had added.
 
 The fix is structural, not vigilance: a SKILL.md carries only what is needed to FIND the repo, and
@@ -23,7 +23,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 #: (skill file, the ONE entry doc it is allowed to name).
 SKILLS: dict[str, str] = {
-    "skill/coyodex/SKILL.md": "method/dispatch.md",
+    "skill/coyomap/SKILL.md": "method/dispatch.md",
     "eval/SKILL.md": "eval/method.md",
     "eval/retro/SKILL.md": "eval/retro/method.md",
 }
@@ -48,7 +48,7 @@ def make_body(rel: str) -> str:
 def test_every_skill_names_only_its_own_entry_doc():
     """The drift that actually bit: a SKILL.md enumerating method docs it does not own.
 
-    `skill/coyodex/SKILL.md` listed `method/model.md` as an example of what the docs would ask for,
+    `skill/coyomap/SKILL.md` listed `method/model.md` as an example of what the docs would ask for,
     and an earlier rename left the installed copy pointing at `method/schema-v1.md`. A pointer that
     names exactly one destination cannot rot that way — and the destination is checked to exist."""
     offenders: list[str] = []
@@ -79,15 +79,15 @@ def test_every_skill_tells_the_agent_to_read_its_entry_doc():
     """The one instruction a pointer must carry."""
     for rel, entry in SKILLS.items():
         body = make_body(rel)
-        assert f"__COYODEX_HOME__/{entry}" in body, (
-            f"{rel} must tell the agent to read __COYODEX_HOME__/{entry}")
+        assert f"__COYOMAP_HOME__/{entry}" in body, (
+            f"{rel} must tell the agent to read __COYOMAP_HOME__/{entry}")
 
 
 def test_every_skill_resolves_paths_against_the_clone():
     """Without this the agent looks for method docs inside the repo it is mapping, where they are
     not. Both directories have to be named, or the substitution means nothing."""
     for rel in SKILLS:
-        assert "__COYODEX_HOME__" in make_body(rel), f"{rel} never names COYODEX_HOME"
+        assert "__COYOMAP_HOME__" in make_body(rel), f"{rel} never names COYOMAP_HOME"
 
 
 def test_the_install_targets_cover_every_skill():

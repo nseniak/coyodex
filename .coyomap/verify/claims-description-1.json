@@ -1,0 +1,246 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "description",
+ "claims": [
+  {
+   "claim": "Component C1 (Map model) is described as: Defines every kind of thing a map can hold. Reads a map file back and refuses one whose shape is wrong.",
+   "anchor": "tools/coyomap/model.py:1153",
+   "detail": "declared at tools/coyomap/model.py:1153; files: tools/coyomap/model.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C2 (Shared map grammar) is described as: Holds the shared words and formats every other part of the map reads.",
+   "anchor": "tools/coyomap/grammar.py:21",
+   "detail": "declared at tools/coyomap/grammar.py:21; files: tools/coyomap/grammar.py, tools/coyomap/anchors.py, tools/coyomap/records.py, tools/coyomap/pathmatch.py, tools/coyomap/pysrc.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C3 (Map schema document) is described as: Writes a machine-readable description of the map file, for editors and other tools to read.",
+   "anchor": "tools/coyomap/json_schema.py:505",
+   "detail": "declared at tools/coyomap/json_schema.py:505; files: tools/coyomap/json_schema.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C4 (Map assembly) is described as: Merges the pieces each build agent returned into one map. Refuses two pieces that name the same thing twice.",
+   "anchor": "tools/coyomap/assemble.py:408",
+   "detail": "declared at tools/coyomap/assemble.py:408; files: tools/coyomap/assemble.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C5 (Fragment self-check) is described as: Checks one agent's piece of the map before it is handed in. The agent that made a mistake is the one that fixes it.",
+   "anchor": "tools/coyomap/lint_fragment.py:134",
+   "detail": "declared at tools/coyomap/lint_fragment.py:134; files: tools/coyomap/lint_fragment.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C6 (Shape checks) is described as: Checks that every name in the map points at something real. Also checks that each code link is well formed and really exists.",
+   "anchor": "tools/coyomap/validate_model.py:195",
+   "detail": "declared at tools/coyomap/validate_model.py:195; files: tools/coyomap/validate_model.py, tools/coyomap/validate_analysis.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C7 (Story checks) is described as: Checks the use cases, their flows and the happy path against each other. Reports the parts of the code no story covers.",
+   "anchor": "tools/coyomap/validate_model.py:405",
+   "detail": "declared at tools/coyomap/validate_model.py:405; files: tools/coyomap/validate_model.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C8 (Rule checks) is described as: Checks that each business rule names real code lines. Also writes down which files the map says guard access.",
+   "anchor": "tools/coyomap/validate_model.py:1748",
+   "detail": "declared at tools/coyomap/validate_model.py:1748; files: tools/coyomap/validate_model.py, tools/coyomap/access_surface.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C9 (Wiring checks) is described as: Checks how the product connects: its interfaces, its ways in, the services it calls and the processes it runs in.",
+   "anchor": "tools/coyomap/validate_model.py:2700",
+   "detail": "declared at tools/coyomap/validate_model.py:2700; files: tools/coyomap/validate_model.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C10 (Data checks) is described as: Checks the saved records, their stores, who owns each data area, and how much of the map was verified.",
+   "anchor": "tools/coyomap/validate_model.py:4205",
+   "detail": "declared at tools/coyomap/validate_model.py:4205; files: tools/coyomap/validate_model.py, tools/coyomap/areas.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C100 (Eval command line) is described as: Routes each typed eval sub-command to the checker that answers it. Loads that checker only when it is asked for.",
+   "anchor": "eval/tools/coyomap_eval/cli.py:69",
+   "detail": "declared at eval/tools/coyomap_eval/cli.py:69; files: eval/tools/coyomap_eval/cli.py, eval/tools/coyomap_eval/__init__.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C101 (Map profile) is described as: Reduces one built map to the numbers two builds can be compared on. Two maps of one project never share wording, so counts are what survives.",
+   "anchor": "eval/tools/coyomap_eval/profile.py:430",
+   "detail": "declared at eval/tools/coyomap_eval/profile.py:430; files: eval/tools/coyomap_eval/profile.py, eval/tools/coyomap_eval/legacy_map.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C102 (Baseline comparison) is described as: Judges a fresh map against the accepted one. Returns one word: as good, drifted, or worse.",
+   "anchor": "eval/tools/coyomap_eval/compare.py:518",
+   "detail": "declared at eval/tools/coyomap_eval/compare.py:518; files: eval/tools/coyomap_eval/compare.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C103 (Judge report) is described as: Folds many doubters' votes and many scorers' marks into one quality report. Never talks to a model itself, so the arithmetic can be tested alone.",
+   "anchor": "eval/tools/coyomap_eval/judge.py:257",
+   "detail": "declared at eval/tools/coyomap_eval/judge.py:257; files: eval/tools/coyomap_eval/judge.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C104 (Eval run) is described as: Runs one scoring pass end to end and files everything it produced. Can then promote that run to be the accepted baseline.",
+   "anchor": "eval/tools/coyomap_eval/run.py:69",
+   "detail": "declared at eval/tools/coyomap_eval/run.py:69; files: eval/tools/coyomap_eval/run.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C105 (Lost arrows) is described as: Finds the relations a rebuild dropped. Re-reads each dropped relation's recorded line to say whether the code still does it.",
+   "anchor": "eval/tools/coyomap_eval/arrows.py:152",
+   "detail": "declared at eval/tools/coyomap_eval/arrows.py:152; files: eval/tools/coyomap_eval/arrows.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C106 (Rebuild archive) is described as: Moves a project's current map aside so the next build starts from nothing. Moves, never deletes: the old map is what the new one is compared against.",
+   "anchor": "eval/tools/coyomap_eval/archive.py:110",
+   "detail": "declared at eval/tools/coyomap_eval/archive.py:110; files: eval/tools/coyomap_eval/archive.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C107 (Transcript reader) is described as: Turns a build's raw chat log into one record per model answer. The log stores one answer as many rows, so counting rows gets every later number wrong.",
+   "anchor": "eval/tools/coyomap_eval/transcript.py:442",
+   "detail": "declared at eval/tools/coyomap_eval/transcript.py:442; files: eval/tools/coyomap_eval/transcript.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C108 (Build cost) is described as: Reports what one build spent in time and tokens. Divides both by how much map the build produced. Two builds of different sizes then read side by side.",
+   "anchor": "eval/tools/coyomap_eval/cost.py:620",
+   "detail": "declared at eval/tools/coyomap_eval/cost.py:620; files: eval/tools/coyomap_eval/cost.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C109 (Process scorecard) is described as: Scores whether the build agent behaved as the method says, one checked rule at a time. Reports numbers, never a pass or a fail.",
+   "anchor": "eval/tools/coyomap_eval/process_scorecard.py:3318",
+   "detail": "declared at eval/tools/coyomap_eval/process_scorecard.py:3318; files: eval/tools/coyomap_eval/process_scorecard.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C110 (Retro precheck) is described as: Refuses a retrospective while the build it would read is still running. A build stamps who made it near the end, so mid-run the stamp still names the previous build.",
+   "anchor": "eval/tools/coyomap_eval/retro_precheck.py:198",
+   "detail": "declared at eval/tools/coyomap_eval/retro_precheck.py:198; files: eval/tools/coyomap_eval/retro_precheck.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C111 (Ledger check) is described as: Asks the code history whether a retrospective's finished rows really shipped. A row saying it is still open while its named change is merged gets proposed again for nothing.",
+   "anchor": "eval/tools/coyomap_eval/ledger.py:110",
+   "detail": "declared at eval/tools/coyomap_eval/ledger.py:110; files: eval/tools/coyomap_eval/ledger.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C112 (Live number ledger) is described as: Re-measures every count the tools state about a map that keeps changing. A person writes the sentence twice, so nothing has to guess which sum produced the number.",
+   "anchor": "eval/tools/coyomap_eval/live_numbers.py:540",
+   "detail": "declared at eval/tools/coyomap_eval/live_numbers.py:540; files: eval/tools/coyomap_eval/live_numbers.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C113 (Skeptic recall test) is described as: Plants claims that are false by construction and keeps the answer key. Counts how many of them the doubters caught, which is a number that means something on its own.",
+   "anchor": "eval/tools/coyomap_eval/mutate.py:236",
+   "detail": "declared at eval/tools/coyomap_eval/mutate.py:236; files: eval/tools/coyomap_eval/mutate.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C45 (Code survey) is described as: Measures how big a project's code is before the map is drawn.",
+   "anchor": "tools/coyomap/preindex.py:604",
+   "detail": "declared at tools/coyomap/preindex.py:604; files: tools/coyomap/preindex.py, tools/coyomap/preindex_lib.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C46 (Ignore list) is described as: Lets a project declare which of its own code the map must leave out.",
+   "anchor": "tools/coyomap/ignorefile.py:178",
+   "detail": "declared at tools/coyomap/ignorefile.py:178; files: tools/coyomap/ignorefile.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C47 (Assignment rules) is described as: Records where every mapped thing belongs, so a rebuild keeps the decision.",
+   "anchor": "tools/coyomap/reconcile.py:692",
+   "detail": "declared at tools/coyomap/reconcile.py:692; files: tools/coyomap/reconcile.py, tools/coyomap/reconcile_build.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C48 (Diagram balance) is described as: Reports how crowded each screen of the map is.",
+   "anchor": "tools/coyomap/balance.py:142",
+   "detail": "declared at tools/coyomap/balance.py:142; files: tools/coyomap/balance.py, tools/coyomap/balance_lib.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C49 (Change impact) is described as: Works out which parts of the map a code change touches.",
+   "anchor": "tools/coyomap/impact_git.py:285",
+   "detail": "declared at tools/coyomap/impact_git.py:285; files: tools/coyomap/impact_lib.py, tools/coyomap/impact_ripple.py, tools/coyomap/impact_git.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C50 (Map and transcript backup) is described as: Bundles a finished map with the conversation that produced it.",
+   "anchor": "tools/map_backup.py:391",
+   "detail": "declared at tools/map_backup.py:391; files: tools/map_backup.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C51 (Live reload supervisor) is described as: Restarts the map server when someone editing the viewer changes its code.",
+   "anchor": "tools/devserve.py:103",
+   "detail": "declared at tools/devserve.py:103; files: tools/devserve.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C120 (Product description instructions) is described as: Tells the mapping agent to describe the product before reading code. It orders the goal, the shared words, the people and their goals. The one successful run through those goals comes last.",
+   "anchor": "method.md:28",
+   "detail": "declared at method.md:28; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C121 (Code inventory instructions) is described as: Says how to list what the product is made of, area by area. Every box gets a plain sentence, a code link and a confidence label. Outside services and the ways in are listed the same way.",
+   "anchor": "method.md:414",
+   "detail": "declared at method.md:414; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C122 (Outside edge instructions) is described as: Says how to name every place the product meets the outside world. Each place gets one word for what it is, and a side saying whose design it is. It also says how a story crosses one, in both directions.",
+   "anchor": "method.md:506",
+   "detail": "declared at method.md:506; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C123 (Data and step instructions) is described as: Says how to write the records the product keeps and the steps of each goal. A step names who acts, on what, and which way the data moves. Machinery shared by several goals is written once and referenced.",
+   "anchor": "method.md:879",
+   "detail": "declared at method.md:879; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C124 (Operations and decision instructions) is described as: Says how to record what runs, what is watched, what is configured and what the product decides. A decision is only worth recording when a product person could have chosen otherwise. Test coverage is measured against the map, never against line counts.",
+   "anchor": "method.md:1068",
+   "detail": "declared at method.md:1068; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C125 (Cross-cutting build instructions) is described as: Holds the rules that apply to every part of a build. It says how to write text a reader meets alone, with no page around it. It also sets the order of work, the tools to reach for, and how big one box may be.",
+   "anchor": "method.md:1332",
+   "detail": "declared at method.md:1332; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C126 (Fan-out phase instructions) is described as: Plans the parallel work of a build in three phases. Many agents gather the pieces, one agent merges them, then many agents trace the goals. It says how to size each slice, brief it and wait for the batch.",
+   "anchor": "method.md:1728",
+   "detail": "declared at method.md:1728; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C127 (Verification phase instructions) is described as: Plans what happens once every goal has been traced. Fresh agents try to disprove each claim the map makes, against the code. Two more passes write what the product decides and measure what the tests cover.",
+   "anchor": "method.md:2152",
+   "detail": "declared at method.md:2152; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C128 (Closing sequence instructions) is described as: Runs the closing steps that turn a finished map into a committed one. Corrections land, the record of what was checked is written, then the gates run. It ends by telling the reader where to open the map.",
+   "anchor": "method.md:2651",
+   "detail": "declared at method.md:2651; files: method.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  }
+ ]
+}

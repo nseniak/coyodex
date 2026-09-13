@@ -5,7 +5,7 @@
 Every layer reads it through here, so a trap can never be asserted twice under two spellings,
 and a trap nobody asserts shows up as a declared gap rather than as silence.
 
-**Why a hand-rolled parser.** coyodex core is deliberately zero-dependency (`pyproject`
+**Why a hand-rolled parser.** coyomap core is deliberately zero-dependency (`pyproject`
 `dependencies = []`) and `cli.py` documents a stdlib import firewall; PyYAML is not installed
 and adding it for a fixture would be the wrong trade. So `traps.yaml` is written in a small,
 explicitly-documented YAML subset and parsed below with the stdlib alone. The subset is:
@@ -14,7 +14,7 @@ indentation, and lists of mappings (`- key: value` plus indented continuation li
 per value; no block scalars, no anchors, no flow collections. Anything else raises rather than
 being silently mis-read — a fixture manifest that parses wrong is worse than one that fails.
 
-Dataclasses, not pydantic: pydantic is not installed either, and `coyodex.model` is built from
+Dataclasses, not pydantic: pydantic is not installed either, and `coyomap.model` is built from
 frozen dataclasses throughout. Matching the surrounding code wins.
 """
 from __future__ import annotations

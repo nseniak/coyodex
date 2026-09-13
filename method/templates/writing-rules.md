@@ -52,7 +52,7 @@ the other. One element type had drifted off a convention 360-odd names already k
 even consistent with itself. Note what the surfaces that skipped the article had in common: a proper
 name, a plural, a mass noun. The article was doing grammar, never meaning.
 
-`coyodex validate` counts rules 1 to 4 and 7, and reports them as advisories, so a build gets numbers
+`coyomap validate` counts rules 1 to 4 and 7, and reports them as advisories, so a build gets numbers
 back rather than an opinion. Of rule 4 it counts the checkable part: an opening pointer word, and a
 mid-sentence "either / both / such / the other" + category noun with no two alternatives named in
 the same box. The rest of rule 4, and rules 5 and 6, are yours to obey.

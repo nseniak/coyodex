@@ -1,0 +1,1050 @@
+{
+  "set": [
+    {
+      "ids": [
+        "BR1",
+        "BR2",
+        "BR3",
+        "BR4",
+        "BR5",
+        "BR6",
+        "BR7",
+        "BR8"
+      ],
+      "block": "BLK1"
+    },
+    {
+      "ids": [
+        "BR180",
+        "BR181",
+        "BR182",
+        "BR183",
+        "BR184",
+        "BR185",
+        "BR186",
+        "BR187"
+      ],
+      "block": "BLK10"
+    },
+    {
+      "ids": [
+        "BR200",
+        "BR201",
+        "BR202",
+        "BR203",
+        "BR204",
+        "BR205",
+        "BR206",
+        "BR207"
+      ],
+      "block": "BLK11"
+    },
+    {
+      "ids": [
+        "BR20",
+        "BR21",
+        "BR22",
+        "BR23",
+        "BR24",
+        "BR25",
+        "BR26",
+        "BR27"
+      ],
+      "block": "BLK2"
+    },
+    {
+      "ids": [
+        "BR40",
+        "BR41",
+        "BR42",
+        "BR43",
+        "BR44",
+        "BR45",
+        "BR46"
+      ],
+      "block": "BLK3"
+    },
+    {
+      "ids": [
+        "BR60",
+        "BR61",
+        "BR62",
+        "BR63",
+        "BR64",
+        "BR65",
+        "BR66"
+      ],
+      "block": "BLK4"
+    },
+    {
+      "ids": [
+        "BR80",
+        "BR81",
+        "BR82",
+        "BR83",
+        "BR84",
+        "BR85",
+        "BR86",
+        "BR87"
+      ],
+      "block": "BLK5"
+    },
+    {
+      "ids": [
+        "BR100",
+        "BR101",
+        "BR102",
+        "BR103",
+        "BR104",
+        "BR105",
+        "BR106",
+        "BR107"
+      ],
+      "block": "BLK6"
+    },
+    {
+      "ids": [
+        "BR120",
+        "BR121",
+        "BR122",
+        "BR123",
+        "BR124",
+        "BR125",
+        "BR126",
+        "BR127"
+      ],
+      "block": "BLK7"
+    },
+    {
+      "ids": [
+        "BR140",
+        "BR141",
+        "BR142",
+        "BR143",
+        "BR144",
+        "BR145",
+        "BR146",
+        "BR147"
+      ],
+      "block": "BLK8"
+    },
+    {
+      "ids": [
+        "BR160",
+        "BR161",
+        "BR162",
+        "BR163",
+        "BR164",
+        "BR165",
+        "BR166",
+        "BR167"
+      ],
+      "block": "BLK9"
+    },
+    {
+      "ids": [
+        "D105"
+      ],
+      "bucket": "AI & ML",
+      "interfaces": [
+        "I11"
+      ]
+    },
+    {
+      "ids": [
+        "D95"
+      ],
+      "bucket": "AI & ML",
+      "interfaces": [
+        "I4",
+        "I5"
+      ]
+    },
+    {
+      "ids": [
+        "D104"
+      ],
+      "bucket": "Build & packaging"
+    },
+    {
+      "ids": [
+        "D94"
+      ],
+      "bucket": "Code navigation",
+      "interfaces": [
+        "I10"
+      ]
+    },
+    {
+      "ids": [
+        "D93"
+      ],
+      "bucket": "Code navigation",
+      "interfaces": [
+        "I9"
+      ]
+    },
+    {
+      "ids": [
+        "D97",
+        "D98",
+        "D160"
+      ],
+      "bucket": "Frontend / UI"
+    },
+    {
+      "ids": [
+        "D91"
+      ],
+      "bucket": "Infrastructure & runtime",
+      "interfaces": [
+        "I6",
+        "I7"
+      ]
+    },
+    {
+      "ids": [
+        "D92",
+        "D96",
+        "D161"
+      ],
+      "bucket": "Infrastructure & runtime"
+    },
+    {
+      "ids": [
+        "D90"
+      ],
+      "bucket": "Source and history",
+      "interfaces": [
+        "I8"
+      ]
+    },
+    {
+      "ids": [
+        "D99",
+        "D100"
+      ],
+      "bucket": "Source parsing"
+    },
+    {
+      "ids": [
+        "D101",
+        "D102",
+        "D103"
+      ],
+      "bucket": "Testing & type checking"
+    },
+    {
+      "ids": [
+        "UC2"
+      ],
+      "capability": "CAP1",
+      "entry_points": [
+        {
+          "id": "EP20",
+          "source": "skill/coyomap/SKILL.md:27"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "UC3"
+      ],
+      "capability": "CAP1"
+    },
+    {
+      "ids": [
+        "UC7",
+        "UC8",
+        "UC9"
+      ],
+      "capability": "CAP2",
+      "entry_points": [
+        {
+          "id": "EP20",
+          "source": "skill/coyomap/SKILL.md:27"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "UC4"
+      ],
+      "capability": "CAP3",
+      "entry_points": [
+        {
+          "id": "EP26",
+          "source": "tools/coyomap/cli.py:168"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "UC5"
+      ],
+      "capability": "CAP3",
+      "entry_points": [
+        {
+          "id": "EP58",
+          "source": "tools/coyomap/viewer/serve.py:640"
+        },
+        {
+          "id": "EP64",
+          "source": "tools/coyomap/viewer/serve.py:730"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "UC6"
+      ],
+      "capability": "CAP3",
+      "entry_points": [
+        {
+          "id": "EP91",
+          "source": "tools/coyomap/viewer/viewer.js:13011"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "UC1"
+      ],
+      "capability": "CAP4"
+    },
+    {
+      "ids": [
+        "UC11"
+      ],
+      "capability": "CAP5",
+      "entry_points": [
+        {
+          "id": "EP1",
+          "source": "eval/retro/SKILL.md:28"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "UC10"
+      ],
+      "capability": "CAP5",
+      "entry_points": [
+        {
+          "id": "EP2",
+          "source": "eval/SKILL.md:28"
+        },
+        {
+          "id": "EP11",
+          "source": "eval/tools/coyomap_eval/cli.py:75"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "EP3",
+        "EP4",
+        "EP5",
+        "EP6",
+        "EP7",
+        "EP8",
+        "EP9",
+        "EP10",
+        "EP11",
+        "EP12",
+        "EP13",
+        "EP14",
+        "EP15",
+        "EP16",
+        "EP17",
+        "EP18",
+        "EP19"
+      ],
+      "component": "C100"
+    },
+    {
+      "ids": [
+        "EP20"
+      ],
+      "component": "C134"
+    },
+    {
+      "ids": [
+        "EP2"
+      ],
+      "component": "C135"
+    },
+    {
+      "ids": [
+        "EP1"
+      ],
+      "component": "C136"
+    },
+    {
+      "ids": [
+        "EP22",
+        "EP23",
+        "EP24",
+        "EP25",
+        "EP26",
+        "EP27",
+        "EP28",
+        "EP29",
+        "EP30",
+        "EP31"
+      ],
+      "component": "C20"
+    },
+    {
+      "ids": [
+        "EP21"
+      ],
+      "component": "C21"
+    },
+    {
+      "ids": [
+        "EP43",
+        "EP44",
+        "EP45",
+        "EP46",
+        "EP47"
+      ],
+      "component": "C22"
+    },
+    {
+      "ids": [
+        "EP35",
+        "EP36",
+        "EP37",
+        "EP38",
+        "EP39",
+        "EP40",
+        "EP41",
+        "EP42",
+        "EP51"
+      ],
+      "component": "C23"
+    },
+    {
+      "ids": [
+        "EP32",
+        "EP34",
+        "EP48"
+      ],
+      "component": "C24"
+    },
+    {
+      "ids": [
+        "EP53"
+      ],
+      "component": "C25"
+    },
+    {
+      "ids": [
+        "EP33",
+        "EP52"
+      ],
+      "component": "C26"
+    },
+    {
+      "ids": [
+        "EP49",
+        "EP50",
+        "EP54",
+        "EP55",
+        "EP56"
+      ],
+      "component": "C27"
+    },
+    {
+      "ids": [
+        "EP99",
+        "EP100"
+      ],
+      "component": "C50"
+    },
+    {
+      "ids": [
+        "EP98"
+      ],
+      "component": "C51"
+    },
+    {
+      "ids": [
+        "EP90",
+        "EP91",
+        "EP92",
+        "EP93",
+        "EP94",
+        "EP95",
+        "EP96",
+        "EP97"
+      ],
+      "component": "C60"
+    },
+    {
+      "ids": [
+        "EP77",
+        "EP78",
+        "EP79",
+        "EP80",
+        "EP81",
+        "EP82",
+        "EP83",
+        "EP84",
+        "EP85",
+        "EP86",
+        "EP87",
+        "EP88",
+        "EP89"
+      ],
+      "component": "C70"
+    },
+    {
+      "ids": [
+        "EP57",
+        "EP58",
+        "EP59",
+        "EP60",
+        "EP61",
+        "EP62",
+        "EP63",
+        "EP64",
+        "EP65",
+        "EP66",
+        "EP67",
+        "EP68",
+        "EP69",
+        "EP70",
+        "EP71",
+        "EP72",
+        "EP73",
+        "EP74",
+        "EP75",
+        "EP76"
+      ],
+      "component": "C83"
+    },
+    {
+      "ids": [
+        "C83",
+        "C84",
+        "C85"
+      ],
+      "runs_in": [
+        "Map server"
+      ],
+      "subsystem": "S41"
+    },
+    {
+      "ids": [
+        "C60",
+        "C65",
+        "C70",
+        "C71",
+        "C73"
+      ],
+      "runs_in": [
+        "Map server"
+      ],
+      "subsystem": "S42"
+    },
+    {
+      "ids": [
+        "C61",
+        "C62",
+        "C63",
+        "C64",
+        "C69"
+      ],
+      "runs_in": [
+        "Map server"
+      ],
+      "subsystem": "S43"
+    },
+    {
+      "ids": [
+        "C66",
+        "C67",
+        "C68",
+        "C72"
+      ],
+      "runs_in": [
+        "Map server"
+      ],
+      "subsystem": "S44"
+    },
+    {
+      "ids": [
+        "C80",
+        "C81",
+        "C82"
+      ],
+      "runs_in": [
+        "coyomap command line",
+        "Map server"
+      ],
+      "subsystem": "S40"
+    },
+    {
+      "ids": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5"
+      ],
+      "runs_in": [
+        "coyomap command line"
+      ],
+      "subsystem": "S20"
+    },
+    {
+      "ids": [
+        "C6",
+        "C7",
+        "C8",
+        "C9",
+        "C10"
+      ],
+      "runs_in": [
+        "coyomap command line"
+      ],
+      "subsystem": "S21"
+    },
+    {
+      "ids": [
+        "C49"
+      ],
+      "runs_in": [
+        "coyomap command line"
+      ],
+      "subsystem": "S3"
+    },
+    {
+      "ids": [
+        "C20",
+        "C24",
+        "C26",
+        "C27"
+      ],
+      "runs_in": [
+        "coyomap command line"
+      ],
+      "subsystem": "S30"
+    },
+    {
+      "ids": [
+        "C45",
+        "C46",
+        "C47",
+        "C48"
+      ],
+      "runs_in": [
+        "coyomap command line"
+      ],
+      "subsystem": "S31"
+    },
+    {
+      "ids": [
+        "C21",
+        "C22",
+        "C23",
+        "C25"
+      ],
+      "runs_in": [
+        "coyomap command line"
+      ],
+      "subsystem": "S32"
+    },
+    {
+      "ids": [
+        "C50"
+      ],
+      "runs_in": [
+        "coyomap command line"
+      ],
+      "subsystem": "S52"
+    },
+    {
+      "ids": [
+        "C120",
+        "C121",
+        "C122",
+        "C123",
+        "C124"
+      ],
+      "runs_in": [
+        "coyomap skill"
+      ],
+      "subsystem": "S10"
+    },
+    {
+      "ids": [
+        "C125",
+        "C126",
+        "C127",
+        "C128",
+        "C130",
+        "C131"
+      ],
+      "runs_in": [
+        "coyomap skill"
+      ],
+      "subsystem": "S11"
+    },
+    {
+      "ids": [
+        "C129",
+        "C132",
+        "C133"
+      ],
+      "runs_in": [
+        "coyomap skill"
+      ],
+      "subsystem": "S12"
+    },
+    {
+      "ids": [
+        "C134"
+      ],
+      "runs_in": [
+        "coyomap skill"
+      ],
+      "subsystem": "S13"
+    },
+    {
+      "ids": [
+        "C101",
+        "C102",
+        "C103",
+        "C104",
+        "C105",
+        "C113"
+      ],
+      "runs_in": [
+        "coyomap-eval command line"
+      ],
+      "subsystem": "S50"
+    },
+    {
+      "ids": [
+        "C107",
+        "C108",
+        "C109",
+        "C110",
+        "C111"
+      ],
+      "runs_in": [
+        "coyomap-eval command line"
+      ],
+      "subsystem": "S51"
+    },
+    {
+      "ids": [
+        "C100",
+        "C106",
+        "C112"
+      ],
+      "runs_in": [
+        "coyomap-eval command line"
+      ],
+      "subsystem": "S52"
+    },
+    {
+      "ids": [
+        "C135"
+      ],
+      "runs_in": [
+        "coyomap-eval skill"
+      ],
+      "subsystem": "S13"
+    },
+    {
+      "ids": [
+        "C136"
+      ],
+      "runs_in": [
+        "coyomap-retro skill"
+      ],
+      "subsystem": "S13"
+    },
+    {
+      "ids": [
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+        "E6",
+        "E7",
+        "E8",
+        "E24",
+        "E25",
+        "E26",
+        "E38",
+        "E69"
+      ],
+      "subdomain": "SD10"
+    },
+    {
+      "ids": [
+        "E9",
+        "E10",
+        "E12",
+        "E13",
+        "E15",
+        "E23",
+        "E27",
+        "E68"
+      ],
+      "subdomain": "SD11"
+    },
+    {
+      "ids": [
+        "E16",
+        "E17",
+        "E18",
+        "E19",
+        "E20",
+        "E21",
+        "E22",
+        "E66"
+      ],
+      "subdomain": "SD12"
+    },
+    {
+      "ids": [
+        "E11",
+        "E31",
+        "E34",
+        "E35",
+        "E67"
+      ],
+      "subdomain": "SD13"
+    },
+    {
+      "ids": [
+        "E14",
+        "E28",
+        "E29",
+        "E30",
+        "E32",
+        "E33"
+      ],
+      "subdomain": "SD14"
+    },
+    {
+      "ids": [
+        "E1",
+        "E36",
+        "E37",
+        "E54",
+        "E62",
+        "E63",
+        "E64",
+        "E65"
+      ],
+      "subdomain": "SD2"
+    },
+    {
+      "ids": [
+        "E56",
+        "E57",
+        "E58",
+        "E59",
+        "E60",
+        "E61"
+      ],
+      "subdomain": "SD3"
+    },
+    {
+      "ids": [
+        "E50",
+        "E51",
+        "E52",
+        "E53",
+        "E55"
+      ],
+      "subdomain": "SD4"
+    },
+    {
+      "ids": [
+        "E39",
+        "E40",
+        "E41",
+        "E42",
+        "E43",
+        "E44",
+        "E45",
+        "E46",
+        "E47",
+        "E48",
+        "E49"
+      ],
+      "subdomain": "SD5"
+    },
+    {
+      "ids": [
+        "C137",
+        "C138",
+        "C139"
+      ],
+      "subsystem": "S13"
+    },
+    {
+      "ids": [
+        "C51"
+      ],
+      "subsystem": "S41"
+    },
+    {
+      "ids": [
+        "I5"
+      ],
+      "ways_in": [
+        "EP1",
+        "EP2"
+      ]
+    },
+    {
+      "ids": [
+        "I4"
+      ],
+      "ways_in": [
+        "EP20"
+      ]
+    },
+    {
+      "ids": [
+        "I1"
+      ],
+      "ways_in": [
+        "EP21",
+        "EP22",
+        "EP23",
+        "EP24",
+        "EP25",
+        "EP26",
+        "EP27",
+        "EP28",
+        "EP29",
+        "EP30",
+        "EP31",
+        "EP32",
+        "EP33",
+        "EP34",
+        "EP35",
+        "EP36",
+        "EP37",
+        "EP38",
+        "EP39",
+        "EP40",
+        "EP41",
+        "EP42",
+        "EP43",
+        "EP44",
+        "EP45",
+        "EP46",
+        "EP47",
+        "EP48",
+        "EP49",
+        "EP50",
+        "EP51",
+        "EP52",
+        "EP53",
+        "EP54",
+        "EP55",
+        "EP56",
+        "EP99",
+        "EP100"
+      ]
+    },
+    {
+      "ids": [
+        "I2"
+      ],
+      "ways_in": [
+        "EP3",
+        "EP4",
+        "EP5",
+        "EP6",
+        "EP7",
+        "EP8",
+        "EP9",
+        "EP10",
+        "EP11",
+        "EP12",
+        "EP13",
+        "EP14",
+        "EP15",
+        "EP16",
+        "EP17",
+        "EP18",
+        "EP19"
+      ]
+    },
+    {
+      "ids": [
+        "I3"
+      ],
+      "ways_in": [
+        "EP58",
+        "EP59",
+        "EP60",
+        "EP61",
+        "EP62",
+        "EP63",
+        "EP64",
+        "EP65",
+        "EP66",
+        "EP67",
+        "EP68",
+        "EP69",
+        "EP70",
+        "EP71",
+        "EP72",
+        "EP73",
+        "EP74",
+        "EP75",
+        "EP77",
+        "EP78",
+        "EP79",
+        "EP80",
+        "EP81",
+        "EP82",
+        "EP83",
+        "EP84",
+        "EP85",
+        "EP86",
+        "EP87",
+        "EP88",
+        "EP89",
+        "EP90",
+        "EP91",
+        "EP92",
+        "EP93",
+        "EP94",
+        "EP95",
+        "EP96",
+        "EP97"
+      ]
+    }
+  ],
+  "drop_edges": [
+    {
+      "src": "C72",
+      "verb": "reads",
+      "dst": "E46"
+    }
+  ],
+  "set_anchors": [
+    {
+      "claim": "C131 reads E1",
+      "corrected": "method/change-impact.md:51"
+    },
+    {
+      "claim": "C61 reads E40",
+      "corrected": "tools/coyomap/viewer/viewer.js:724"
+    }
+  ]
+}

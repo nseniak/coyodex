@@ -1,0 +1,10 @@
+{
+  "schema": "coyomap/prose-verdicts/v1",
+  "fields": [
+    {
+      "where": "BR142 statement",
+      "flag": "lost precision",
+      "note": "The referent of 'the same thing' is not clearly identified; should specify which element's information is being referred to."
+    }
+  ]
+}

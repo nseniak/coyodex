@@ -82,7 +82,7 @@ def test_retired_checks_say_WHY_they_stopped_running():
     could prove it. Demanding a `verified in` line from a SUPERSEDED file would force a false
     claim: nothing verified it. So a retired file says either what proved it, or what replaced it.
     `2026-09-03-what-crosses-is-a-pair.md` is the case — its checks grade a field that no longer
-    exists, and one of them grades as a PASS the exact shape that made coyodex's own map stop
+    exists, and one of them grades as a PASS the exact shape that made coyomap's own map stop
     validating."""
     for path in sorted((CHECKS_DIR / "verified").glob("*.md")):
         body = path.read_text(encoding="utf-8")

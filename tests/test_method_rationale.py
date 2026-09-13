@@ -3,7 +3,7 @@
 `method.md` and the `method/` docs used to carry three registers in one file: the **contract** (what
 a map must contain), the **procedure** (how to run a build), and the **incident record** (the named
 past build that produced a rule — "a live build spent 88 of its 278 tool calls polling", "two maps
-of one repo went from 103 security rows to 19"). The third one is written for the coyodex author,
+of one repo went from 103 security rows to 19"). The third one is written for the coyomap author,
 not for the build agent, and the agent paid attention cost for it on every build.
 
 That register now lives in `internal/docs/method-rationale.md`, which the method tells agents to
@@ -82,7 +82,7 @@ def make_record_text() -> str:
 
 
 def _unwrap(value: str) -> str:
-    """A backtick-quoted field value. Anchors contain backticks themselves (`` `coyodex fix` ``), so
+    """A backtick-quoted field value. Anchors contain backticks themselves (`` `coyomap fix` ``), so
     this spans first-to-last backtick instead of matching a backtick-free run — the bug that made
     this test silently skip 11 of 115 entries and mispair 11 more."""
     assert value.startswith("`") and value.endswith("`") and len(value) > 2, (

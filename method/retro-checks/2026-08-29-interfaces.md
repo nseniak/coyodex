@@ -4,7 +4,7 @@ Change (2026-08-29, extended the same day by `interfaces[].kind`): a map records
 data or events with the outside world — every external-group dep either names a surface or says why
 it is none, and every flow opens at its door (`Rn → In`, then `In → Cn`) with each `Cn → Dn` step on
 a surface-standing dep migrated to `Cn → In` · method.md, method/model.md,
-method/project-map.schema.json, method/templates/project-map.template.md, tools/coyodex/model.py,
+method/project-map.schema.json, method/templates/project-map.template.md, tools/coyomap/model.py,
 grammar.py, features.py, validate_model.py, audit_model.py, views.py, viewer, eval profile.
 
 Escalation: if check 1 fails as ZERO interfaces on a map with external deps, the section had no step
@@ -46,7 +46,7 @@ The root mistake under both: **a section was scheduled by its INPUTS and never b
    of theirs touches that surface", or "step(s) point at a dependency that stands on a surface".
    Both are aggregated to one line each, so a build cannot lose them in volume.
 
-3. expect: the eval sees the section. `coyodex-eval score` reports `interfaces`, `interface_doors`
+3. expect: the eval sees the section. `coyomap-eval score` reports `interfaces`, `interface_doors`
    and `interfaces_undecided_deps`, so a build that authors twelve surfaces and one that authors none
    no longer score identically.
    regression sign: a profile in which those three read `None` on a map that has interfaces.

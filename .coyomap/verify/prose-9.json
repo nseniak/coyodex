@@ -1,0 +1,167 @@
+{
+ "schema": "coyomap/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "D100 used for",
+   "text": "Supplies the per-language grammars the source parser needs."
+  },
+  {
+   "where": "D101 used for",
+   "text": "Runs the whole test suite, which is the first half of the checks a change must pass."
+  },
+  {
+   "where": "D102 used for",
+   "text": "Checks the tool's Python types, which is the second half of the checks a change must pass."
+  },
+  {
+   "where": "D103 used for",
+   "text": "Drives a real browser for the one test file that can see a viewer bug on screen."
+  },
+  {
+   "where": "D104 used for",
+   "text": "Builds and installs the tool from the repo, including the viewer files that ship with it."
+  },
+  {
+   "where": "D105 used for",
+   "text": "Reads what the coding agent actually did during a build. Three of the checks here have no other source for that."
+  },
+  {
+   "where": "D160 used for",
+   "text": "Colours the source code shown in the viewer's code pane."
+  },
+  {
+   "where": "D161 used for",
+   "text": "Serves the code-colouring library the viewer page loads when a file is opened."
+  },
+  {
+   "where": "R1 wants",
+   "text": "a trustworthy map of their own project, and a cheap way to keep it in step with the code"
+  },
+  {
+   "where": "R2 wants",
+   "text": "to understand what a system does, top down, without reading all of its code"
+  },
+  {
+   "where": "R3 wants",
+   "text": "to know whether a change to the instructions made the maps better or worse"
+  },
+  {
+   "where": "HP2 why",
+   "text": "needs the command installed at HP1"
+  },
+  {
+   "where": "HP3 why",
+   "text": "needs a built map to serve, from HP2"
+  },
+  {
+   "where": "HP4 why",
+   "text": "needs the server running from HP3"
+  },
+  {
+   "where": "HP5 why",
+   "text": "needs a box on screen, reached at HP4"
+  },
+  {
+   "where": "HP6 why",
+   "text": "needs the pinned baseline written at HP2"
+  },
+  {
+   "where": "HP7 why",
+   "text": "needs the change report produced at HP6"
+  },
+  {
+   "where": "glossary 'map'",
+   "text": "The whole picture coyomap produces for one project: the diagrams, the plain sentence on every box, and the code links."
+  },
+  {
+   "where": "glossary 'baseline'",
+   "text": "The map as currently accepted, pinned to one commit. A later code change is measured against it."
+  },
+  {
+   "where": "glossary 'build'",
+   "text": "Analysing a project from scratch and writing a new map. It throws away hand edits to the old one."
+  },
+  {
+   "where": "glossary 'viewer'",
+   "text": "The browser page that shows a map. It is served live and never stored as a file."
+  },
+  {
+   "where": "glossary 'view'",
+   "text": "One tab in the viewer. Each answers a single question about the project."
+  },
+  {
+   "where": "glossary 'box'",
+   "text": "One thing drawn on a view. An arrow between two boxes is a relation."
+  },
+  {
+   "where": "glossary 'code link'",
+   "text": "The file and line a box points at. A box without one is ungrounded, which counts as a defect."
+  },
+  {
+   "where": "glossary 'use case'",
+   "text": "One goal one party has, with the thing that starts it and the result it ends in."
+  },
+  {
+   "where": "glossary 'feature'",
+   "text": "A group of use cases that serve one goal of the product."
+  },
+  {
+   "where": "glossary 'happy path'",
+   "text": "One end to end run through the use cases that tells the product's story, with nothing going wrong."
+  },
+  {
+   "where": "glossary 'flow'",
+   "text": "The numbered steps of one use case. Each step says who or what acts, on what."
+  },
+  {
+   "where": "glossary 'shared sub-flow'",
+   "text": "A run of steps that several flows all run. It is written once and referred to by each of them."
+  },
+  {
+   "where": "glossary 'interface'",
+   "text": "One place the product meets something that is not the product."
+  },
+  {
+   "where": "glossary 'way in'",
+   "text": "One address, command or tool an interface is made of."
+  },
+  {
+   "where": "glossary 'door'",
+   "text": "One crossing between a person and the product, at an interface, inside one flow."
+  },
+  {
+   "where": "glossary 'component'",
+   "text": "One module sized piece of the code, drawn as a single box."
+  },
+  {
+   "where": "glossary 'subsystem'",
+   "text": "A group of components, and of smaller subsystems under it."
+  },
+  {
+   "where": "glossary 'entity'",
+   "text": "One real named type the code defines, with its fields and its links to other types."
+  },
+  {
+   "where": "glossary 'business rule'",
+   "text": "One decision the product makes, written in product words, plus every place it is enforced."
+  },
+  {
+   "where": "glossary 'change impact'",
+   "text": "The report saying what a code change does to the map."
+  },
+  {
+   "where": "glossary 'accept'",
+   "text": "Folding a change impact report into the baseline and re-pinning it."
+  },
+  {
+   "where": "glossary 'the method'",
+   "text": "The instructions a coding agent follows to build a map. Most of this product's real logic lives there, not in code."
+  },
+  {
+   "where": "glossary 'the skill'",
+   "text": "The small file that lets a coding agent find this project and start following the instructions."
+  }
+ ]
+}

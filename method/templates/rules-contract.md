@@ -4,11 +4,11 @@
 `method/templates/` shipped a harvest contract and a skeptic contract and nothing for the rules
 fan-out, so the lead wrote one from memory — and told all eleven rule agents to put a `block` field
 on every rule. `lint_fragment` makes that a BLOCKING problem (`method.md` and `method/model.md` both
-say `block` is assigned by the lead through `coyodex reconcile`, never in a fragment), so the lint
+say `block` is assigned by the lead through `coyomap reconcile`, never in a fragment), so the lint
 failure fired in **13 of that build's 71 agent transcripts** and every one of the eleven fragments
 had to be repaired. One wrong sentence, eleven agents, thirteen failures.
 
-Fill the «angle-bracket» slots. There are exactly SIX — «COYODEX_HOME», «REPO», «MAP», «PROJECT»,
+Fill the «angle-bracket» slots. There are exactly SIX — «COYOMAP_HOME», «REPO», «MAP», «PROJECT»,
 «BLOCK», «AGENT_ID» — each spelled the same way everywhere.
 
 - **«BLOCK»** is this agent's one block id and its BR id range, taken from the lead's block plan.
@@ -18,10 +18,10 @@ Everything below the line is what the agent reads.
 
 ---
 
-You are writing the **business-logic layer** of a coyodex map of `«REPO»` — «PROJECT».
+You are writing the **business-logic layer** of a coyomap map of `«REPO»` — «PROJECT».
 
-**NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
-for the rest of your session, so a later relative `.coyodex/...` path silently reads the TOOL's own
+**NEVER `cd` into the coyomap clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
+for the rest of your session, so a later relative `.coyomap/...` path silently reads the TOOL's own
 map instead of this project's — a wrong answer that looks like a right one. On the 2026-09-02 build
 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide and no agent had
 read it.
@@ -31,7 +31,7 @@ and how it is built. **None of them says what the product DECIDES.** That is you
 the part a reader means by "what is special about this application".
 
 ```
-CX=«COYODEX_HOME»/.venv/bin/coyodex
+CX=«COYOMAP_HOME»/.venv/bin/coyomap
 MAP=«MAP»
 $CX dump --map $MAP --legend           # every id with its name and source
 $CX dump --map $MAP --members S3       # the components inside a subsystem
@@ -97,7 +97,7 @@ Those seven keys are the whole authored surface. Notes on each:
 - **`confidence`** — `confidence` says what YOU knew: **`verified`** = you read the code and traced it,
   **`inferred`** = you took it from a name, a path or a convention. Nothing in the toolchain writes
   this field, so it is the one fact only the author has. It is NOT a statement about the grounding
-  skeptics — that is worked out per element by `coyodex grounding by-element`, from the votes, and is
+  skeptics — that is worked out per element by `coyomap grounding by-element`, from the votes, and is
   never stored. **Use both values.** One shipped map carried `verified` on all 301 element rows, which
   tells a reader nothing about which rows were read.
 - **`sites[].where`** is the **OPERATIVE line** — the `if` / `raise` / `require_*` / decorator call
@@ -108,7 +108,7 @@ Those seven keys are the whole authored surface. Notes on each:
   anchor.
 
 **Do NOT write a `block` field.** Your block id is «BLOCK» and it is how the LEAD will group your
-rules, through `coyodex reconcile`, after this fan-out. A `block` key inside a fragment is a
+rules, through `coyomap reconcile`, after this fan-out. A `block` key inside a fragment is a
 blocking `lint-fragment` failure, not a warning. Say your block id in your REPLY instead — the lead
 needs it there, and that is the only place it belongs.
 
@@ -148,7 +148,7 @@ truncated command lines across 18 of 71 agents.
 
 ```
 $CX lint-fragment --repo «REPO» --ids $MAP \
-   «REPO»/.coyodex/build-fragments/«AGENT_ID».json
+   «REPO»/.coyomap/build-fragments/«AGENT_ID».json
 ```
 
 Fix every problem until it exits clean. If it prints `warning:` lines, either fix them or repeat them
@@ -170,8 +170,8 @@ the output and the PROBLEM LIST is the middle; a narrow window shows you `LINT F
 problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
 invocations were narrowed on one, 71 of 101 on the next.
 
-**Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+**Do not open a previous map.** Not one under `.coyomap/dev-rebuilds/`, not a
 `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
 its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
 more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
-copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.
+copying. If you need an element's record, it is in THIS map — `coyomap dump` reads it.

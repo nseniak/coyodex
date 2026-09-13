@@ -11,8 +11,8 @@ Run either way: `python3 tests/test_owners.py` or `pytest tests/test_owners.py`.
 """
 from __future__ import annotations
 
-from coyodex.areas import build_areas
-from coyodex.model import (
+from coyomap.areas import build_areas
+from coyomap.model import (
     Entity,
     ExtraSection,
     Flow,
@@ -27,7 +27,7 @@ from coyodex.model import (
     subdomain_owners,
     to_canonical_json,
 )
-from coyodex.validate_model import DATA_OWNER_EXCEPTIONS_HEADING, validate_model
+from coyomap.validate_model import DATA_OWNER_EXCEPTIONS_HEADING, validate_model
 
 
 # --- builders -------------------------------------------------------------------

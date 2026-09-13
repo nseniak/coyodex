@@ -1,0 +1,118 @@
+{
+  "components": [
+    {
+      "id": "C45",
+      "name": "Code survey",
+      "purpose": "Measures how big a project's code is before the map is drawn.",
+      "source": "tools/coyomap/preindex.py:604",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/preindex.py",
+        "tools/coyomap/preindex_lib.py"
+      ]
+    },
+    {
+      "id": "C46",
+      "name": "Ignore list",
+      "purpose": "Lets a project declare which of its own code the map must leave out.",
+      "source": "tools/coyomap/ignorefile.py:178",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/ignorefile.py"
+      ]
+    },
+    {
+      "id": "C47",
+      "name": "Assignment rules",
+      "purpose": "Records where every mapped thing belongs, so a rebuild keeps the decision.",
+      "source": "tools/coyomap/reconcile.py:692",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/reconcile.py",
+        "tools/coyomap/reconcile_build.py"
+      ]
+    },
+    {
+      "id": "C48",
+      "name": "Diagram balance",
+      "purpose": "Reports how crowded each screen of the map is.",
+      "source": "tools/coyomap/balance.py:142",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/balance.py",
+        "tools/coyomap/balance_lib.py"
+      ]
+    },
+    {
+      "id": "C49",
+      "name": "Change impact",
+      "purpose": "Works out which parts of the map a code change touches.",
+      "source": "tools/coyomap/impact_git.py:285",
+      "confidence": "verified",
+      "files": [
+        "tools/coyomap/impact_lib.py",
+        "tools/coyomap/impact_ripple.py",
+        "tools/coyomap/impact_git.py"
+      ]
+    },
+    {
+      "id": "C50",
+      "name": "Map and transcript backup",
+      "purpose": "Bundles a finished map with the conversation that produced it.",
+      "source": "tools/map_backup.py:391",
+      "confidence": "verified",
+      "files": [
+        "tools/map_backup.py"
+      ]
+    },
+    {
+      "id": "C51",
+      "name": "Live reload supervisor",
+      "purpose": "Restarts the map server when someone editing the viewer changes its code.",
+      "source": "tools/devserve.py:103",
+      "confidence": "verified",
+      "files": [
+        "tools/devserve.py"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "kind": "poller",
+      "trigger": "The viewer's code changed on disk, so the map server restarts.",
+      "source": "tools/devserve.py:97",
+      "activation": "self",
+      "cadence": "every 1s",
+      "cadence_source": "tools/devserve.py:91"
+    },
+    {
+      "kind": "cli",
+      "trigger": "An operator archives a project's map with the conversation that built it.",
+      "source": "tools/map_backup.py:478",
+      "activation": "external"
+    },
+    {
+      "kind": "cli",
+      "trigger": "A build records which conversation produced this map.",
+      "source": "tools/map_backup.py:452",
+      "activation": "external"
+    }
+  ],
+  "deps": [],
+  "observability": [],
+  "config": [
+    {
+      "key": "CLAUDE_CODE_SESSION_ID",
+      "purpose": "Names the conversation the archive records as the one that built this map.",
+      "default": "the id the coding agent sets for the running conversation"
+    }
+  ],
+  "deployment": [],
+  "run_commands": [
+    {
+      "action": "start the map server for someone working on the viewer",
+      "command": "make dev-start",
+      "source": "Makefile:145"
+    }
+  ]
+}

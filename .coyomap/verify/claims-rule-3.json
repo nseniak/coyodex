@@ -1,0 +1,228 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'A group holding exactly one thing is reported, because that level costs a click and adds no meaning.' is enforced at tools/coyomap/balance_lib.py:303 — reports a group whose single member is one box rather than another group",
+   "anchor": "tools/coyomap/balance_lib.py:303",
+   "detail": "In: Diagram balance (C48)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A group holding exactly one thing is reported, because that level costs a click and adds no meaning.' is enforced at tools/coyomap/validate_model.py:6317 — reports a group whose single member is another group of the same kind",
+   "anchor": "tools/coyomap/validate_model.py:6317",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A crowded or thin screen is only ever advice. It never refuses a map or stops a build.' is enforced at method.md:1673 — states that screen density never refuses a map, because grouping is a free choice about the picture",
+   "anchor": "method.md:1673",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A crowded or thin screen is only ever advice. It never refuses a map or stops a build.' is enforced at tools/coyomap/validate_model.py:6328 — files every screen-density finding as advice rather than as a fault that refuses the map",
+   "anchor": "tools/coyomap/validate_model.py:6328",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A crowded or thin screen is only ever advice. It never refuses a map or stops a build.' is enforced at tools/coyomap/finalize.py:587 — records the density findings in the closing report without moving its verdict",
+   "anchor": "tools/coyomap/finalize.py:587",
+   "detail": "In: Build closer (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Regrouping may only move boxes between groups. It may never merge or split the boxes themselves.' is enforced at method.md:1675 — forbids any density finding from merging or splitting boxes to reach a number",
+   "anchor": "method.md:1675",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Regrouping may only move boxes between groups. It may never merge or split the boxes themselves.' is enforced at tools/coyomap/balance.py:107 — writes a split suggestion as a change of which group a box sits in, and nothing else",
+   "anchor": "tools/coyomap/balance.py:107",
+   "detail": "In: Diagram balance (C48)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Regrouping may only move boxes between groups. It may never merge or split the boxes themselves.' is enforced at tools/coyomap/balance.py:109 — tells the reader applying a suggestion to add no member the suggestion did not list",
+   "anchor": "tools/coyomap/balance.py:109",
+   "detail": "In: Diagram balance (C48)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A group is never one end of an arrow, so moving a box into another group moves no arrow.' is enforced at method.md:3134 — says dissolving a level moves no arrow, because a group is never an end of one",
+   "anchor": "method.md:3134",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A group is never one end of an arrow, so moving a box into another group moves no arrow.' is enforced at tools/coyomap/validate_model.py:5283 — refuses a map holding any arrow that starts or ends at a group",
+   "anchor": "tools/coyomap/validate_model.py:5283",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Grouping is worth doing only once a map passes about fifteen boxes. A smaller map stays flat.' is enforced at method.md:414 — makes groups optional, and recommends them only above about fifteen boxes",
+   "anchor": "method.md:414",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Grouping is worth doing only once a map passes about fifteen boxes. A smaller map stays flat.' is enforced at tools/coyomap/balance_lib.py:280 — asks for groups only once an ungrouped map passes that count",
+   "anchor": "tools/coyomap/balance_lib.py:280",
+   "detail": "In: Diagram balance (C48)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map covers the files a project's version control accounts for, including new files it does not already skip.' is enforced at tools/coyomap/preindex_lib.py:198 — Asks version control for the files it already tracks.",
+   "anchor": "tools/coyomap/preindex_lib.py:198",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map covers the files a project's version control accounts for, including new files it does not already skip.' is enforced at tools/coyomap/preindex_lib.py:201 — Adds files the author created but never registered, minus what version control skips.",
+   "anchor": "tools/coyomap/preindex_lib.py:201",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map covers the files a project's version control accounts for, including new files it does not already skip.' is enforced at tools/coyomap/preindex_lib.py:222 — The file list for a project starts from version control, not from the folder tree.",
+   "anchor": "tools/coyomap/preindex_lib.py:222",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Packaged output, copied-in libraries and lock files never count as a project's own code.' is enforced at tools/coyomap/preindex_lib.py:148 — Drops every file sitting under a known build, package or vendor folder.",
+   "anchor": "tools/coyomap/preindex_lib.py:148",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Packaged output, copied-in libraries and lock files never count as a project's own code.' is enforced at tools/coyomap/preindex_lib.py:150 — Drops the lock files a package manager writes for itself.",
+   "anchor": "tools/coyomap/preindex_lib.py:150",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Packaged output, copied-in libraries and lock files never count as a project's own code.' is enforced at tools/coyomap/preindex_lib.py:257 — Keeps the same folders out when the project has no version control at all.",
+   "anchor": "tools/coyomap/preindex_lib.py:257",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project can list committed code that its map must leave out.' is enforced at tools/coyomap/ignorefile.py:88 — Keeps the last pattern that matched, so a later line can put a file back.",
+   "anchor": "tools/coyomap/ignorefile.py:88",
+   "detail": "In: Ignore list (C46)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project can list committed code that its map must leave out.' is enforced at tools/coyomap/ignorefile.py:95 — Answers whether a file is left out, from the pattern that decided it.",
+   "anchor": "tools/coyomap/ignorefile.py:95",
+   "detail": "In: Ignore list (C46)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project can list committed code that its map must leave out.' is enforced at tools/coyomap/preindex_lib.py:245 — Removes the file from the set a build will read.",
+   "anchor": "tools/coyomap/preindex_lib.py:245",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every run reports what a project's own skip list removed, one pattern at a time.' is enforced at tools/coyomap/validate_model.py:6288 — Says the tree was narrowed on every check, not only the thorough one.",
+   "anchor": "tools/coyomap/validate_model.py:6288",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every run reports what a project's own skip list removed, one pattern at a time.' is enforced at tools/coyomap/scope.py:133 — Prints one line per pattern in the briefing a person reads before a build.",
+   "anchor": "tools/coyomap/scope.py:133",
+   "detail": "In: Build briefing (C26)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every run reports what a project's own skip list removed, one pattern at a time.' is enforced at tools/coyomap/ignorefile.py:129 — Builds the line saying how many files each pattern removed.",
+   "anchor": "tools/coyomap/ignorefile.py:129",
+   "detail": "In: Ignore list (C46)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every run reports what a project's own skip list removed, one pattern at a time.' is enforced at tools/coyomap/validate_analysis.py:336 — Names the patterns that removed nothing, which read as coverage the author never got.",
+   "anchor": "tools/coyomap/validate_analysis.py:336",
+   "detail": "In: Shape checks (C6)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'One box covers about one folder of code, at most ten files or three thousand lines.' is enforced at tools/coyomap/preindex_lib.py:599 — A folder inside both limits becomes one box and is not opened further.",
+   "anchor": "tools/coyomap/preindex_lib.py:599",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'One box covers about one folder of code, at most ten files or three thousand lines.' is enforced at tools/coyomap/preindex_lib.py:615 — One oversized folder holding no subfolders splits into several boxes.",
+   "anchor": "tools/coyomap/preindex_lib.py:615",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'One box covers about one folder of code, at most ten files or three thousand lines.' is enforced at method.md:1591 — States the size one box should cover, in the instructions a build follows.",
+   "anchor": "method.md:1591",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Findings about how coarsely a map is drawn are advice, because deliberate abstraction is allowed.' is enforced at tools/coyomap/validate_model.py:6299 — Files a folded-away module as advice rather than as a failure.",
+   "anchor": "tools/coyomap/validate_model.py:6299",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Findings about how coarsely a map is drawn are advice, because deliberate abstraction is allowed.' is enforced at tools/coyomap/validate_model.py:6308 — Files the box-count nudge as advice rather than as a failure.",
+   "anchor": "tools/coyomap/validate_model.py:6308",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Findings about how coarsely a map is drawn are advice, because deliberate abstraction is allowed.' is enforced at tools/coyomap/validate_model.py:6680 — The run fails on real errors only, so advice never stops it.",
+   "anchor": "tools/coyomap/validate_model.py:6680",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map can record a deliberate coarse decision, and the advice about that decision then stops.' is enforced at tools/coyomap/validate_model.py:6293 — Reads the folders a map records as deliberately drawn coarsely.",
+   "anchor": "tools/coyomap/validate_model.py:6293",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map can record a deliberate coarse decision, and the advice about that decision then stops.' is enforced at tools/coyomap/validate_analysis.py:171 — Skips a folder that sits at or under one the map recorded.",
+   "anchor": "tools/coyomap/validate_analysis.py:171",
+   "detail": "In: Shape checks (C6)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map can record a deliberate coarse decision, and the advice about that decision then stops.' is enforced at tools/coyomap/validate_model.py:6307 — Skips the box-count nudge when the map records that altitude decision.",
+   "anchor": "tools/coyomap/validate_model.py:6307",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The map a build replaces is never an input to the new one.' is enforced at method/dispatch.md:135 — Tells a build not to open the map it is replacing.",
+   "anchor": "method/dispatch.md:135",
+   "detail": "In: Mode dispatch instructions (C130)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The map a build replaces is never an input to the new one.' is enforced at tools/coyomap/scope.py:116 — Warns before a build when a stray map sits among the files to be read.",
+   "anchor": "tools/coyomap/scope.py:116",
+   "detail": "In: Build briefing (C26)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The map a build replaces is never an input to the new one.' is enforced at tools/coyomap/preindex_lib.py:108 — Keeps the folder holding a map out of the files a build reads.",
+   "anchor": "tools/coyomap/preindex_lib.py:108",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

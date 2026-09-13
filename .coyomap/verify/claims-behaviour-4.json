@@ -1,0 +1,222 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "behaviour",
+ "claims": [
+  {
+   "claim": "UC11 step 15: I12 → R3 — leave the score sheet where the method author reads it",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC11 step 16: C136 → C107 — print one slice of the chat for each fresh reader",
+   "anchor": "eval/retro/method.md:562",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC11 step 17: C136 → I5 [out] — hand over the findings, the proposals and what could not be checked",
+   "anchor": "eval/retro/method.md:814",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC11 step 18: I5 → R3 — put the finished review in front of the method author",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 1: R1 → I1 — run `make install` in the cloned coyomap folder",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 2: I1 → C20 [in] — create the folder-local Python environment and install the map tool into it",
+   "anchor": "Makefile:40",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 3: I1 → C134 [in] — copy the skill pointer into every coding agent's skills folder, with this clone's path written into it",
+   "anchor": "Makefile:74",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 4: C134 → I4 [out] — point the coding agent at the method's entry document inside this clone",
+   "anchor": "skill/coyomap/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 5: I4 → R1 — give the person's coding agent a `/coyomap` command it can run",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 6: R1 → I1 — run `make install-dev` to add the two developer skills as well",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 7: I1 → C135 [in] — copy the map-scoring instructions into every skills folder",
+   "anchor": "Makefile:86",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 8: C135 → I5 [out] — point the coding agent at the scoring recipe inside this clone",
+   "anchor": "eval/SKILL.md:28",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 9: I1 → C136 [in] — copy the build-review instructions into every skills folder",
+   "anchor": "Makefile:98",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 10: C136 → I5 [out] — point the coding agent at the build-review recipe inside this clone",
+   "anchor": "eval/retro/SKILL.md:28",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 step 11: I5 → R1 — give the coding agent the `/coyomap-eval` and `/coyomap-retro` commands",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 1: R1 → I1 — run `coyomap serve` to put every mapped project on one page",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 2: I1 → C20 [in] — hand the typed command, its port and its options to the tool",
+   "anchor": "tools/coyomap/cli.py:139",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 3: C20 → C83 — start the local map server on the requested port",
+   "anchor": "tools/coyomap/cli.py:168",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 4: C83 → C85 — read the project folders remembered from earlier sessions",
+   "anchor": "tools/coyomap/viewer/serve.py:883",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 5: C83 → E1 [in] — read each remembered folder's map for its title, goal and pinned commit",
+   "anchor": "tools/coyomap/viewer/serve.py:123",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 6: C83 → I1 [out] — report how many projects are being served and the address to open",
+   "anchor": "tools/coyomap/viewer/serve.py:889",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 7: I1 → R1 — show the address the maps are served at, and how to stop the server",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 8: C83 → I3 [out] — open the landing page in the person's browser",
+   "anchor": "tools/coyomap/viewer/serve.py:895",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 9: I3 → C83 [in] — carry the landing page's request for the remembered projects",
+   "anchor": "tools/coyomap/viewer/serve.py:642",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 10: C83 → C85 — re-read the remembered folders, so a project mapped since startup appears without a restart",
+   "anchor": "tools/coyomap/viewer/serve.py:675",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 11: C83 → I3 [out] — return one card per remembered project, saying which of their maps can be opened",
+   "anchor": "tools/coyomap/viewer/serve.py:677",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC4 step 12: I3 → R1 — list every mapped project on one page, each one openable or removable",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 2: R2 → I3 — pick the Features tab",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 3: I3 → C70 [in] — pass the chosen tab to the page frame",
+   "anchor": "tools/coyomap/viewer/viewer.html:118",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 4: C70 → C65 — record the new screen and write its address",
+   "anchor": "tools/coyomap/viewer/viewer.js:5116",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 5: C65 → C66 — draw the product description and one card per feature",
+   "anchor": "tools/coyomap/viewer/viewer.js:13006",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 6: C66 → C61 — build one card for each feature",
+   "anchor": "tools/coyomap/viewer/viewer.js:10919",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 7: C61 → E40 [in] — read each box's name, its type and its one sentence",
+   "anchor": "tools/coyomap/viewer/viewer.js:1265",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 8: C66 → I3 [out] — put the feature cards on the page",
+   "anchor": "tools/coyomap/viewer/viewer.js:10934",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 9: I3 → R2 — show what the product does, feature by feature",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC5 step 10: R2 → I3 — click one feature's card",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  }
+ ]
+}

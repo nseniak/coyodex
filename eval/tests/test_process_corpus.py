@@ -2,8 +2,8 @@
 """L3 corpus run — the scorecard against eight REAL build transcripts. OPT-IN, never a gate.
 
 Run either way (needs an editable install: `make deps`):
-    COYODEX_L3_CORPUS=1 python3 eval/tests/test_process_corpus.py
-    COYODEX_L3_CORPUS=1 pytest eval/tests/test_process_corpus.py
+    COYOMAP_L3_CORPUS=1 python3 eval/tests/test_process_corpus.py
+    COYOMAP_L3_CORPUS=1 pytest eval/tests/test_process_corpus.py
 
 **Why opt-in.** These transcripts live in `~/.claude/projects/`, outside the repo. They will not
 exist on another machine or in CI, so every test here SKIPS cleanly when the files are absent and
@@ -12,7 +12,7 @@ logic tests that DO run everywhere.
 
 **Why it exists anyway.** The detectors in `process_scorecard.py` were calibrated against these
 eight files, and four separate false positives were found and fixed that way — a heredoc that
-mentioned `coyodex anchor-drift` without running it, a `git add` that named `preindex.json` without
+mentioned `coyomap anchor-drift` without running it, a `git add` that named `preindex.json` without
 parsing it, a binary aliased to `$CX` that hid every invocation behind it, and a `reconcile.json`
 produced by a generator script rather than a redirect. A synthetic test cannot find those, because
 the author of the synthetic test is the author of the bug. What this file pins is that the numbers
@@ -33,10 +33,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from coyodex_eval.process_scorecard import Scorecard, diff, score_transcript
+from coyomap_eval.process_scorecard import Scorecard, diff, score_transcript
 
 #: Set this to run the corpus. Absent, every test here skips.
-ENV_FLAG = "COYODEX_L3_CORPUS"
+ENV_FLAG = "COYOMAP_L3_CORPUS"
 
 PROJECTS = Path.home() / ".claude" / "projects"
 
@@ -66,7 +66,7 @@ class Build:
 
 
 CORPUS: tuple[Build, ...] = (
-    Build("post", "coyodex", "-Users-nitsanseniak-Projects-coyodex/"
+    Build("post", "coyomap", "-Users-nitsanseniak-Projects-coyomap/"
                              "36b1b143-b7a4-4a04-89f5-40a9bf932746.jsonl"),
     Build("post", "argus", "-Users-nitsanseniak-Projects-argus/"
                            "07a8f4e9-54b6-4afb-b6c8-48ec987d3770.jsonl"),
@@ -74,7 +74,7 @@ CORPUS: tuple[Build, ...] = (
                              "fbc095e4-9edf-4935-af33-86dac6a6efdd.jsonl"),
     Build("post", "mee6", "-Users-nitsanseniak-mee6-repos-mee6/"
                           "a2d36839-9b29-4f58-b756-f2c501539063.jsonl"),
-    Build("base", "coyodex", "-Users-nitsanseniak-Projects-coyodex/"
+    Build("base", "coyomap", "-Users-nitsanseniak-Projects-coyomap/"
                              "25ff248b-c035-4499-a4ae-ff67f3d91142.jsonl"),
     Build("base", "argus", "-Users-nitsanseniak-Projects-argus/"
                            "01331ac9-0678-485d-8469-111aa21ea049.jsonl"),
@@ -84,7 +84,7 @@ CORPUS: tuple[Build, ...] = (
                           "23e4e486-86cb-44b5-984c-988f634fbbd3.jsonl"),
     # The 2026-08-02 mcpolis build, added because an adversarial review of that day's detector
     # repairs found three of them producing ZERO delta across the eight transcripts above: no build
-    # in the original corpus invokes `coyodex grounding` at all (assertion 13 scores 0/0 on every
+    # in the original corpus invokes `coyomap grounding` at all (assertion 13 scores 0/0 on every
     # one), none redirects a gate to a file and reads it back with the Read tool (assertions 9 and
     # 23's new path), and none runs `audit --batches` or `fix dedup-edge --to-reconcile`. The rule
     # "measure a repaired detector against the corpus BOTH ways" was being satisfied vacuously.
@@ -167,7 +167,7 @@ def test_the_reconcile_command_went_from_never_used_to_used():
     """Assertion 7 — the headline class-2 defect, and the one this corpus can now show being fixed.
 
     Seven of the original eight builds produced a `reconcile.json` and ZERO produced it with
-    `coyodex reconcile`; every one wrote it by hand or generated it with a script. That held across
+    `coyomap reconcile`; every one wrote it by hand or generated it with a script. That held across
     ten builds and is why the "~30 assignments" escape was deleted from method.md.
 
     The `0802` build is the first to reach for the command — twice, at turns 147 and 149. This test
@@ -187,12 +187,12 @@ def test_the_reconcile_command_went_from_never_used_to_used():
         used += a.observed
         produced += a.of
     assert produced >= 7, f"only {produced} reconcile.json production(s) seen across the corpus"
-    assert used >= 1, "no build in the corpus reaches `coyodex reconcile`"
+    assert used >= 1, "no build in the corpus reaches `coyomap reconcile`"
 
 
 def test_grounding_was_recorded_after_the_change_and_never_before():
     """Assertion 6. All four post-change builds recorded a `grounding` object; not one baseline
-    did — including the baseline coyodex build, which had none at all."""
+    did — including the baseline coyomap build, which had none at all."""
     if _skip():
         return
     cards = make_cards()
@@ -208,7 +208,7 @@ def test_the_shape_only_anchor_drift_pass_was_reached_by_three_of_four_post_buil
 
     This is one of the two numbers where the brief's expectation and the transcripts disagree: the
     brief said one of four. Each of the three is a real invocation, verified command by command —
-    `.venv/bin/coyodex anchor-drift --map .coyodex/project-map.json` with no verdicts flag."""
+    `.venv/bin/coyomap anchor-drift --map .coyomap/project-map.json` with no verdicts flag."""
     if _skip():
         return
     cards = make_cards()
@@ -223,7 +223,7 @@ def test_fan_outs_are_batched_in_seven_of_eight_builds():
     The expectation handed to this work was ZERO batched fan-outs across all eight transcripts:
     every fan-out one agent per turn. That is not what the files say. Seven of the eight builds
     contain at least one assistant message carrying two or more `Agent` calls; the eighth
-    (base/coyodex) launched no agents at all, so it has no fan-out to batch.
+    (base/coyomap) launched no agents at all, so it has no fan-out to batch.
 
     The prior measurement almost certainly counted JSONL RECORDS as turns. This harness writes one
     content block per record and stamps each with the time the tool EXECUTED, so a message that
@@ -236,9 +236,9 @@ def test_fan_outs_are_batched_in_seven_of_eight_builds():
         return
     cards = make_cards()
     batched = {label: c.by_id()[3].observed for label, c in cards.items()}
-    assert batched["base/coyodex"] == 0 and cards["base/coyodex"].by_id()[3].of == 0, (
-        "base/coyodex is the serial build — no agents at all, so assertion 3 is n/a, not 0")
-    others = {k: v for k, v in batched.items() if k != "base/coyodex"}
+    assert batched["base/coyomap"] == 0 and cards["base/coyomap"].by_id()[3].of == 0, (
+        "base/coyomap is the serial build — no agents at all, so assertion 3 is n/a, not 0")
+    others = {k: v for k, v in batched.items() if k != "base/coyomap"}
     assert all(v >= 1 for v in others.values()), f"expected batching everywhere else: {others}"
 
 
@@ -250,7 +250,7 @@ def test_the_post_change_era_did_not_regress_on_the_adoption_assertions():
     if _skip():
         return
     cards = make_cards()
-    for repo in ("coyodex", "argus", "mcpolis", "mee6"):
+    for repo in ("coyomap", "argus", "mcpolis", "mee6"):
         rows = {d.id: d for d in diff(cards[f"base/{repo}"], cards[f"post/{repo}"])}
         for aid in (1, 2, 6):
             assert rows[aid].direction in ("up", "flat", "new"), (

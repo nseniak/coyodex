@@ -1,6 +1,6 @@
 # Small themes share one batch, and the prose batches are minted only on request
 
-Change (2026-09-09): `coyodex audit --batches` puts every theme with fewer than 5 claims into one
+Change (2026-09-09): `coyomap audit --batches` puts every theme with fewer than 5 claims into one
 `claims-small.json` (`theme: mixed`, each claim carrying its own `theme`); `--floor N` moves the
 line, and the security theme never merges. The same command writes no `prose-N.json` unless
 `--with-prose` is passed, and removes any left from an earlier run. On the 2026-09-08 mcpolis
@@ -21,7 +21,7 @@ Escalation: none on its own.
    pair by claim text like any other batch.
    regression sign: the small batch left undispatched, or split back by hand.
 
-3. expect: `prose-*.json` absent from `.coyodex/verify/` unless the transcript shows
+3. expect: `prose-*.json` absent from `.coyomap/verify/` unless the transcript shows
    `--with-prose`, and finalize's unread-prose check silent.
    regression sign: prose batches minted and deleted, or the unread-prose advisory firing on a
    build that never asked for them.

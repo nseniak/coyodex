@@ -1,0 +1,167 @@
+{
+ "schema": "coyomap/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "CAP2 purpose",
+   "text": "Says what a code change did to the map, and folds the answer back into the baseline."
+  },
+  {
+   "where": "CAP3 purpose",
+   "text": "Puts the map in front of a person, drillable, with the code one click away."
+  },
+  {
+   "where": "CAP4 purpose",
+   "text": "Puts the command into a coding agent and builds the tools that command drives."
+  },
+  {
+   "where": "CAP5 purpose",
+   "text": "Measures whether a change to the instructions made the maps better or worse."
+  },
+  {
+   "where": "S1 purpose",
+   "text": "Holds the instructions a coding agent follows to build, check and ship a map. Most of this product's logic lives here, not in code."
+  },
+  {
+   "where": "S10 purpose",
+   "text": "Says what a map must contain, one section at a time. It runs from the product story down to the code."
+  },
+  {
+   "where": "S11 purpose",
+   "text": "Says how a build runs. Which mode to enter, how to split the work, how to verify it, how to close."
+  },
+  {
+   "where": "S12 purpose",
+   "text": "The stored shape of a map, the briefs handed to fan-out workers, and the checks that keep the instructions honest."
+  },
+  {
+   "where": "S13 purpose",
+   "text": "How a coding agent finds this product, and what a person reads before using or changing it."
+  },
+  {
+   "where": "S2 purpose",
+   "text": "Defines what a map is and merges each worker's rows into one. Refuses a map that is not well formed."
+  },
+  {
+   "where": "S20 purpose",
+   "text": "The typed shape of a map, its shared words, and the merge that turns many workers' rows into one map."
+  },
+  {
+   "where": "S21 purpose",
+   "text": "Five families of check that ask whether a map is well formed, from its shape to its stored data."
+  },
+  {
+   "where": "S3 purpose",
+   "text": "The commands a coding agent runs during a build. Sizing, grouping, challenging the claims, closing, and measuring a later code change."
+  },
+  {
+   "where": "S30 purpose",
+   "text": "What a person types, and what the briefing says before any work starts. Also what the run records about itself."
+  },
+  {
+   "where": "S31 purpose",
+   "text": "Sizing the code and leaving parts of it out. Assigning every element to its group, and measuring how crowded each screen is."
+  },
+  {
+   "where": "S32 purpose",
+   "text": "Turns the map against itself and records how its claims held up. Applies the fixes, then runs the closing sequence."
+  },
+  {
+   "where": "S4 purpose",
+   "text": "Turns a stored map into pictures and serves them beside the project's own code. Draws the page a person reads."
+  },
+  {
+   "where": "S40 purpose",
+   "text": "Builds every diagram and every page's facts from the stored map, on demand."
+  },
+  {
+   "where": "S41 purpose",
+   "text": "Serves the viewer page, the map data and the project's own files, on this machine only."
+  },
+  {
+   "where": "S42 purpose",
+   "text": "Loads a map into the browser and holds the tabs and the trail. Keeps the address in step with the screen."
+  },
+  {
+   "where": "S43 purpose",
+   "text": "Draws the boxes, answers a click, explains the selected thing, and shows the code behind it."
+  },
+  {
+   "where": "S44 purpose",
+   "text": "The screens themselves: what the product does, what it stores, what it decides, and what a change touched."
+  },
+  {
+   "where": "S5 purpose",
+   "text": "Answers the two questions a person changing the instructions has. Did the maps get worse, and what did that run reveal?"
+  },
+  {
+   "where": "S50 purpose",
+   "text": "Measures one map and compares it against an accepted one. Also tests whether the challengers catch a planted falsehood."
+  },
+  {
+   "where": "S51 purpose",
+   "text": "Reads what a build actually did and what it cost, and refuses to review a run that has not finished."
+  },
+  {
+   "where": "S52 purpose",
+   "text": "Files an old map out of the way, and bundles a map with the chat that made it. Keeps the numbers written in the code honest."
+  },
+  {
+   "where": "SD1 purpose",
+   "text": "Everything a map says about the project it describes."
+  },
+  {
+   "where": "SD10 purpose",
+   "text": "Who the product is for, what they want from it, and the ordered steps each goal takes."
+  },
+  {
+   "where": "SD11 purpose",
+   "text": "The pieces the product is built from, what it pulls in from outside, and how they are wired."
+  },
+  {
+   "where": "SD12 purpose",
+   "text": "The types the product keeps, where each one lives, and the states it moves through."
+  },
+  {
+   "where": "SD13 purpose",
+   "text": "Where the product meets the world, and the decisions it enforces at those places."
+  },
+  {
+   "where": "SD14 purpose",
+   "text": "How the product is run, watched, configured and tested."
+  },
+  {
+   "where": "SD2 purpose",
+   "text": "The stored map itself, the workers' rows it is merged from, and the record of how its claims held up."
+  },
+  {
+   "where": "SD3 purpose",
+   "text": "The declared edits a build applies every time the map is rebuilt from its rows."
+  },
+  {
+   "where": "SD4 purpose",
+   "text": "What the measuring pass finds in a code tree before any map is drawn."
+  },
+  {
+   "where": "SD5 purpose",
+   "text": "The drawn form of a map: boxes, arrows and pages, built fresh for each screen."
+  },
+  {
+   "where": "BLK1 purpose",
+   "text": "Decides which of a project's files a map describes, and how coarsely."
+  },
+  {
+   "where": "BLK2 purpose",
+   "text": "Decides whether a command or an address is a door into the product, or something the product owns."
+  },
+  {
+   "where": "BLK3 purpose",
+   "text": "Decides where the product ends, what kind of thing each edge is, and who stands on the far side."
+  },
+  {
+   "where": "BLK4 purpose",
+   "text": "Decides which findings stop a build, which only advise, and what a written reason may silence."
+  }
+ ]
+}

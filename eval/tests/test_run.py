@@ -13,23 +13,23 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex_eval.judge import JudgeReport
-from coyodex_eval.profile import MapProfile, build_profile
-from coyodex_eval.run import BASELINE, bless, delta_md, load_baseline, map_sha256, run_eval, write_run
+from coyomap_eval.judge import JudgeReport
+from coyomap_eval.profile import MapProfile, build_profile
+from coyomap_eval.run import BASELINE, bless, delta_md, load_baseline, map_sha256, run_eval, write_run
 from test_judge import ScriptedJudge
 
-RUN = [sys.executable, "-m", "coyodex_eval.cli", "run"]
-BLESS = [sys.executable, "-m", "coyodex_eval.cli", "bless"]
-HASH = [sys.executable, "-m", "coyodex_eval.cli", "hash"]
-CLAIMS = [sys.executable, "-m", "coyodex_eval.cli", "claims"]
-JUDGE = [sys.executable, "-m", "coyodex_eval.cli", "judge"]
+RUN = [sys.executable, "-m", "coyomap_eval.cli", "run"]
+BLESS = [sys.executable, "-m", "coyomap_eval.cli", "bless"]
+HASH = [sys.executable, "-m", "coyomap_eval.cli", "hash"]
+CLAIMS = [sys.executable, "-m", "coyomap_eval.cli", "claims"]
+JUDGE = [sys.executable, "-m", "coyomap_eval.cli", "judge"]
 
 
 def make_map() -> str:
     """A small well-formed-enough map (a JSON model document) with the two L2 sources
     (a Security & auth row + an `enforces` edge), so profile + judge both have content."""
     return """{
-  "format": "coyodex-map",
+  "format": "coyomap-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -196,7 +196,7 @@ def test_cli_judge_refuses_a_rubric_that_is_not_there() -> None:
 
     The rubric's sha is part of the judge-protocol fingerprint. Falling back to "" stamped the report
     `rubric_sha: ""` — a fingerprint claiming the scores came from a rubric that was never read.
-    `coyodex-eval protocol` refuses the same missing path, so the two disagreed and an expensive
+    `coyomap-eval protocol` refuses the same missing path, so the two disagreed and an expensive
     skeptic fan-out got silently discarded as a protocol mismatch."""
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
@@ -324,7 +324,7 @@ def test_cli_claims_lists_the_l2_worklist_as_json() -> None:
     with tempfile.TemporaryDirectory() as d:
         mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
-        r = subprocess.run([sys.executable, "-m", "coyodex_eval.cli", "claims", str(mp), "--json"],
+        r = subprocess.run([sys.executable, "-m", "coyomap_eval.cli", "claims", str(mp), "--json"],
                            capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
         claims = json.loads(r.stdout)

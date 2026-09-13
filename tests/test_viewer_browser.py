@@ -28,8 +28,8 @@ from urllib.request import urlopen
 
 import pytest
 
-from coyodex.viewer.recents import RecentsStore
-from coyodex.viewer.serve import Handler, build_projects
+from coyomap.viewer.recents import RecentsStore
+from coyomap.viewer.serve import Handler, build_projects
 
 _FIXTURE_MAP = Path(__file__).resolve().parent / "fixtures" / "mcpolis-project-map.json"
 
@@ -37,8 +37,8 @@ _FIXTURE_MAP = Path(__file__).resolve().parent / "fixtures" / "mcpolis-project-m
 def make_served_map(parent: Path, name: str) -> Path:
     """`parent/name` holding the committed fixture map, ready for `build_projects`."""
     d = parent / name
-    (d / ".coyodex").mkdir(parents=True)
-    shutil.copy(_FIXTURE_MAP, d / ".coyodex" / "project-map.json")
+    (d / ".coyomap").mkdir(parents=True)
+    shutil.copy(_FIXTURE_MAP, d / ".coyomap" / "project-map.json")
     return d
 
 
@@ -49,7 +49,7 @@ def _served_map(mutate: Any) -> Iterator[str]:
     import json
     with tempfile.TemporaryDirectory() as td:
         folder = make_served_map(Path(td), "alpha")
-        f = folder / ".coyodex" / "project-map.json"
+        f = folder / ".coyomap" / "project-map.json"
         m = json.loads(f.read_text())
         mutate(m)
         f.write_text(json.dumps(m))
@@ -60,7 +60,7 @@ def _served_map(mutate: Any) -> Iterator[str]:
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
-            yield f"http://127.0.0.1:{httpd.server_address[1]}/coyodex/{slug}/"
+            yield f"http://127.0.0.1:{httpd.server_address[1]}/coyomap/{slug}/"
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -78,7 +78,7 @@ def _served() -> Iterator[str]:
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
-            yield f"http://127.0.0.1:{httpd.server_address[1]}/coyodex/{slug}/"
+            yield f"http://127.0.0.1:{httpd.server_address[1]}/coyomap/{slug}/"
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -948,7 +948,7 @@ def _both_shores_carry_people_and_a_pipe() -> Any:
 def test_the_picture_draws_the_people_and_the_pipe_on_both_shores() -> None:
     """The two shores were drawing DIFFERENT HALVES of the same fact: `ours` drew the people and
     dropped the pipes, `theirs` drew the pipes and dropped the people. Nine things the two live maps
-    state went undrawn — coyodex's Agent skill reaches three agent hosts, its GitHub and code-editor
+    state went undrawn — coyomap's Agent skill reaches three agent hosts, its GitHub and code-editor
     handoffs each have a reader standing at them, mcpolis mails through a service and sends three
     people to Google. Every one of them was already on the surface's own page.
 
@@ -3649,7 +3649,7 @@ def test_a_map_that_names_no_feature_keeps_one_flat_grid_of_areas() -> None:
 
 
 
-# ── a link from `coyodex url` lands on the element it names ──────────────────────────────────────
+# ── a link from `coyomap url` lands on the element it names ──────────────────────────────────────
 # The grammar in url.py mirrors two functions of this file's subject (`drillInto`, `selectTargetFor`),
 # and nothing but a browser can tell whether the mirror is true: a link that opens the right SCREEN
 # with nothing selected is the likely failure, and it looks fine from the outside. So every kind, in
@@ -3667,7 +3667,7 @@ def _every_kind() -> Any:
 
 
 def _every_kind_model() -> Any:
-    from coyodex.model import load_model
+    from coyomap.model import load_model
     m = json.loads(_FIXTURE_MAP.read_text(encoding="utf-8"))
     _every_kind()(m)
     return load_model(json.dumps(m))
@@ -3717,9 +3717,9 @@ _SELECTED_NODE_IDS = """[...document.querySelectorAll('#diagram g.node.is-select
 
 @pytest.mark.parametrize("eid,context,how,want", _LINK_CASES,
                          ids=[f"{e}{'-context' if c else ''}" for e, c, _h, _w in _LINK_CASES])
-def test_a_link_from_coyodex_url_lands_on_the_element_it_names(eid: str, context: bool, how: str,
+def test_a_link_from_coyomap_url_lands_on_the_element_it_names(eid: str, context: bool, how: str,
                                                               want: str) -> None:
-    from coyodex.viewer.url import link_for
+    from coyomap.viewer.url import link_for
     link = link_for(_every_kind_model(), eid, context)
     assert link is not None, eid
     with _served_map(_every_kind()) as url, _page(url + "#" + link.fragment) as page:
@@ -3747,7 +3747,7 @@ def test_an_entry_point_link_rings_its_row_and_keeps_it_in_the_address() -> None
     row is a picked box like a step on the walk: lit on arrival, scrolled into view, and restated in
     the address so the copied link and a reload come back to it."""
     link_fragment = None
-    from coyodex.viewer.url import link_for
+    from coyomap.viewer.url import link_for
     link = link_for(_every_kind_model(), "EP1")
     assert link is not None
     link_fragment = link.fragment
@@ -3773,7 +3773,7 @@ def test_an_entry_point_link_rings_its_row_and_keeps_it_in_the_address() -> None
 
 # ── the Overview tab: the goal as paragraphs, held to a readable width ──────────────────────────
 
-_VIEWER_CSS = Path(__file__).resolve().parent.parent / "tools" / "coyodex" / "viewer" / "viewer.css"
+_VIEWER_CSS = Path(__file__).resolve().parent.parent / "tools" / "coyomap" / "viewer" / "viewer.css"
 
 
 def _three_long_paragraphs(m: dict) -> None:

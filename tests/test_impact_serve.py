@@ -16,9 +16,9 @@ import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from coyodex.model import to_canonical_json
-from coyodex.viewer.recents import RecentsStore
-from coyodex.viewer.serve import (
+from coyomap.model import to_canonical_json
+from coyomap.viewer.recents import RecentsStore
+from coyomap.viewer.serve import (
     Handler,
     build_projects,
     impact_commits,
@@ -33,8 +33,8 @@ from test_impact import GUILD_V1, commit, git_run, make_model
 def make_served_repo(td: str) -> tuple[Path, str]:
     root = Path(td)
     pin = commit(root, {"svc/guild.py": GUILD_V1, ".gitignore": ".env\n"}, msg="pin")
-    (root / ".coyodex").mkdir()
-    (root / ".coyodex" / "project-map.json").write_text(to_canonical_json(make_model(pin)),
+    (root / ".coyomap").mkdir()
+    (root / ".coyomap" / "project-map.json").write_text(to_canonical_json(make_model(pin)),
                                                         encoding="utf-8")
     return root, pin
 
@@ -74,7 +74,7 @@ def test_worktree_read_refuses_ignored_git_and_escape() -> None:
         assert worktree_read(root, ".env") is None                          # gitignored secret
         assert worktree_read(root, ".git/config") is None                   # git internals
         assert worktree_read(root, "../outside.txt") is None                # _safe_rel
-        outside = Path(td).parent / "outside-coyodex-test.txt"
+        outside = Path(td).parent / "outside-coyomap-test.txt"
         outside.write_text("out\n", encoding="utf-8")
         try:
             os.symlink(outside, root / "svc" / "link.txt")
@@ -93,15 +93,15 @@ def test_src_at_worktree_and_sha_frames() -> None:
         (root / "svc/guild.py").write_text("worktree-version\n", encoding="utf-8")
         httpd, slug, port = make_server(root)
         try:
-            st, body = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py")
+            st, body = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py")
             assert st == 200 and b"return 1" in body                        # default: the pin
-            st, body = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py&at={v2}")
+            st, body = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py&at={v2}")
             assert st == 200 and b"return 2" in body                        # another commit
-            st, body = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py&at=WORKTREE")
+            st, body = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py&at=WORKTREE")
             assert st == 200 and body == b"worktree-version\n"              # the dirty tree
-            st, _ = get(port, f"/coyodex/{slug}/api/src?path=.env&at=WORKTREE")
+            st, _ = get(port, f"/coyomap/{slug}/api/src?path=.env&at=WORKTREE")
             assert st == 404                                                # guard holds over HTTP
-            st, _ = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py&at=--flag")
+            st, _ = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py&at=--flag")
             assert st == 400                                                # never reaches git argv
         finally:
             httpd.shutdown()
@@ -115,8 +115,8 @@ def test_impact_commits_lists_ancestors_and_descendants() -> None:
         commit(root, {"a.txt": "1\n"}, msg="one")
         pin = commit(root, {"a.txt": "2\n"}, msg="two")
         commit(root, {"a.txt": "3\n"}, msg="three")
-        (root / ".coyodex").mkdir()
-        (root / ".coyodex" / "project-map.json").write_text(
+        (root / ".coyomap").mkdir()
+        (root / ".coyomap" / "project-map.json").write_text(
             to_canonical_json(make_model(pin)), encoding="utf-8")
         projects = build_projects([str(root)])
         proj = projects[next(iter(projects))]
@@ -137,8 +137,8 @@ def test_impact_file_diff_arbitrary_range() -> None:
         git_run(root, "checkout", "-q", "-b", "b2", pin)
         b2 = commit(root, {"svc/guild.py": GUILD_V1.replace("return 1", "return 20")}, msg="b2")
         # the map goes in AFTER the branch dance (a checkout would drop a freshly-tracked map file)
-        (root / ".coyodex").mkdir()
-        (root / ".coyodex" / "project-map.json").write_text(
+        (root / ".coyomap").mkdir()
+        (root / ".coyomap" / "project-map.json").write_text(
             to_canonical_json(make_model(pin)), encoding="utf-8")
         projects = build_projects([str(root)])
         proj = projects[next(iter(projects))]
@@ -149,9 +149,9 @@ def test_impact_file_diff_arbitrary_range() -> None:
         assert any("return 10" in t for t in texts) and any("return 20" in t for t in texts)
         httpd, slug, port = make_server(root)
         try:
-            st, body = get(port, f"/coyodex/{slug}/api/impactsrcdiff?path=svc/guild.py&base={b1}&target={b2}")
+            st, body = get(port, f"/coyomap/{slug}/api/impactsrcdiff?path=svc/guild.py&base={b1}&target={b2}")
             assert st == 200 and json.loads(body)["path"] == "svc/guild.py"
-            st, _ = get(port, f"/coyodex/{slug}/api/impactsrcdiff?path=../x&base={b1}&target={b2}")
+            st, _ = get(port, f"/coyomap/{slug}/api/impactsrcdiff?path=../x&base={b1}&target={b2}")
             assert st == 400
         finally:
             httpd.shutdown()

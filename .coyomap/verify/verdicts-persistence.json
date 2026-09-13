@@ -1,0 +1,25 @@
+{
+ "grounding": [
+  {
+   "claim": "E1 (Project map) is stored in D91 container 'project-map.json' (collection)",
+   "grounded": true,
+   "evidence": "tools/coyomap/assemble.py:978",
+   "skeptic": "persistence",
+   "note": "I opened the anchor tools/coyomap/model.py:761 and it is the `class ProjectModel` dataclass declaration ('The whole map. Field order IS the canonical JSON key order'). I then followed the write path: tools/coyomap/assemble.py:978 does `(out_dir / \"project-map.json\").write_text(to_canonical_json(model), encoding=\"utf-8\")` on a plain filesystem Path, which is exactly the anchor D91 'Local file system' cites for itself. The file exists on disk at .coyomap/project-map.json. Mode 'collection' is correct: grammar.py:517/534 make 'collection' the mode meaning this codebase saves a record with a row (here a file) of its own, and grammar/model.py:421 explicitly allow a file name as the `container`."
+  },
+  {
+   "claim": "E55 (Map profile) is stored in D91 container 'profile.json' (collection)",
+   "grounded": true,
+   "evidence": "eval/tools/coyomap_eval/run.py:166",
+   "skeptic": "persistence",
+   "note": "I opened the anchor eval/tools/coyomap_eval/profile.py:39 and it is the `class MapProfile` frozen dataclass, whose own docstring says 'Serialized to `profile.json`'. I did not stop at the docstring: eval/tools/coyomap_eval/run.py:166 in `write_run` does `(out_dir / \"profile.json\").write_text(result.profile.to_json(), encoding=\"utf-8\")`, where `result.profile` is typed MapProfile (run.py:47) and `to_json` is profile.py:277. `out_dir` is a filesystem Path created with mkdir at run.py:156, so the dep is D91 'Local file system'. run.py:76 reads the same file name back from a baseline dir, and run.py:146 lists it as a run artifact."
+  },
+  {
+   "claim": "E56 (Reconcile file) is stored in D91 container 'reconcile.json' (collection)",
+   "grounded": true,
+   "evidence": "tools/coyomap/reconcile_build.py:480",
+   "skeptic": "persistence",
+   "note": "I opened the anchor tools/coyomap/reconcile.py:215 and it is the `class Reconcile` dataclass with fields sets/drop_edges/keep_edges/set_anchors/drop_relations. The write is tools/coyomap/reconcile_build.py:480, `out.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + \"\\n\", encoding=\"utf-8\")`, with `_DEFAULT_RECONCILE = \".coyomap/reconcile.json\"` at reconcile_build.py:65 and `out.parent.mkdir` on line 479 — a local filesystem path, so dep D91. The read side, reconcile.py:306 `load_reconcile`, accepts exactly the top-level keys set/drop_edges/keep_edges/set_anchors/drop_relations, matching the Reconcile record, and assemble.py:962 looks for `out_dir / \"reconcile.json\"`. The file exists on disk at .coyomap/reconcile.json (15197 bytes)."
+  }
+ ]
+}

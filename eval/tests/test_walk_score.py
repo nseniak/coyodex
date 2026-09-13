@@ -1,4 +1,4 @@
-"""`coyodex-eval walk-score`: two maps against a gold table, one verdict per way in."""
+"""`coyomap-eval walk-score`: two maps against a gold table, one verdict per way in."""
 from __future__ import annotations
 
 import contextlib
@@ -7,7 +7,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.model import (
+from coyomap.model import (
     Component,
     EntryPoint,
     ExtraSection,
@@ -18,7 +18,7 @@ from coyodex.model import (
     UseCase,
     to_canonical_json,
 )
-from coyodex_eval import walk_score
+from coyomap_eval import walk_score
 
 
 def make_way_in(i: int) -> EntryPoint:

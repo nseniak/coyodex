@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex_eval.mutate` — the planted-falsehood harness.
+"""Tests for `coyomap_eval.mutate` — the planted-falsehood harness.
 
 The harness measures a skeptic's RECALL, so its own correctness is load-bearing in an unusual way:
 a mutation that is not actually false makes a skeptic look bad for being right, and a mutation that
@@ -12,7 +12,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex_eval import mutate
+from coyomap_eval import mutate
 
 
 def _batch(anchor: str = "src/a.py:20", stmt: str | None = None, n: int = 8) -> dict:
@@ -21,7 +21,7 @@ def _batch(anchor: str = "src/a.py:20", stmt: str | None = None, n: int = 8) -> 
     test fail for a reason that had nothing to do with swapping actors."""
     stmt = stmt or ("Only the owner may delete it; the asker is told the item was not found, "
                     "never that it exists but is out of their reach.")
-    return {"schema": "coyodex/theme-batch/v1", "theme": "rule",
+    return {"schema": "coyomap/theme-batch/v1", "theme": "rule",
             "claims": [{"claim": f"Rule '{stmt}' is enforced at {anchor} — decides case {i}",
                         "anchor": anchor, "detail": f"In: X (C{i})", "why_risky": "r"}
                        for i in range(n)]}

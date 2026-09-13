@@ -1,0 +1,228 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'An advisory the operator decides to live with is silenced only by a reason recorded in the map.' is enforced at method.md:1640 — forbids rewording the map to dodge an advisory, and asks for a recorded reason instead",
+   "anchor": "method.md:1640",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An advisory the operator decides to live with is silenced only by a reason recorded in the map.' is enforced at tools/coyomap/records.py:324 — matches a finding against the recorded reasons, so only a recorded one is passed over",
+   "anchor": "tools/coyomap/records.py:324",
+   "detail": "In: Shared map grammar (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A recorded reason is refused unless it names a finding the checks really read.' is enforced at tools/coyomap/record.py:268 — refuses a reason filed under a heading no check ever reads",
+   "anchor": "tools/coyomap/record.py:268",
+   "detail": "In: Map editor (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A recorded reason is refused unless it names a finding the checks really read.' is enforced at tools/coyomap/record.py:309 — refuses a reason that answers no finding, and writes nothing at all",
+   "anchor": "tools/coyomap/record.py:309",
+   "detail": "In: Map editor (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A recorded reason is refused unless it names a finding the checks really read.' is enforced at tools/coyomap/records.py:243 — reads nothing from a reason listing several things when one of them is not a finding",
+   "anchor": "tools/coyomap/records.py:243",
+   "detail": "In: Shared map grammar (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every advisory a recorded reason silenced is still counted out loud in the build's report.' is enforced at tools/coyomap/validate_model.py:720 — adds a line saying how many advisories the recorded reasons silenced, and on which elements",
+   "anchor": "tools/coyomap/validate_model.py:720",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every advisory a recorded reason silenced is still counted out loud in the build's report.' is enforced at tools/coyomap/validate_analysis.py:329 — names on every build the code a written exclusion removed from every check",
+   "anchor": "tools/coyomap/validate_analysis.py:329",
+   "detail": "In: Shape checks (C6)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every advisory a recorded reason silenced is still counted out loud in the build's report.' is enforced at tools/coyomap/records.py:286 — reports a reason that failed to parse instead of dropping it in silence",
+   "anchor": "tools/coyomap/records.py:286",
+   "detail": "In: Shared map grammar (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every advisory a recorded reason silenced is still counted out loud in the build's report.' is enforced at tools/coyomap/anchor_drift.py:199 — collects a line that tries to be a reason and answers nothing, so the build reports it",
+   "anchor": "tools/coyomap/anchor_drift.py:199",
+   "detail": "In: Map checks (C21)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every advisory a recorded reason silenced is still counted out loud in the build's report.' is enforced at tests/test_method_contract.py:671 — keeps the announcement of a silence out of reach of any recorded reason",
+   "anchor": "tests/test_method_contract.py:671",
+   "detail": "In: no component claims this file — the site is UNVERIFIED.",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding whose only honest answer is a fix cannot be silenced by a recorded reason.' is enforced at tests/test_method_contract.py:531 — holds the findings no recorded reason may silence, each beside the reason it cannot",
+   "anchor": "tests/test_method_contract.py:531",
+   "detail": "In: no component claims this file — the site is UNVERIFIED.",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding whose only honest answer is a fix cannot be silenced by a recorded reason.' is enforced at method.md:2093 — refuses any way to record a use case as deliberately left untold",
+   "anchor": "method.md:2093",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding whose only honest answer is a fix cannot be silenced by a recorded reason.' is enforced at tools/coyomap/anchor_drift.py:437 — tells an operator that a recorded reason cannot answer a finding about a code link's shape",
+   "anchor": "tools/coyomap/anchor_drift.py:437",
+   "detail": "In: Map checks (C21)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An advisory must say where the operator records the reason for living with it.' is enforced at tests/test_method_contract.py:716 — fails when an advisory leaves the reader nowhere to record the decision",
+   "anchor": "tests/test_method_contract.py:716",
+   "detail": "In: no component claims this file — the site is UNVERIFIED.",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'An advisory must say where the operator records the reason for living with it.' is enforced at tools/coyomap/validate_model.py:6676 — prints beside the advisories the command that records a reason the checks will find",
+   "anchor": "tools/coyomap/validate_model.py:6676",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Only files git accounts for are analysed, so ignored and generated trees stay out of the map.' is enforced at tools/coyomap/preindex_lib.py:198 — Takes the starting file list from everything git tracks in the project.",
+   "anchor": "tools/coyomap/preindex_lib.py:198",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Only files git accounts for are analysed, so ignored and generated trees stay out of the map.' is enforced at tools/coyomap/preindex_lib.py:201 — Adds files someone created but never added yet, and leaves every ignored path to git.",
+   "anchor": "tools/coyomap/preindex_lib.py:201",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Only files git accounts for are analysed, so ignored and generated trees stay out of the map.' is enforced at tools/coyomap/preindex_lib.py:148 — Drops dependency folders, build output and caches by name, whether or not git is there to ask.",
+   "anchor": "tools/coyomap/preindex_lib.py:148",
+   "detail": "In: Code survey (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project's own exclusion patterns are named on every run, each beside the number of files it removed.' is enforced at tools/coyomap/validate_model.py:6288 — Names the patterns on every check run, including the cheap pass a lead runs most often.",
+   "anchor": "tools/coyomap/validate_model.py:6288",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project's own exclusion patterns are named on every run, each beside the number of files it removed.' is enforced at tools/coyomap/ignorefile.py:133 — Collects each pattern that removed nothing, so a typo cannot read as coverage the map never got.",
+   "anchor": "tools/coyomap/ignorefile.py:133",
+   "detail": "In: Ignore list (C46)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project's own exclusion patterns are named on every run, each beside the number of files it removed.' is enforced at tools/coyomap/scope.py:131 — Puts the same per pattern account in the briefing, printed before a build reads any code.",
+   "anchor": "tools/coyomap/scope.py:131",
+   "detail": "In: Build briefing (C26)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A build never opens the map it is replacing, so the new map cannot quietly copy the old one.' is enforced at method/dispatch.md:135 — Bans opening the map being replaced, including the one version history still holds and one already filed away.",
+   "anchor": "method/dispatch.md:135",
+   "detail": "In: Mode dispatch instructions (C130)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A build never opens the map it is replacing, so the new map cannot quietly copy the old one.' is enforced at tools/coyomap/scope.py:116 — Warns when a copy of a map sits among the files that are about to be read as code.",
+   "anchor": "tools/coyomap/scope.py:116",
+   "detail": "In: Build briefing (C26)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map is built again from scratch only when the person asks, because a rebuild discards the accepted map.' is enforced at method/dispatch.md:187 — Sends an existing map to a change report, and makes a fresh build need a spoken request and a confirmation.",
+   "anchor": "method/dispatch.md:187",
+   "detail": "In: Mode dispatch instructions (C130)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map is built again from scratch only when the person asks, because a rebuild discards the accepted map.' is enforced at method.md:2831 — Says a build writes a new map over any existing one, so nothing of the older map is kept.",
+   "anchor": "method.md:2831",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A correction only lasts where the build reads from, because every file the build produces is written again from scratch.' is enforced at tools/coyomap/fix.py:136 — Warns that a correction made to the finished map disappears the next time the pieces are merged.",
+   "anchor": "tools/coyomap/fix.py:136",
+   "detail": "In: Map editor (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A correction only lasts where the build reads from, because every file the build produces is written again from scratch.' is enforced at tools/coyomap/fix.py:470 — Refuses a removal aimed at one piece, because the pieces beside that one cannot be seen from there.",
+   "anchor": "tools/coyomap/fix.py:470",
+   "detail": "In: Map editor (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A correction only lasts where the build reads from, because every file the build produces is written again from scratch.' is enforced at tools/coyomap/assemble.py:922 — Applies the recorded assignments after every merge, which is what makes those assignments last.",
+   "anchor": "tools/coyomap/assemble.py:922",
+   "detail": "In: Map assembly (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A correction only lasts where the build reads from, because every file the build produces is written again from scratch.' is enforced at method.md:2742 — States the split: what must survive a rebuild goes in the assignment file, never in the finished map.",
+   "anchor": "method.md:2742",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A correction only lasts where the build reads from, because every file the build produces is written again from scratch.' is enforced at tools/coyomap/validate_model.py:6134 — Compares the committed readable copy with a freshly generated one, and reports any difference.",
+   "anchor": "tools/coyomap/validate_model.py:6134",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A correction only lasts where the build reads from, because every file the build produces is written again from scratch.' is enforced at method/dispatch.md:194 — States that the readable copy is generated from the map and never edited by hand.",
+   "anchor": "method/dispatch.md:194",
+   "detail": "In: Mode dispatch instructions (C130)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A warning the person decides to accept is silenced only by a note written under a heading the checks read.' is enforced at tools/coyomap/record.py:85 — Refuses a heading no check reads, because a note filed under such a heading silences nothing.",
+   "anchor": "tools/coyomap/record.py:85",
+   "detail": "In: Map editor (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A warning the person decides to accept is silenced only by a note written under a heading the checks read.' is enforced at tools/coyomap/finalize.py:635 — Drops each file named by a recorded note out of the advisory the finish check would otherwise raise.",
+   "anchor": "tools/coyomap/finalize.py:635",
+   "detail": "In: Build closer (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A warning the person decides to accept is silenced only by a note written under a heading the checks read.' is enforced at method/dispatch.md:110 — Names the heading the finish check reads, after twenty notes were filed where nothing could find them.",
+   "anchor": "method/dispatch.md:110",
+   "detail": "In: Mode dispatch instructions (C130)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map names the version of the code it describes. That name is marked when the code on disk was never committed.' is enforced at tools/coyomap/provenance.py:191 — appends the mark to the version name when anything is uncommitted",
+   "anchor": "tools/coyomap/provenance.py:191",
+   "detail": "In: Build log (C27)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map names the version of the code it describes. That name is marked when the code on disk was never committed.' is enforced at tools/coyomap/provenance.py:164 — asks version control what is uncommitted, ignoring the map's own folder",
+   "anchor": "tools/coyomap/provenance.py:164",
+   "detail": "In: Build log (C27)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map names the version of the code it describes. That name is marked when the code on disk was never committed.' is enforced at method/change-impact.md:129 — tells the agent to offer the choice, and to mark the pin only if the person declines to commit",
+   "anchor": "method/change-impact.md:129",
+   "detail": "In: Change impact instructions (C131)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

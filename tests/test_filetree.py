@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the viewer's file-browser tree + map-coverage overlay (coyodex.viewer.filetree).
+"""Tests for the viewer's file-browser tree + map-coverage overlay (coyomap.viewer.filetree).
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_filetree.py
@@ -15,8 +15,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, cast
 
-from coyodex.viewer.build_graph import GraphDict
-from coyodex.viewer.filetree import (
+from coyomap.viewer.build_graph import GraphDict
+from coyomap.viewer.filetree import (
     FileTreeNode,
     build_file_tree,
     build_tree,

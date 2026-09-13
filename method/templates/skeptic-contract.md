@@ -4,7 +4,7 @@
 and one clause in particular has been got wrong before in a way that silently destroys the phase
 (see the WARNING below).
 
-Fill the «angle-bracket» parts. There are exactly FIVE — «COYODEX_HOME», «MAP», «REPO», «BATCH»,
+Fill the «angle-bracket» parts. There are exactly FIVE — «COYOMAP_HOME», «MAP», «REPO», «BATCH»,
 «CLAIMS» — each spelled the same way everywhere, so a fill is five substitutions.
 
 **«BATCH» is this skeptic's OWN id; «CLAIMS» is the claims file it reads.** They are usually the
@@ -23,8 +23,8 @@ most-dangerous first; cap each batch at ~40 claims.
 You are a fresh-context skeptic. You have never seen this map being built and you must not ask how
 it was built — your value is that you do not share its author's assumptions.
 
-**NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
-for the rest of your session, so a later relative `.coyodex/...` path silently reads the TOOL's own
+**NEVER `cd` into the coyomap clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
+for the rest of your session, so a later relative `.coyomap/...` path silently reads the TOOL's own
 map instead of this project's — a wrong answer that looks like a right one. On the 2026-09-02 build
 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide and no agent had
 read it.
@@ -43,7 +43,7 @@ exists to be independent of it. When a claim needs an element's stored record, d
 slice:
 
 ```
-CX=«COYODEX_HOME»/.venv/bin/coyodex
+CX=«COYOMAP_HOME»/.venv/bin/coyomap
 $CX dump --map «MAP» --id C50          # one id: kind, name, source
 $CX dump --map «MAP» --record C50      # one element's full stored record
 $CX dump --map «MAP» --edges C50       # a node's incoming and outgoing backbone edges
@@ -136,16 +136,16 @@ that is the lead's problem, not yours.
 - **Do not fix the map.** You report; the lead reconciles. A refutation with a precise `note` is
   worth more than a guess at the correction.
 - **WRITE the JSON to your output path, then say only that you wrote it.** Your final message is NOT
-  the verdicts file: `coyodex grounding write --verdicts <file>` and `coyodex anchor-drift
+  the verdicts file: `coyomap grounding write --verdicts <file>` and `coyomap anchor-drift
   --verdicts <file>` both read FILES, and the lead's barrier collects files.
 
 ## Your inputs and output
 
-- **Claims file**: `.coyodex/verify/claims-«CLAIMS».json`
-  — written by `coyodex audit <map> --batches .coyodex/verify --cap 40`. A `claims-small.json`
+- **Claims file**: `.coyomap/verify/claims-«CLAIMS».json`
+  — written by `coyomap audit <map> --batches .coyomap/verify --cap 40`. A `claims-small.json`
   holds several small themes at once; each claim there carries its own `theme`.
 - **Map**: `«MAP»` · **Repo root**: `«REPO»`
-- **Write your verdicts to**: `.coyodex/verify/verdicts-«BATCH».json`
+- **Write your verdicts to**: `.coyomap/verify/verdicts-«BATCH».json`
 
 Your skeptic id is `«BATCH»`. Use it in the output filename exactly as given, so the lead's glob
 finds it, and put it in the `skeptic` field of every row. When several skeptics share one claims
@@ -168,11 +168,11 @@ the output and the PROBLEM LIST is the middle; a narrow window shows you `LINT F
 problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
 invocations were narrowed on one, 71 of 101 on the next.
 
-**Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+**Do not open a previous map.** Not one under `.coyomap/dev-rebuilds/`, not a
 `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
 its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
 more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
-copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.
+copying. If you need an element's record, it is in THIS map — `coyomap dump` reads it.
 
 **A guard's truth lives at its CALLERS.** When the claim is an `access: true` rule site — a check
 that refuses something — reading the guard line alone cannot settle it. Open every call site of the

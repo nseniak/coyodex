@@ -1,9 +1,9 @@
-"""Unified-diff row parsing (`coyodex.viewer.diffmap`) — what remains of the old diff viewer's
+"""Unified-diff row parsing (`coyomap.viewer.diffmap`) — what remains of the old diff viewer's
 pure core after the impact explorer superseded its projection layer. Explicit builders, no fixtures.
 """
 from __future__ import annotations
 
-from coyodex.viewer.diffmap import DiffRow, parse_unified_diff
+from coyomap.viewer.diffmap import DiffRow, parse_unified_diff
 
 
 # --- parse_unified_diff ---------------------------------------------------------

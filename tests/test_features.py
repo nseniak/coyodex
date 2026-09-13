@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex.features` — the feature-led derivation: what belongs to each feature, from the stored map.
+"""`coyomap.features` — the feature-led derivation: what belongs to each feature, from the stored map.
 
 The pin that matters most is the RULE JOIN. The obvious join (through the component holding the
 site) reaches 92-98% of rules on live maps and names a single feature for 10-28% of them, because a
@@ -16,8 +16,8 @@ from pathlib import Path
 
 from typing import cast
 
-from coyodex.features import as_bundle, build_index
-from coyodex.model import FORMAT, load_model
+from coyomap.features import as_bundle, build_index
+from coyomap.model import FORMAT, load_model
 
 
 # --- builders -------------------------------------------------------------------
@@ -188,7 +188,7 @@ def test_an_exact_line_match_still_links_without_the_preindex():
 
 
 def test_a_map_with_no_features_cannot_join_and_reports_no_gap():
-    """coyodex's own map records no capabilities. Reporting its 14 rules as unjoined would read as a
+    """coyomap's own map records no capabilities. Reporting its 14 rules as unjoined would read as a
     defect rather than as the pre-feature shape the map has."""
     doc = make_map()
     doc["capabilities"] = []
@@ -208,7 +208,7 @@ def test_coverage_names_the_components_no_feature_and_no_rule_reaches():
 
 
 def test_every_owner_of_a_shared_file_counts_as_enforcing_the_rule():
-    """`components[].files` is not disjoint: on coyodex's own map 5 files are claimed by 2-5
+    """`components[].files` is not disjoint: on coyomap's own map 5 files are claimed by 2-5
     components each. Crediting the first owner silently would under-count where a decision lives."""
     c = index_of(make_map(files_c1=["src/a.py"], files_c2=["src/a.py", "src/b.py"])).coverage
     assert c.components_in_a_rule == 2      # BR1's site is in a.py, which C1 and C2 both claim
@@ -466,8 +466,8 @@ def test_a_map_with_no_walk_columns_in_map_order():
 def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
     """The frontend reads `applyBundle` keys, so a rename here is a silent blank screen there. This
     pins the shape, and that the whole bundle still serialises."""
-    from coyodex.viewer.gen_viewer import build_view_bundle
-    from coyodex.views import model_to_graph
+    from coyomap.viewer.gen_viewer import build_view_bundle
+    from coyomap.views import model_to_graph
     m = load_model(json.dumps(make_map()))
     b = build_view_bundle(model_to_graph(m, EXTENTS), None, Path("."), model=m, extents=EXTENTS)
     f = b["features"]
@@ -482,8 +482,8 @@ def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
 def test_a_bundle_built_without_a_readable_map_still_renders_the_rest():
     """`build_view_bundle` runs per request. A map folder it cannot read must cost the feature block,
     never the whole view."""
-    from coyodex.viewer.gen_viewer import build_view_bundle
-    from coyodex.views import model_to_graph
+    from coyomap.viewer.gen_viewer import build_view_bundle
+    from coyomap.views import model_to_graph
     m = load_model(json.dumps(make_map()))
     b = build_view_bundle(model_to_graph(m, EXTENTS), None, Path("/nonexistent-map-dir"))
     assert b["features"] == {} and b["graph"]
@@ -566,7 +566,7 @@ def test_a_surface_carries_the_walks_and_features_that_come_through_it():
 def test_the_interface_fixture_is_a_map_VALIDATE_ACCEPTS():
     """`build_index` never validates, so a fixture can encode a shape the product rejects and every
     assertion resting on it passes. One did: doors carrying a direction, which `validate` blocks."""
-    from coyodex.validate_model import validate_model
+    from coyomap.validate_model import validate_model
     problems, _ = validate_model(load_model(json.dumps(make_interface_map())))
     assert not [p for p in problems if "direction" in p], problems
 
@@ -672,7 +672,7 @@ def test_a_door_step_says_which_features_come_through_a_surface():
 
 
 def test_the_direction_comes_from_the_STEP_not_from_whose_surface_it_is():
-    """The two cases that killed the `side`-based rule. coyodex's map files are OUR surface and the
+    """The two cases that killed the `side`-based rule. coyomap's map files are OUR surface and the
     story goes OUT through them; Slack is SOMEONE ELSE'S and the story comes IN through it."""
     doc = make_interface_map()
     doc["interfaces"][0]["name"] = "Files we write"          # I1, ours — but written OUT to

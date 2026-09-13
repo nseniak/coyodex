@@ -48,7 +48,7 @@ def cli(*args: str, cwd: Path = FIXTURE, timeout: int = 120) -> subprocess.Compl
     codes and stream buffering — where three of today's bugs actually lived."""
     return subprocess.run(
         [sys.executable, "-c",
-         "import sys;from coyodex.cli import main;sys.exit(main(sys.argv[1:]))", *args],
+         "import sys;from coyomap.cli import main;sys.exit(main(sys.argv[1:]))", *args],
         capture_output=True, text=True, cwd=cwd, stdin=subprocess.DEVNULL, timeout=timeout,
         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
 
@@ -93,9 +93,9 @@ def _extras_copy(tmp: Path) -> Path:
     return dst
 
 
-def _with_coyodex_dir(tmp: Path) -> Path:
-    """`provenance stamp` writes into an existing `.coyodex/`; it refuses to invent one."""
-    (tmp / "prov" / ".coyodex").mkdir(parents=True, exist_ok=True)
+def _with_coyomap_dir(tmp: Path) -> Path:
+    """`provenance stamp` writes into an existing `.coyomap/`; it refuses to invent one."""
+    (tmp / "prov" / ".coyomap").mkdir(parents=True, exist_ok=True)
     return tmp / "prov"
 
 
@@ -132,7 +132,7 @@ RECIPES: dict[str, tuple] = {
     "record":        (lambda t, m: ["record", "--map", str(_extras_copy(t)),
                                     "--heading", "Balance exceptions",
                                     "--line", "S1: deliberate, the fixture says so"], OK),
-    "provenance":    (lambda t, m: ["provenance", "stamp", str(_with_coyodex_dir(t))], OK),
+    "provenance":    (lambda t, m: ["provenance", "stamp", str(_with_coyomap_dir(t))], OK),
     "preindex":      (lambda t, m: ["preindex", "--root", str(FIXTURE),
                                     "--out", str(t / "pre.json")], OK),
     "fix":           (lambda t, m: ["fix", "dedup-relation", "--map", str(m)], OK),
@@ -151,9 +151,9 @@ RECIPES: dict[str, tuple] = {
 
 
 def _claims(tmp: Path, map_path: Path) -> Path:
-    """A one-claim batch shaped like `coyodex audit --batches` writes them."""
+    """A one-claim batch shaped like `coyomap audit --batches` writes them."""
     p = tmp / "claims.json"
-    p.write_text(json.dumps({"schema": "coyodex-claims/v1", "theme": "backbone",
+    p.write_text(json.dumps({"schema": "coyomap-claims/v1", "theme": "backbone",
                              "claims": [{"claim": "C1 calls C2", "anchor": "src/a.py:10"}]}),
                  encoding="utf-8")
     return p
@@ -164,7 +164,7 @@ def _ship_repo(tmp: Path, map_path: Path) -> Path:
     verdicts, and the fixture's reconcile file (so ship's assembles match `_assembled`'s)."""
     import shutil
     repo = tmp / "shiprepo"
-    out = repo / ".coyodex"
+    out = repo / ".coyomap"
     (out / "build-fragments").mkdir(parents=True, exist_ok=True)
     (out / "verify").mkdir(parents=True, exist_ok=True)
     for p in FRAGMENTS:
@@ -218,7 +218,7 @@ GROUNDING_RECIPES: dict[str, Recipe] = {
 def test_every_grounding_verb_has_a_sweep_recipe():
     """Read from the dispatch, like the others — a hand-kept list stops being complete quietly."""
     import re
-    src = (REPO / "tools" / "coyodex" / "grounding.py").read_text(encoding="utf-8")
+    src = (REPO / "tools" / "coyomap" / "grounding.py").read_text(encoding="utf-8")
     m = re.search(r'verb not in \(([^)]*)\)', src)
     assert m, "could not read the grounding verb tuple — the gate would pass vacuously"
     verbs = set(re.findall(r'"([a-z-]+)"', m.group(1)))
@@ -238,12 +238,12 @@ def test_the_grounding_verb_survives_a_realistic_map(verb, tmp_path):
 
 
 def test_the_sweep_never_registers_its_scratch_repos_with_serve() -> None:
-    """The `ship` recipe assembles into a throwaway `<tmp>/shiprepo/.coyodex`, and a finished assemble
-    registers its folder in ~/.coyodex/serve-recents.json — the landing page's cards. Every run left
+    """The `ship` recipe assembles into a throwaway `<tmp>/shiprepo/.coyomap`, and a finished assemble
+    registers its folder in ~/.coyomap/serve-recents.json — the landing page's cards. Every run left
     one more dead card there (577 by 2026-09-12). The root conftest.py sets the product's own opt-out
     for the whole run, and `cli()` hands children `os.environ`, so they inherit it. This is the guard
     that the switch stays set."""
-    assert os.environ.get("COYODEX_NO_SERVE_REGISTER"), "conftest.py no longer sets the opt-out"
+    assert os.environ.get("COYOMAP_NO_SERVE_REGISTER"), "conftest.py no longer sets the opt-out"
 
 
 def test_every_advertised_command_has_a_sweep_recipe():
@@ -259,7 +259,7 @@ def test_every_advertised_command_has_a_sweep_recipe():
 
 
 def test_every_fix_verb_has_a_sweep_recipe():
-    from coyodex.fix import _VERBS
+    from coyomap.fix import _VERBS
     missing = sorted(set(_VERBS) - set(FIX_RECIPES))
     stale = sorted(set(FIX_RECIPES) - set(_VERBS))
     assert not missing, f"{missing} are `fix` verbs with no sweep recipe"

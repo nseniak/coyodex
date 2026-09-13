@@ -19,9 +19,9 @@ import os
 import tempfile
 from pathlib import Path
 
-from coyodex.model import Component, ProjectModel, to_canonical_json
-from coyodex.viewer import serve as serve_mod
-from coyodex.viewer.serve import ensure_fresh, load_project, project_view
+from coyomap.model import Component, ProjectModel, to_canonical_json
+from coyomap.viewer import serve as serve_mod
+from coyomap.viewer.serve import ensure_fresh, load_project, project_view
 
 
 # --- builders -------------------------------------------------------------------
@@ -29,10 +29,10 @@ from coyodex.viewer.serve import ensure_fresh, load_project, project_view
 def write_map(root: Path, title: str, component_name: str, mtime_ns: int) -> None:
     """Write a minimal map (no git pin needed — the view path never reads git) with a forced
     mtime, so edits are distinguishable regardless of filesystem timestamp granularity."""
-    (root / ".coyodex").mkdir(parents=True, exist_ok=True)
+    (root / ".coyomap").mkdir(parents=True, exist_ok=True)
     model = ProjectModel(title=title, components=[
         Component(id="C1", name=component_name, purpose="does things")])
-    p = root / ".coyodex" / "project-map.json"
+    p = root / ".coyomap" / "project-map.json"
     p.write_text(to_canonical_json(model), encoding="utf-8")
     os.utime(p, ns=(mtime_ns, mtime_ns))
 
@@ -75,7 +75,7 @@ def test_broken_edit_keeps_serving_the_old_bundle_and_retries() -> None:
         proj = load_project(str(root))
         assert proj is not None
         first = project_view(proj)
-        p = root / ".coyodex" / "project-map.json"
+        p = root / ".coyomap" / "project-map.json"
         p.write_text("{ not json", encoding="utf-8")   # caught mid-write / newly invalid
         os.utime(p, ns=(2_000_000_000, 2_000_000_000))
         ensure_fresh(proj)
@@ -92,7 +92,7 @@ def test_missing_file_keeps_the_cached_bundle() -> None:
         proj = load_project(str(root))
         assert proj is not None
         first = project_view(proj)
-        (root / ".coyodex" / "project-map.json").unlink()
+        (root / ".coyomap" / "project-map.json").unlink()
         ensure_fresh(proj)
         assert proj.view is first                      # unstat-able -> serve what we have
 

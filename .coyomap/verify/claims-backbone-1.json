@@ -1,0 +1,234 @@
+{
+ "schema": "coyomap/theme-batch/v1",
+ "theme": "backbone",
+ "claims": [
+  {
+   "claim": "C3 reads C1",
+   "anchor": "tools/coyomap/json_schema.py:505",
+   "detail": "From: C3 = Map schema document (tools/coyomap/json_schema.py:505); To: C1 = Map model (tools/coyomap/model.py:1153)",
+   "why_risky": "backbone edge — no deterministic gate confirms C3's code 'reads' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C3 reads C2",
+   "anchor": "tools/coyomap/json_schema.py:206",
+   "detail": "From: C3 = Map schema document (tools/coyomap/json_schema.py:505); To: C2 = Shared map grammar (tools/coyomap/grammar.py:21)",
+   "why_risky": "backbone edge — no deterministic gate confirms C3's code 'reads' C2; ground the call site against the code."
+  },
+  {
+   "claim": "C20 calls C24",
+   "anchor": "tools/coyomap/cli.py:177",
+   "detail": "From: C20 = Command line (tools/coyomap/cli.py:139); entry points: An operator runs `coyomap preindex` to build the structural pre-index a map build starts from. (tools/coyomap/cli.py:153); An operator runs `coyomap validate` to check that a map is well formed. (tools/coyomap/cli.py:156); An operator runs `coyomap audit` to find where a map contradicts itself. (tools/coyomap/cli.py:159); An operator runs `coyomap render` to write the map's committed markdown view. (tools/coyomap/cli.py:165); An operator runs `coyomap serve` to open the viewer for a map in a browser. (tools/coyomap/cli.py:168); An operator runs `coyomap assemble` to merge the build agents' fragments into one map. (tools/coyomap/cli.py:171); +4 more; To: C24 = Map reader (tools/coyomap/dump.py:303); entry points: A skeptic runs `coyomap context` to get one claims batch with its evidence already beside it. (tools/coyomap/context.py:200); An operator runs `coyomap dump` to read the map, or one element's stored record, as data. (tools/coyomap/dump.py:303); An operator runs `coyomap diff` to see which rows two maps of the same work differ on. (tools/coyomap/mapdiff.py:254)",
+   "why_risky": "backbone edge — no deterministic gate confirms C20's code 'calls' C24; ground the call site against the code."
+  },
+  {
+   "claim": "C24 calls C4",
+   "anchor": "tools/coyomap/dump.py:298",
+   "detail": "From: C24 = Map reader (tools/coyomap/dump.py:303); entry points: A skeptic runs `coyomap context` to get one claims batch with its evidence already beside it. (tools/coyomap/context.py:200); An operator runs `coyomap dump` to read the map, or one element's stored record, as data. (tools/coyomap/dump.py:303); An operator runs `coyomap diff` to see which rows two maps of the same work differ on. (tools/coyomap/mapdiff.py:254); To: C4 = Map assembly (tools/coyomap/assemble.py:408)",
+   "why_risky": "backbone edge — no deterministic gate confirms C24's code 'calls' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C24 reads C1",
+   "anchor": "tools/coyomap/context.py:196",
+   "detail": "From: C24 = Map reader (tools/coyomap/dump.py:303); entry points: A skeptic runs `coyomap context` to get one claims batch with its evidence already beside it. (tools/coyomap/context.py:200); An operator runs `coyomap dump` to read the map, or one element's stored record, as data. (tools/coyomap/dump.py:303); An operator runs `coyomap diff` to see which rows two maps of the same work differ on. (tools/coyomap/mapdiff.py:254); To: C1 = Map model (tools/coyomap/model.py:1153)",
+   "why_risky": "backbone edge — no deterministic gate confirms C24's code 'reads' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C46 calls C2",
+   "anchor": "tools/coyomap/ignorefile.py:87",
+   "detail": "From: C46 = Ignore list (tools/coyomap/ignorefile.py:178); To: C2 = Shared map grammar (tools/coyomap/grammar.py:21)",
+   "why_risky": "backbone edge — no deterministic gate confirms C46's code 'calls' C2; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C46",
+   "anchor": "tools/coyomap/preindex_lib.py:227",
+   "detail": "From: C45 = Code survey (tools/coyomap/preindex.py:604); To: C46 = Ignore list (tools/coyomap/ignorefile.py:178)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C46; ground the call site against the code."
+  },
+  {
+   "claim": "C26 calls C46",
+   "anchor": "tools/coyomap/scope.py:131",
+   "detail": "From: C26 = Build briefing (tools/coyomap/scope.py:172); entry points: An operator runs `coyomap contract` to print the exact brief one helper agent should receive. (tools/coyomap/contract.py:405); An operator runs `coyomap scope` to see which files a build will read before it starts. (tools/coyomap/scope.py:172); To: C46 = Ignore list (tools/coyomap/ignorefile.py:178)",
+   "why_risky": "backbone edge — no deterministic gate confirms C26's code 'calls' C46; ground the call site against the code."
+  },
+  {
+   "claim": "C84 calls C46",
+   "anchor": "tools/coyomap/viewer/filetree.py:260",
+   "detail": "From: C84 = File browser (tools/coyomap/viewer/filetree.py:214); To: C46 = Ignore list (tools/coyomap/ignorefile.py:178)",
+   "why_risky": "backbone edge — no deterministic gate confirms C84's code 'calls' C46; ground the call site against the code."
+  },
+  {
+   "claim": "C6 calls C46",
+   "anchor": "tools/coyomap/validate_analysis.py:321",
+   "detail": "From: C6 = Shape checks (tools/coyomap/validate_model.py:195); To: C46 = Ignore list (tools/coyomap/ignorefile.py:178)",
+   "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C46; ground the call site against the code."
+  },
+  {
+   "claim": "C48 reads C1",
+   "anchor": "tools/coyomap/balance_lib.py:156",
+   "detail": "From: C48 = Diagram balance (tools/coyomap/balance.py:142); To: C1 = Map model (tools/coyomap/model.py:1153)",
+   "why_risky": "backbone edge — no deterministic gate confirms C48's code 'reads' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C48 calls C2",
+   "anchor": "tools/coyomap/balance_lib.py:238",
+   "detail": "From: C48 = Diagram balance (tools/coyomap/balance.py:142); To: C2 = Shared map grammar (tools/coyomap/grammar.py:21)",
+   "why_risky": "backbone edge — no deterministic gate confirms C48's code 'calls' C2; ground the call site against the code."
+  },
+  {
+   "claim": "C20 calls C48",
+   "anchor": "tools/coyomap/cli.py:183",
+   "detail": "From: C20 = Command line (tools/coyomap/cli.py:139); entry points: An operator runs `coyomap preindex` to build the structural pre-index a map build starts from. (tools/coyomap/cli.py:153); An operator runs `coyomap validate` to check that a map is well formed. (tools/coyomap/cli.py:156); An operator runs `coyomap audit` to find where a map contradicts itself. (tools/coyomap/cli.py:159); An operator runs `coyomap render` to write the map's committed markdown view. (tools/coyomap/cli.py:165); An operator runs `coyomap serve` to open the viewer for a map in a browser. (tools/coyomap/cli.py:168); An operator runs `coyomap assemble` to merge the build agents' fragments into one map. (tools/coyomap/cli.py:171); +4 more; To: C48 = Diagram balance (tools/coyomap/balance.py:142)",
+   "why_risky": "backbone edge — no deterministic gate confirms C20's code 'calls' C48; ground the call site against the code."
+  },
+  {
+   "claim": "C25 calls C48",
+   "anchor": "tools/coyomap/finalize.py:125",
+   "detail": "From: C25 = Build closer (tools/coyomap/ship.py:439); entry points: An operator runs `coyomap ship` to run a build's whole closing sequence as one step. (tools/coyomap/ship.py:439); To: C48 = Diagram balance (tools/coyomap/balance.py:142)",
+   "why_risky": "backbone edge — no deterministic gate confirms C25's code 'calls' C48; ground the call site against the code."
+  },
+  {
+   "claim": "C101 calls C48",
+   "anchor": "eval/tools/coyomap_eval/profile.py:383",
+   "detail": "From: C101 = Map profile (eval/tools/coyomap_eval/profile.py:430); To: C48 = Diagram balance (tools/coyomap/balance.py:142)",
+   "why_risky": "backbone edge — no deterministic gate confirms C101's code 'calls' C48; ground the call site against the code."
+  },
+  {
+   "claim": "C71 calls C62",
+   "anchor": "tools/coyomap/viewer/viewer.js:15120",
+   "detail": "From: C71 = Map search (tools/coyomap/viewer/viewer.js:15119); To: C62 = Diagram canvas (tools/coyomap/viewer/viewer.js:13096)",
+   "why_risky": "backbone edge — no deterministic gate confirms C71's code 'calls' C62; ground the call site against the code."
+  },
+  {
+   "claim": "C71 calls C83",
+   "anchor": "tools/coyomap/viewer/viewer.js:15224",
+   "detail": "From: C71 = Map search (tools/coyomap/viewer/viewer.js:15119); To: C83 = Map server (tools/coyomap/viewer/serve.py:869); entry points: A map page opened in developer mode asks the server every second whether the viewer's files changed. (tools/coyomap/viewer/serve.py:225); Opening the server's home address lists every project folder opened before, each one openable or removable. (tools/coyomap/viewer/serve.py:640); Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened. (tools/coyomap/viewer/serve.py:677); Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map. (tools/coyomap/viewer/serve.py:688); Posting to `/api/open` remembers a folder and starts serving the map inside it. (tools/coyomap/viewer/serve.py:700); Posting to `/api/forget` drops a folder from the remembered list and stops serving its map. (tools/coyomap/viewer/serve.py:708); +14 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C71's code 'calls' C83; ground the call site against the code."
+  },
+  {
+   "claim": "C72 calls C83",
+   "anchor": "tools/coyomap/viewer/viewer.js:15794",
+   "detail": "From: C72 = Impact explorer (tools/coyomap/viewer/viewer.js:15650); To: C83 = Map server (tools/coyomap/viewer/serve.py:869); entry points: A map page opened in developer mode asks the server every second whether the viewer's files changed. (tools/coyomap/viewer/serve.py:225); Opening the server's home address lists every project folder opened before, each one openable or removable. (tools/coyomap/viewer/serve.py:640); Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened. (tools/coyomap/viewer/serve.py:677); Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map. (tools/coyomap/viewer/serve.py:688); Posting to `/api/open` remembers a folder and starts serving the map inside it. (tools/coyomap/viewer/serve.py:700); Posting to `/api/forget` drops a folder from the remembered list and stops serving its map. (tools/coyomap/viewer/serve.py:708); +14 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C72's code 'calls' C83; ground the call site against the code."
+  },
+  {
+   "claim": "C72 calls C62",
+   "anchor": "tools/coyomap/viewer/viewer.js:15716",
+   "detail": "From: C72 = Impact explorer (tools/coyomap/viewer/viewer.js:15650); To: C62 = Diagram canvas (tools/coyomap/viewer/viewer.js:13096)",
+   "why_risky": "backbone edge — no deterministic gate confirms C72's code 'calls' C62; ground the call site against the code."
+  },
+  {
+   "claim": "C70 loads C73",
+   "anchor": "tools/coyomap/viewer/viewer.html:12",
+   "detail": "From: C70 = Viewer shell (tools/coyomap/viewer/viewer.js:14609); entry points: Opening `#v=overview` shows the sentences saying what the product is for. (tools/coyomap/viewer/viewer.html:117); Opening `#v=features` lists everything the product does, one card per feature. (tools/coyomap/viewer/viewer.html:118); Opening `#v=hp` shows the product's one successful run, end to end. (tools/coyomap/viewer/viewer.html:119); Opening `#v=interfaces` shows every place the product meets the outside world. (tools/coyomap/viewer/viewer.html:120); Opening `#v=rules` shows the decisions the product makes, grouped by area. (tools/coyomap/viewer/viewer.html:126); Opening `#v=domain` shows the things the product knows about. (tools/coyomap/viewer/viewer.html:127); +7 more; To: C73 = Viewer styles (tools/coyomap/viewer/viewer.css:6)",
+   "why_risky": "backbone edge — no deterministic gate confirms C70's code 'loads' C73; ground the call site against the code."
+  },
+  {
+   "claim": "C83 serves C73",
+   "anchor": "tools/coyomap/viewer/serve.py:851",
+   "detail": "From: C83 = Map server (tools/coyomap/viewer/serve.py:869); entry points: A map page opened in developer mode asks the server every second whether the viewer's files changed. (tools/coyomap/viewer/serve.py:225); Opening the server's home address lists every project folder opened before, each one openable or removable. (tools/coyomap/viewer/serve.py:640); Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened. (tools/coyomap/viewer/serve.py:677); Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map. (tools/coyomap/viewer/serve.py:688); Posting to `/api/open` remembers a folder and starts serving the map inside it. (tools/coyomap/viewer/serve.py:700); Posting to `/api/forget` drops a folder from the remembered list and stops serving its map. (tools/coyomap/viewer/serve.py:708); +14 more; To: C73 = Viewer styles (tools/coyomap/viewer/viewer.css:6)",
+   "why_risky": "backbone edge — no deterministic gate confirms C83's code 'serves' C73; ground the call site against the code."
+  },
+  {
+   "claim": "C83 calls C84",
+   "anchor": "tools/coyomap/viewer/serve.py:492",
+   "detail": "From: C83 = Map server (tools/coyomap/viewer/serve.py:869); entry points: A map page opened in developer mode asks the server every second whether the viewer's files changed. (tools/coyomap/viewer/serve.py:225); Opening the server's home address lists every project folder opened before, each one openable or removable. (tools/coyomap/viewer/serve.py:640); Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened. (tools/coyomap/viewer/serve.py:677); Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map. (tools/coyomap/viewer/serve.py:688); Posting to `/api/open` remembers a folder and starts serving the map inside it. (tools/coyomap/viewer/serve.py:700); Posting to `/api/forget` drops a folder from the remembered list and stops serving its map. (tools/coyomap/viewer/serve.py:708); +14 more; To: C84 = File browser (tools/coyomap/viewer/filetree.py:214)",
+   "why_risky": "backbone edge — no deterministic gate confirms C83's code 'calls' C84; ground the call site against the code."
+  },
+  {
+   "claim": "C84 calls C45",
+   "anchor": "tools/coyomap/viewer/filetree.py:253",
+   "detail": "From: C84 = File browser (tools/coyomap/viewer/filetree.py:214); To: C45 = Code survey (tools/coyomap/preindex.py:604)",
+   "why_risky": "backbone edge — no deterministic gate confirms C84's code 'calls' C45; ground the call site against the code."
+  },
+  {
+   "claim": "C121 cites C122",
+   "anchor": "method.md:489",
+   "detail": "From: C121 = Code inventory instructions (method.md:414); To: C122 = Outside edge instructions (method.md:506)",
+   "why_risky": "backbone edge — no deterministic gate confirms C121's code 'cites' C122; ground the call site against the code."
+  },
+  {
+   "claim": "C125 cites C122",
+   "anchor": "method.md:1465",
+   "detail": "From: C125 = Cross-cutting build instructions (method.md:1332); To: C122 = Outside edge instructions (method.md:506)",
+   "why_risky": "backbone edge — no deterministic gate confirms C125's code 'cites' C122; ground the call site against the code."
+  },
+  {
+   "claim": "C125 cites C123",
+   "anchor": "method.md:1467",
+   "detail": "From: C125 = Cross-cutting build instructions (method.md:1332); To: C123 = Data and step instructions (method.md:879)",
+   "why_risky": "backbone edge — no deterministic gate confirms C125's code 'cites' C123; ground the call site against the code."
+  },
+  {
+   "claim": "C125 cites C132",
+   "anchor": "method.md:1333",
+   "detail": "From: C125 = Cross-cutting build instructions (method.md:1332); To: C132 = Fan-out worker contracts (method/templates/)",
+   "why_risky": "backbone edge — no deterministic gate confirms C125's code 'cites' C132; ground the call site against the code."
+  },
+  {
+   "claim": "C123 cites C129",
+   "anchor": "method.md:884",
+   "detail": "From: C123 = Data and step instructions (method.md:879); To: C129 = Map model spec (method/model.md:45)",
+   "why_risky": "backbone edge — no deterministic gate confirms C123's code 'cites' C129; ground the call site against the code."
+  },
+  {
+   "claim": "C124 cites C129",
+   "anchor": "method.md:1321",
+   "detail": "From: C124 = Operations and decision instructions (method.md:1068); To: C129 = Map model spec (method/model.md:45)",
+   "why_risky": "backbone edge — no deterministic gate confirms C124's code 'cites' C129; ground the call site against the code."
+  },
+  {
+   "claim": "C121 cites C129",
+   "anchor": "method.md:505",
+   "detail": "From: C121 = Code inventory instructions (method.md:414); To: C129 = Map model spec (method/model.md:45)",
+   "why_risky": "backbone edge — no deterministic gate confirms C121's code 'cites' C129; ground the call site against the code."
+  },
+  {
+   "claim": "C127 cites C129",
+   "anchor": "method.md:2205",
+   "detail": "From: C127 = Verification phase instructions (method.md:2152); To: C129 = Map model spec (method/model.md:45)",
+   "why_risky": "backbone edge — no deterministic gate confirms C127's code 'cites' C129; ground the call site against the code."
+  },
+  {
+   "claim": "C128 cites C129",
+   "anchor": "method.md:2834",
+   "detail": "From: C128 = Closing sequence instructions (method.md:2651); To: C129 = Map model spec (method/model.md:45)",
+   "why_risky": "backbone edge — no deterministic gate confirms C128's code 'cites' C129; ground the call site against the code."
+  },
+  {
+   "claim": "C126 cites C132",
+   "anchor": "method.md:2113",
+   "detail": "From: C126 = Fan-out phase instructions (method.md:1728); To: C132 = Fan-out worker contracts (method/templates/)",
+   "why_risky": "backbone edge — no deterministic gate confirms C126's code 'cites' C132; ground the call site against the code."
+  },
+  {
+   "claim": "C128 cites C132",
+   "anchor": "method.md:2781",
+   "detail": "From: C128 = Closing sequence instructions (method.md:2651); To: C132 = Fan-out worker contracts (method/templates/)",
+   "why_risky": "backbone edge — no deterministic gate confirms C128's code 'cites' C132; ground the call site against the code."
+  },
+  {
+   "claim": "C138 cites C132",
+   "anchor": "CONTRIBUTING.md:48",
+   "detail": "From: C138 = Contributor guide (CONTRIBUTING.md:48); To: C132 = Fan-out worker contracts (method/templates/)",
+   "why_risky": "backbone edge — no deterministic gate confirms C138's code 'cites' C132; ground the call site against the code."
+  },
+  {
+   "claim": "C136 cites C133",
+   "anchor": "eval/retro/method.md:281",
+   "detail": "From: C136 = Build retrospective instructions (eval/retro/method.md:4); entry points: A person types `/coyomap-retro`, and their agent reads this file to find the review recipe. (eval/retro/SKILL.md:28); To: C133 = Method regression checks (method/retro-checks/)",
+   "why_risky": "backbone edge — no deterministic gate confirms C136's code 'cites' C133; ground the call site against the code."
+  },
+  {
+   "claim": "C135 cites C100",
+   "anchor": "eval/method.md:215",
+   "detail": "From: C135 = Map quality eval instructions (eval/method.md:8); entry points: A person types `/coyomap-eval`, and their agent reads this file to find the scoring recipe. (eval/SKILL.md:28); To: C100 = Eval command line (eval/tools/coyomap_eval/cli.py:69); entry points: A developer moves a project's map aside so the next build starts from nothing. (eval/tools/coyomap_eval/cli.py:102); A developer checks a retrospective's finished rows against the code history. (eval/tools/coyomap_eval/cli.py:105); A developer re-measures the counts the tools state about a live map. (eval/tools/coyomap_eval/cli.py:108); A developer asks whether the build a retrospective would read has finished. (eval/tools/coyomap_eval/cli.py:111); A developer reads a build's chat log in slices. (eval/tools/coyomap_eval/cli.py:114); A developer asks what one build spent in time and tokens. (eval/tools/coyomap_eval/cli.py:117); +11 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C135's code 'cites' C100; ground the call site against the code."
+  },
+  {
+   "claim": "C138 cites C137",
+   "anchor": "CONTRIBUTING.md:40",
+   "detail": "From: C138 = Contributor guide (CONTRIBUTING.md:48); To: C137 = Public documentation (README.md:13)",
+   "why_risky": "backbone edge — no deterministic gate confirms C138's code 'cites' C137; ground the call site against the code."
+  }
+ ]
+}

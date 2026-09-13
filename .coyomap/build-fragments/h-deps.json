@@ -1,0 +1,482 @@
+{
+  "components": [],
+  "entry_points": [],
+  "deps": [
+    {
+      "id": "D90",
+      "name": "Git",
+      "kind": "platform",
+      "type": "version control program",
+      "used_for": "Lists a project's files, and reads any file exactly as it stood at the map's pinned commit.",
+      "where_configured": "tools/coyomap/impact_git.py:50",
+      "confidence": "verified",
+      "package": "git (external program, no declared version)",
+      "evidence": [
+        {
+          "file": "tools/coyomap/preindex_lib.py:190",
+          "why": "Asks git for the tracked and untracked files, so ignored output never enters the map."
+        },
+        {
+          "file": "tools/coyomap/viewer/serve.py:317",
+          "why": "Reads a file's contents at the map's commit, so the code viewer shows the mapped version."
+        },
+        {
+          "file": "tools/coyomap/provenance.py:125",
+          "why": "Reads the commit a map is pinned to when a build is stamped."
+        },
+        {
+          "file": "eval/tools/coyomap_eval/ledger.py:87",
+          "why": "Checks whether a recorded commit is an ancestor of the current one."
+        }
+      ]
+    },
+    {
+      "id": "D91",
+      "name": "Local file system",
+      "kind": "platform",
+      "type": "operating system storage",
+      "used_for": "Holds every project's map folder, the tool's own environment, and the remembered list of projects.",
+      "where_configured": "tools/coyomap/assemble.py:978",
+      "confidence": "verified",
+      "evidence": [
+        {
+          "file": "tools/coyomap/assemble.py:978",
+          "why": "Writes the finished map beside the project's code."
+        },
+        {
+          "file": "tools/coyomap/viewer/recents.py:44",
+          "why": "Saves the list of projects the server offers on its landing page."
+        }
+      ]
+    },
+    {
+      "id": "D92",
+      "name": "Web browser",
+      "kind": "platform",
+      "type": "desktop browser",
+      "used_for": "Opens and draws the map viewer page for a person on this machine.",
+      "where_configured": "tools/coyomap/viewer/serve.py:895",
+      "confidence": "verified",
+      "evidence": [
+        {
+          "file": "tools/coyomap/viewer/serve.py:895",
+          "why": "Opens the server's landing page in the person's browser when asked to."
+        },
+        {
+          "file": "Makefile:135",
+          "why": "The start target launches the server and opens the page."
+        }
+      ],
+      "not_an_interface": "The browser is the client a person reaches the viewer through, not a far side of its own."
+    },
+    {
+      "id": "D93",
+      "name": "Code editor",
+      "kind": "platform",
+      "type": "desktop editor",
+      "used_for": "Receives a file and a line from the map, so a person opens that exact spot in their editor.",
+      "where_configured": "tools/coyomap/viewer/viewer.js:14925",
+      "confidence": "verified",
+      "evidence": [
+        {
+          "file": "tools/coyomap/viewer/viewer.js:14798",
+          "why": "Lists the editors the viewer can hand a file to, each with its own address form."
+        },
+        {
+          "file": "tools/coyomap/viewer/viewer.js:14925",
+          "why": "Hands the chosen editor the file and line, which the operating system opens."
+        }
+      ]
+    },
+    {
+      "id": "D94",
+      "name": "GitHub",
+      "kind": "service",
+      "type": "code host",
+      "used_for": "Shows a mapped file on the web, pinned to the commit the map was built at.",
+      "where_configured": "tools/coyomap/viewer/viewer.js:14928",
+      "confidence": "verified",
+      "evidence": [
+        {
+          "file": "tools/coyomap/viewer/viewer.js:14903",
+          "why": "Builds the web address of a mapped file at the map's commit."
+        },
+        {
+          "file": "tools/coyomap/viewer/viewer.js:14928",
+          "why": "Opens that address in a new tab when no editor is chosen."
+        },
+        {
+          "file": ".github/ISSUE_TEMPLATE/config.yml:4",
+          "why": "Bug and idea reports, and private security reports, are filed on the code host."
+        }
+      ]
+    },
+    {
+      "id": "D95",
+      "name": "Coding agent",
+      "kind": "platform",
+      "type": "AI coding assistant",
+      "used_for": "Runs the installed skill that drives a map build, and names the conversation a build is stamped with.",
+      "where_configured": "Makefile:17",
+      "confidence": "verified",
+      "evidence": [
+        {
+          "file": "Makefile:74",
+          "why": "Copies the skill into each agent's skills folder with this clone's path filled in."
+        },
+        {
+          "file": "tools/coyomap/provenance.py:209",
+          "why": "Reads the conversation identifier the agent publishes, so a map records which chat produced it."
+        },
+        {
+          "file": "eval/tools/coyomap_eval/retro_precheck.py:278",
+          "why": "Reads the same conversation identifier before a build review is allowed to start."
+        }
+      ]
+    },
+    {
+      "id": "D96",
+      "name": "jsDelivr",
+      "kind": "service",
+      "type": "content delivery network",
+      "used_for": "Serves the two drawing libraries the viewer page loads in the browser.",
+      "where_configured": "tools/coyomap/viewer/viewer.html:16",
+      "confidence": "verified",
+      "evidence": [
+        {
+          "file": "tools/coyomap/viewer/viewer.html:19",
+          "why": "The page loads the diagram library from this host, pinned to a version and a checksum."
+        }
+      ],
+      "not_an_interface": "Its scripts are fetched into the viewer page and become part of it, so no data crosses a surface."
+    },
+    {
+      "id": "D97",
+      "name": "Mermaid",
+      "kind": "library",
+      "type": "diagram renderer",
+      "used_for": "Draws every diagram on the viewer page from the text the tool generates.",
+      "where_configured": "tools/coyomap/viewer/viewer.html:19",
+      "confidence": "verified",
+      "package": "mermaid 11.15.0",
+      "evidence": [
+        {
+          "file": "tools/coyomap/viewer/viewer.html:19",
+          "why": "Loaded as one self-contained bundle so the checksum covers the whole library."
+        },
+        {
+          "file": "tools/coyomap/viewer/gen_viewer.py:217",
+          "why": "Generates the diagram text this library turns into a picture."
+        }
+      ],
+      "not_an_interface": "A library the viewer page loads and becomes part of."
+    },
+    {
+      "id": "D98",
+      "name": "svg-pan-zoom",
+      "kind": "library",
+      "type": "diagram interaction",
+      "used_for": "Lets a person pan and zoom a drawn diagram in the viewer.",
+      "where_configured": "tools/coyomap/viewer/viewer.html:16",
+      "confidence": "verified",
+      "package": "svg-pan-zoom 3.6.1",
+      "evidence": [
+        {
+          "file": "tools/coyomap/viewer/viewer.html:16",
+          "why": "Loaded from the delivery network, pinned to a version and a checksum."
+        }
+      ],
+      "not_an_interface": "A library the viewer page loads and becomes part of."
+    },
+    {
+      "id": "D99",
+      "name": "tree-sitter",
+      "kind": "library",
+      "type": "source parser",
+      "used_for": "Reads symbols and imports out of source files in many languages during the first pass.",
+      "where_configured": "pyproject.toml:19",
+      "confidence": "verified",
+      "package": "tree-sitter >=0.21",
+      "evidence": [
+        {
+          "file": "tools/coyomap/preindex_lib.py:388",
+          "why": "Builds a parser for one language, and gives up quietly when the library is absent."
+        },
+        {
+          "file": "pyproject.toml:18",
+          "why": "Declared as an optional extra, so the core of the tool stays free of outside packages."
+        }
+      ],
+      "not_an_interface": "A library the code survey imports and becomes part of."
+    },
+    {
+      "id": "D100",
+      "name": "tree-sitter language pack",
+      "kind": "library",
+      "type": "parser grammars",
+      "used_for": "Supplies the per-language grammars the source parser needs.",
+      "where_configured": "pyproject.toml:20",
+      "confidence": "verified",
+      "package": "tree-sitter-language-pack >=0.2",
+      "evidence": [
+        {
+          "file": "tools/coyomap/preindex_lib.py:373",
+          "why": "Tries to load the pack, and records why it failed when it is missing."
+        },
+        {
+          "file": "tools/coyomap/preindex_lib.py:389",
+          "why": "Fetches one language's grammar for the parser."
+        }
+      ],
+      "not_an_interface": "A library the code survey imports and becomes part of."
+    },
+    {
+      "id": "D101",
+      "name": "pytest",
+      "kind": "library",
+      "type": "test runner",
+      "used_for": "Runs the whole test suite, which is the first half of the checks a change must pass.",
+      "where_configured": "pyproject.toml:25",
+      "confidence": "verified",
+      "package": "pytest >=8",
+      "evidence": [
+        {
+          "file": "Makefile:56",
+          "why": "The checks target runs the suite with no folder named, so no tests are silently skipped."
+        },
+        {
+          "file": "pyproject.toml:40",
+          "why": "Declares the two test folders that a bare run collects."
+        }
+      ],
+      "not_an_interface": "A library the checks run under and become part of."
+    },
+    {
+      "id": "D102",
+      "name": "pyright",
+      "kind": "library",
+      "type": "type checker",
+      "used_for": "Checks the tool's Python types, which is the second half of the checks a change must pass.",
+      "where_configured": "pyproject.toml:26",
+      "confidence": "verified",
+      "package": "pyright >=1.1",
+      "evidence": [
+        {
+          "file": "Makefile:58",
+          "why": "The checks target runs the type checker after the tests, so one run reports everything."
+        },
+        {
+          "file": "pyrightconfig.json:2",
+          "why": "Tells the type checker where the two source folders live."
+        }
+      ],
+      "not_an_interface": "A library the checks run under and become part of."
+    },
+    {
+      "id": "D103",
+      "name": "Playwright",
+      "kind": "library",
+      "type": "browser automation",
+      "used_for": "Drives a real browser for the one test file that can see a viewer bug on screen.",
+      "where_configured": "pyproject.toml:31",
+      "confidence": "inferred",
+      "package": "playwright >=1.40",
+      "evidence": [
+        {
+          "file": "pyproject.toml:28",
+          "why": "Declared as optional at run time, so the on-screen viewer test skips itself when the browser is missing."
+        }
+      ],
+      "not_an_interface": "A library one test run drives and becomes part of."
+    },
+    {
+      "id": "D104",
+      "name": "setuptools",
+      "kind": "library",
+      "type": "package builder",
+      "used_for": "Builds and installs the tool from the repo, including the viewer files that ship with it.",
+      "where_configured": "pyproject.toml:2",
+      "confidence": "inferred",
+      "package": "setuptools >=64",
+      "evidence": [
+        {
+          "file": "pyproject.toml:48",
+          "why": "Maps the two source folders onto the two installed packages."
+        },
+        {
+          "file": "pyproject.toml:56",
+          "why": "Ships the viewer page, its styles and its script inside the installed package."
+        }
+      ],
+      "not_an_interface": "A library the install uses and becomes part of."
+    }
+  ],
+  "observability": [],
+  "config": [
+    {
+      "key": "COYOMAP_SELF_MAP",
+      "purpose": "Allows a run to read or write coyomap's own map, which is refused by default.",
+      "default": "not set, so the clone's own map is protected",
+      "per_env": "Set by hand for one session, only when mapping coyomap itself."
+    },
+    {
+      "key": "COYOMAP_HOME",
+      "purpose": "Names the clone whose method files and templates a run should read.",
+      "default": "the installed package's own clone",
+      "per_env": "Same on every machine unless a person points at a second clone."
+    },
+    {
+      "key": "COYOMAP_NO_SERVE_REGISTER",
+      "purpose": "Stops a finished build from adding its project to the server's remembered list.",
+      "default": "not set, so every build registers its project",
+      "per_env": "Set by the method-quality eval so its runs do not pollute the list."
+    },
+    {
+      "key": "CLAUDE_CODE_SESSION_ID",
+      "purpose": "Names the conversation a map build is stamped with.",
+      "default": "published by the coding agent, not set by hand",
+      "per_env": "Same everywhere; a build review refuses to run without it."
+    },
+    {
+      "key": "PORT",
+      "purpose": "Port the local map server listens on.",
+      "default": "8765",
+      "per_env": "Same on every machine unless a person overrides it when starting the server."
+    },
+    {
+      "key": "PYTHONPATH",
+      "purpose": "Points a child process at this checkout's tools instead of another checkout's.",
+      "default": "unset, which falls back to the installed package",
+      "per_env": "Rewritten to an absolute path at test start, so a second checkout is never tested by mistake."
+    }
+  ],
+  "deployment": [
+    {
+      "unit": "coyomap command line",
+      "runs_on": "the person's own machine, inside a folder-local Python environment the repo owns",
+      "exposed_as": "a command typed in a terminal, and called by the coding agent",
+      "config_source": "Installed in editable mode from this repo by the dependency target in the Makefile, so the repo stays the source of truth. Requires Python 3.10 or newer.",
+      "variants": []
+    },
+    {
+      "unit": "Map server",
+      "runs_on": "the person's own machine, listening only on the loopback address",
+      "exposed_as": "a local web address on port 8765",
+      "config_source": "Started by the start target in the Makefile, which passes the port from a make variable. A second target starts the same server with live reload for someone working on the viewer.",
+      "variants": []
+    },
+    {
+      "unit": "coyomap skill",
+      "runs_on": "two skills folders in the person's home directory, one per agent family",
+      "exposed_as": "a slash command inside the coding agent",
+      "config_source": "Copied by the install target into the Claude and cross-agent skills folders, with this clone's absolute path filled in. The method files stay read from the repo, so they evolve without reinstalling.",
+      "variants": []
+    },
+    {
+      "unit": "coyomap-eval skill",
+      "runs_on": "the same two skills folders in the person's home directory",
+      "exposed_as": "a separate slash command, for the developer of coyomap only",
+      "config_source": "Installed by its own target, deliberately not by the plain install target, so the developer surface is never a side effect of setting up the tool.",
+      "variants": []
+    },
+    {
+      "unit": "coyomap-retro skill",
+      "runs_on": "the same two skills folders in the person's home directory",
+      "exposed_as": "a separate slash command, for the developer of coyomap only",
+      "config_source": "Installed by its own target, or together with the eval skill by the developer target. It reads its recipe from this clone.",
+      "variants": []
+    }
+  ],
+  "run_commands": [
+    {
+      "action": "Create the folder-local Python environment, refusing an older Python",
+      "command": "make venv",
+      "source": "Makefile:33"
+    },
+    {
+      "action": "Install the tool from this repo, with the many-language source reader",
+      "command": "make deps",
+      "source": "Makefile:40"
+    },
+    {
+      "action": "Install the tool plus the test and type-check tooling, for a contributor",
+      "command": "make dev",
+      "source": "Makefile:44"
+    },
+    {
+      "action": "Run the full test suite and the type checker, which is what a change must pass",
+      "command": "make gates",
+      "source": "Makefile:56"
+    },
+    {
+      "action": "Install the map-building skill into the coding agents on this machine",
+      "command": "make install",
+      "source": "Makefile:74"
+    },
+    {
+      "action": "Install the map-quality eval skill, which is for the developer of coyomap",
+      "command": "make install-eval",
+      "source": "Makefile:86"
+    },
+    {
+      "action": "Install the build-review skill, which is for the developer of coyomap",
+      "command": "make install-retro",
+      "source": "Makefile:98"
+    },
+    {
+      "action": "Install both developer skills at once",
+      "command": "make install-dev",
+      "source": "Makefile:108"
+    },
+    {
+      "action": "Remove the map-building skill from the coding agents on this machine",
+      "command": "make uninstall",
+      "source": "Makefile:115"
+    },
+    {
+      "action": "Remove the map-quality eval skill",
+      "command": "make uninstall-eval",
+      "source": "Makefile:127"
+    },
+    {
+      "action": "Remove the build-review skill",
+      "command": "make uninstall-retro",
+      "source": "Makefile:121"
+    },
+    {
+      "action": "Remove both developer skills at once",
+      "command": "make uninstall-dev",
+      "source": "Makefile:111"
+    },
+    {
+      "action": "Start the map server and open its landing page in a browser",
+      "command": "make start",
+      "source": "Makefile:135"
+    },
+    {
+      "action": "Start the map server with live reload, for someone working on the viewer",
+      "command": "make dev-start",
+      "source": "Makefile:145"
+    },
+    {
+      "action": "Delete the folder-local Python environment",
+      "command": "make clean",
+      "source": "Makefile:149"
+    },
+    {
+      "action": "Download the browser the one on-screen viewer test drives",
+      "command": ".venv/bin/python -m playwright install chromium",
+      "source": "pyproject.toml:30"
+    },
+    {
+      "action": "Run the main test folder before opening a change for review",
+      "command": ".venv/bin/pytest tests",
+      "source": ".github/PULL_REQUEST_TEMPLATE.md:24"
+    },
+    {
+      "action": "Check the tool's Python types before opening a change for review",
+      "command": ".venv/bin/pyright tools",
+      "source": ".github/PULL_REQUEST_TEMPLATE.md:25"
+    }
+  ]
+}

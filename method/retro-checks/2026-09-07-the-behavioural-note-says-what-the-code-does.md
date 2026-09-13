@@ -1,7 +1,7 @@
 # The behavioural note says what the code does
 
-Change (2026-09-07): the NOTE printed by `coyodex audit --with-behavioural` in
-`tools/coyodex/audit_model.py` no longer states a limit that was removed. Tools only; no method text
+Change (2026-09-07): the NOTE printed by `coyomap audit --with-behavioural` in
+`tools/coyomap/audit_model.py` no longer states a limit that was removed. Tools only; no method text
 changed and no map was edited.
 
 Escalation: none on its own. But if check 1 fails, the map's whole behavioural half stays

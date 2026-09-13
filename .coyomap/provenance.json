@@ -1,0 +1,15 @@
+{
+  "schema": "coyomap-provenance/v1",
+  "project": "coyomap",
+  "repo_path": "/Users/nitsanseniak/Projects/coyomap",
+  "sessions": [
+    {
+      "session_id": "bfaab4f0-1abe-420e-b25b-59529fb67c70",
+      "built_at": "2026-09-09 02:02",
+      "mode": "build",
+      "code_commit": "76ca734",
+      "code_committed": "2026-09-09",
+      "tool_commit": "76ca734-dirty"
+    }
+  ]
+}

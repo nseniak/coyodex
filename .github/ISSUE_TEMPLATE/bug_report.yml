@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug. coyodex is alpha, so this really helps.
+        Thanks for reporting a bug. coyomap is alpha, so this really helps.
         Please fill in what you can — a clear repro is worth more than a long description.
   - type: textarea
     id: what-happened
@@ -35,7 +35,7 @@ body:
       label: Steps to reproduce
       description: What did you run, and on what? A link to a public repo (or a small one) is ideal.
       placeholder: |
-        1. /coyodex map this repo
+        1. /coyomap map this repo
         2. …
         3. …
     validations:
@@ -44,9 +44,9 @@ body:
     id: env
     attributes:
       label: Environment
-      description: coyodex version (see VERSION), the agent / model you drove it with, and your OS.
+      description: coyomap version (see VERSION), the agent / model you drove it with, and your OS.
       placeholder: |
-        coyodex: 0.1.0
+        coyomap: 0.1.0
         agent/model: Claude Code, Opus 4.x
         OS: macOS 15
     validations:

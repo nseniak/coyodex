@@ -1,0 +1,263 @@
+{
+ "grounding": [
+  {
+   "claim": "UC8 step 9: C27 → I8 [in] — read the commit the code now stands at",
+   "grounded": true,
+   "evidence": "tools/coyomap/provenance.py:217",
+   "skeptic": "behaviour-2",
+   "note": "Read provenance.py:217 inside stamp(): `code_commit=pin_sha(repo)`. pin_sha (line 177) runs `git rev-parse --short HEAD` on the mapped repo and appends `-dirty` when dirty_paths() is non-empty, so the build log does read the commit the project's code now stands at."
+  },
+  {
+   "claim": "UC8 step 10: C131 → I4 [out] — ask whether to commit the code first, or pin the map as dirty",
+   "grounded": true,
+   "evidence": "method/change-impact.md:129",
+   "skeptic": "behaviour-2",
+   "note": "Read change-impact.md:127-129 in the Accept steps: the code must be committed, 'else give the user the A/B choice and record the pin `-dirty` only if they pick B'. That is exactly the question the step names, and the anchor line carries it."
+  },
+  {
+   "claim": "UC8 step 11: I4 → R1 — put the two choices in front of the person",
+   "grounded": true,
+   "evidence": "method.md:2860",
+   "skeptic": "behaviour-2",
+   "note": "Read method.md:2857-2869, the pin gate change-impact.md:127 defers to: on a non-trivial dirty diff it says 'STOP and give the user a choice, then loop', then spells A (user commits) at 2862 and B (pin `<sha>-dirty`) at 2865. Two named choices are put to the person."
+  },
+  {
+   "claim": "UC8 step 12: R1 → I4 — commit the code, then say to go on",
+   "grounded": true,
+   "evidence": "method.md:2862",
+   "skeptic": "behaviour-2",
+   "note": "Read method.md:2862-2869. Option A is 'the user commits (or stashes) the code first ... then you re-check and record the pin', and 2868 'only continue when the code is committed (A)'. So the person commits and the run goes on; the tool is explicitly forbidden to commit for them."
+  },
+  {
+   "claim": "UC8 step 13: I4 → C131 [in] — carry the answer back to the accept steps",
+   "grounded": true,
+   "evidence": "method/change-impact.md:129",
+   "skeptic": "behaviour-2",
+   "note": "The batch anchor is skill/coyomap/SKILL.md:27, which is only I4's own source line (the pointer to method/dispatch.md) and says nothing about carrying an answer. I read the accept step that consumes the answer instead: change-impact.md:129 records the `-dirty` pin only on choice B, and method.md:2871-2874 says an answer given earlier must be honoured, not re-asked. The behaviour is real; the anchor points at the interface, not at the step."
+  },
+  {
+   "claim": "UC8 step 14: C27 → I6 [out] — write the build stamp beside the map",
+   "grounded": true,
+   "evidence": "tools/coyomap/provenance.py:232",
+   "skeptic": "behaviour-2",
+   "note": "Read provenance.py:206-232: coyomap_dir = repo/'.coyomap', path = coyomap_dir/PROVENANCE_NAME, and line 232 is `path.write_text(prov.to_json(), encoding='utf-8')`. The session stamp is written into the map folder beside the map."
+  },
+  {
+   "claim": "UC8 step 15: C131 → C45 — rebuild the code survey at the new pin",
+   "grounded": true,
+   "evidence": "method/change-impact.md:133",
+   "skeptic": "behaviour-2",
+   "note": "Read change-impact.md:130-136, accept action 3: if `.coyomap/preindex.json` exists, 'rebuild it at the now-current commit (`.venv/bin/coyomap preindex --root <repo>`)' so its file:line anchors match the re-pinned map. That is the code survey rebuilt at the new pin."
+  },
+  {
+   "claim": "UC8 step 16: C45 → I8 [in] — list the project's tracked and untracked files",
+   "grounded": true,
+   "evidence": "tools/coyomap/preindex_lib.py:190",
+   "skeptic": "behaviour-2",
+   "note": "Read preindex_lib.py:188-209. The subprocess.run at 190 shells `git ls-files -z`; it is called twice, bare at 198 (tracked) and with `--others --exclude-standard` at 201 (untracked, minus git-ignored). Both lists are merged, so the survey does list tracked plus untracked files."
+  },
+  {
+   "claim": "UC8 step 17: C45 → I6 [out] — write the code survey beside the map",
+   "grounded": true,
+   "evidence": "tools/coyomap/preindex.py:604",
+   "skeptic": "behaviour-2",
+   "note": "Read preindex.py:551 (out_path defaults to `<root>/.coyomap/preindex.json`) and 603-604, where the assembled doc is written with out_path.write_text(...). The code survey is written into the map folder."
+  },
+  {
+   "claim": "UC8 step 19: C131 → I6 [out] — commit the map, its readable view, the code survey and the report together",
+   "grounded": true,
+   "evidence": "method/change-impact.md:138",
+   "skeptic": "behaviour-2",
+   "note": "Read change-impact.md:137-139, accept action 5: 'git-commit all (map + markdown view + pre-index + report)'. That is the four things the step names, committed in one commit."
+  },
+  {
+   "claim": "UC8 step 20: C131 → I4 [out] — hand back the address that opens this project's map",
+   "grounded": true,
+   "evidence": "method/change-impact.md:140",
+   "skeptic": "behaviour-2",
+   "note": "Read change-impact.md:140-144, accept action 6: 'Finish by reporting the URL to open the diagram' — start the server if needed, then give `http://127.0.0.1:8765/p/<repo-folder-name>/`."
+  },
+  {
+   "claim": "UC8 step 21: I4 → R1 — give the person the address of the re-pinned map",
+   "grounded": true,
+   "evidence": "method/change-impact.md:143",
+   "skeptic": "behaviour-2",
+   "note": "Same block, line 143 is the concrete address handed back: `http://127.0.0.1:8765/p/<repo-folder-name>/`, or the landing page. Read 140-144 whole; the instruction is to report it as the final step of Accept."
+  },
+  {
+   "claim": "UC3 step 1: R1 → I7 — write one ignore pattern per line beside the map",
+   "grounded": true,
+   "evidence": "tools/coyomap/ignorefile.py:155",
+   "skeptic": "behaviour-2",
+   "note": "Read ignorefile.py:59 (IGNORE_REL = `.coyomap/.ignore`, so it sits beside the map), the module docstring at 14 ('gitignore-like patterns, one per line') and parse_ignore at 155, which iterates text.splitlines() and turns each non-blank, non-comment line into one rule."
+  },
+  {
+   "claim": "UC3 step 2: I7 → C46 [in] — hand over the pattern lines in the order they were written",
+   "grounded": true,
+   "evidence": "tools/coyomap/ignorefile.py:195",
+   "skeptic": "behaviour-2",
+   "note": "Read ignorefile.py:182-199: load_ignore reads `<root>/.coyomap/.ignore` and at 195 hands its text to parse_ignore, which appends to `rules` in splitlines order (line 178). Order is preserved, and it has to be: line 27 of the docstring says the LAST matching line wins."
+  },
+  {
+   "claim": "UC3 step 3: R1 → I1 — ask for the briefing that says what will be read",
+   "grounded": true,
+   "evidence": "method/dispatch.md:19",
+   "skeptic": "behaviour-2",
+   "note": "Read dispatch.md:12-20, Step 0: 'brief the user BEFORE doing anything else', with the exact command `<COYOMAP_HOME>/.venv/bin/coyomap scope --repo <repo>`. cli.py:178-180 shows `scope` is a real subcommand. That is the request for the briefing about what will be read."
+  },
+  {
+   "claim": "UC3 step 4: I1 → C26 [in] — carry the request to describe the tree, and nothing else",
+   "grounded": true,
+   "evidence": "tools/coyomap/scope.py:172",
+   "skeptic": "behaviour-2",
+   "note": "Read scope.py:166-173, the whole of main(): it accepts only `--repo`, then prints scope_report(root). No write path, no map needed (line 179 of cli.py notes 'the walk + git, no map needed'), so the request really does describe the tree and nothing else."
+  },
+  {
+   "claim": "UC3 step 5: C26 → C45 — walk the project's files, the same walk the survey and the checks use",
+   "grounded": true,
+   "evidence": "tools/coyomap/scope.py:74",
+   "skeptic": "behaviour-2",
+   "note": "Read scope.py:74, `walk = iter_source_files(root)`, imported at line 29 from coyomap.preindex_lib. Grepped the other callers: preindex.py:557 (the survey) and validate_analysis.py:154/258/324 (the checks) call the same function, which scope.py:16-17 states as the reason."
+  },
+  {
+   "claim": "UC3 step 6: C45 → C46 — ask which rule decides each file the walk found",
+   "grounded": true,
+   "evidence": "tools/coyomap/preindex_lib.py:242",
+   "skeptic": "behaviour-2",
+   "note": "Read preindex_lib.py:235-248. For each walked file, line 242 asks `ignore.match_index(rel.as_posix())` — the index of the rule that DECIDES the file (last match wins, per the comment at 239-241) — and 243-247 acts on it."
+  },
+  {
+   "claim": "UC3 step 7: C45 → E50 [out] — record which files stayed and how many each rule took out",
+   "grounded": true,
+   "evidence": "tools/coyomap/preindex_lib.py:249",
+   "skeptic": "behaviour-2",
+   "note": "Read preindex_lib.py:249-250: WalkResult is returned with `files` (what stayed), `skipped_ignored`, and `ignore_hits=tuple(hits)` — the per-rule deciding-match tally filled at line 244. WalkResult is the record declared at preindex_lib.py:155."
+  },
+  {
+   "claim": "UC3 step 8: C26 → C46 — ask what each pattern took out, for the briefing",
+   "grounded": true,
+   "evidence": "tools/coyomap/scope.py:131",
+   "skeptic": "behaviour-2",
+   "note": "Read scope.py:130-136: when the ignore file has rules, line 131 calls `ignore_report(walk.ignore, walk.ignore_hits)`, which is ignorefile.py:120-136 building one line per rule with what it removed or put back."
+  },
+  {
+   "claim": "UC3 step 9: C26 → I1 [out] — print the file count and every pattern beside what it took out",
+   "grounded": true,
+   "evidence": "tools/coyomap/scope.py:133",
+   "skeptic": "behaviour-2",
+   "note": "Read scope.py:87-92 (line 89 prints '<N> file(s) will be analyzed'), then 132-136 where line 133 appends one output line per pattern from rep.per_rule and 135 warns about patterns that removed nothing; main() prints the lot at 172. The anchor (132) is the removed-total line just above the per-pattern lines."
+  },
+  {
+   "claim": "UC3 step 10: I1 → R1 — show the narrowed tree before any code is read",
+   "grounded": true,
+   "evidence": "method/dispatch.md:22",
+   "skeptic": "behaviour-2",
+   "note": "Read dispatch.md:14-27: run scope 'before choosing a mode, before reading the repo', and 'Show its output verbatim, as your first message. First message means FIRST: before the first tool call'. The narrowed tree is shown before any code is read."
+  },
+  {
+   "claim": "UC3 step 11: C45 → I6 [out] — write the per-pattern counts into the code survey beside the map",
+   "grounded": true,
+   "evidence": "tools/coyomap/preindex.py:604",
+   "skeptic": "behaviour-2",
+   "note": "Read preindex.py:560 (ignore_report is computed), 572-578 where the coverage block stores `files_skipped_ignored`, `ignore_patterns` (per rule) and `ignore_patterns_unused`, and 604 where that doc is written to `<root>/.coyomap/preindex.json` (default set at line 551)."
+  },
+  {
+   "claim": "UC3 step 12: R1 → I1 — ask for the map's own checks to run",
+   "grounded": true,
+   "evidence": "method/dispatch.md:197",
+   "skeptic": "behaviour-2",
+   "note": "Read dispatch.md:191-204, the invariant for every mode: 'validate → audit → render', with the command spelled `coyomap validate --check-sources`. cli.py:154-156 shows `validate` dispatching to validate_model.main."
+  },
+  {
+   "claim": "UC3 step 13: I1 → C6 [in] — carry the check request, whether the cheap pass or the full one",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:156",
+   "skeptic": "behaviour-2",
+   "note": "Read cli.py:154-156: the `validate` command passes `rest` (all remaining argv) to validate_model.main. I then read validate_model.py:6539-6540, where main reads `--check-sources` and `--check-coverage` out of that argv — so the cheap pass and the full one both ride this line."
+  },
+  {
+   "claim": "UC3 step 14: C6 → C45 — walk the tree again instead of trusting the code survey",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_analysis.py:324",
+   "skeptic": "behaviour-2",
+   "note": "Read validate_analysis.py:309-325 inside ignore_disclosure: it imports iter_source_files and at 324 walks the tree itself. Nothing here opens `.coyomap/preindex.json`; ignorefile.py:140-142 names this second call 'validate's independent re-walk'."
+  },
+  {
+   "claim": "UC3 step 15: C6 → C46 — ask what each pattern decided on that second walk",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_analysis.py:328",
+   "skeptic": "behaviour-2",
+   "note": "Read validate_analysis.py:325-328: the spec comes off that fresh walk (325) and line 328 calls `ignore_report(spec, walk.ignore_hits)` — the per-pattern verdicts of that second walk, not of the pre-index's."
+  },
+  {
+   "claim": "UC3 step 16: C6 → I1 [out] — name every pattern that decided nothing on this tree",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_analysis.py:337",
+   "skeptic": "behaviour-2",
+   "note": "Read validate_analysis.py:336-340: when rep.unused is non-empty it appends a warning naming every pattern that 'decided nothing on this tree', joined by name. rep.unused is built at ignorefile.py:133-134 from the rules whose hit count is 0."
+  },
+  {
+   "claim": "UC3 step 17: I1 → R1 — show what the map was told to leave out, on every check run",
+   "grounded": true,
+   "evidence": "tools/coyomap/validate_model.py:6288",
+   "skeptic": "behaviour-2",
+   "note": "Opened the caller rather than trusting the docstring's 'UNCONDITIONAL': validate_model.py:6284-6291 calls ignore_disclosure on every validate, guarded only on walk_root being resolvable (6277-6278 derives it from the map path), and BEFORE the `if check_coverage:` block at 6292. So the cheap `--check-sources` run discloses it too."
+  },
+  {
+   "claim": "UC9 step 1: R1 → I4 — ask in plain language to move, split or rename part of the map",
+   "grounded": true,
+   "evidence": "method/dispatch.md:68",
+   "skeptic": "behaviour-2",
+   "note": "Read dispatch.md:68-71 and 172-176: 'A plain-language request to change the map itself (\"move component X into subsystem Y\", \"rename this subsystem\", \"split this component\", \"add a use case for…\") is also a recognized input' — a Direct map change, explicitly not Analyze."
+  },
+  {
+   "claim": "UC9 step 2: I4 → C134 [in] — point the agent at the clone and at the one document that decides the mode",
+   "grounded": true,
+   "evidence": "skill/coyomap/SKILL.md:27",
+   "skeptic": "behaviour-2",
+   "note": "Read SKILL.md:22-29. Line 22 sets COYOMAP_HOME to the coyomap clone ('every method doc, template and tool lives here'); line 27 says to read `COYOMAP_HOME/method/dispatch.md` end to end, and dispatch.md:3 and 62-71 are what decides the mode."
+  },
+  {
+   "claim": "UC9 step 4: R1 → I1 — run the map commands the method names",
+   "grounded": true,
+   "evidence": "method/dispatch.md:183",
+   "skeptic": "behaviour-2",
+   "note": "Read dispatch.md:172-185 (Direct map change): edit the model, stay grounded, then 'Run the gates and commit: validate --check-sources → audit → render'. method.md:2154 likewise names `coyomap balance` for reconciling density findings. These are commands the method names for this work."
+  },
+  {
+   "claim": "UC9 step 5: I1 → C24 [in] — carry the request to read one element's stored record",
+   "grounded": true,
+   "evidence": "tools/coyomap/dump.py:322",
+   "skeptic": "behaviour-2",
+   "note": "Read dump.py:305-327. Line 322 is where the parsed request is served: `--id` goes to resolve_id, anything else (i.e. `--record <id>`) to record_of(m, eid), with a 'not defined in the map' error at 324 when the id is unknown."
+  },
+  {
+   "claim": "UC9 step 6: C24 → E1 [in] — read the stored record of the element the person named",
+   "grounded": true,
+   "evidence": "tools/coyomap/dump.py:138",
+   "skeptic": "behaviour-2",
+   "note": "Read dump.py:136-139, record_of: line 138 looks the named id up in all_elements(m) — the loaded project map — and 139 returns asdict(el), the element's full stored record verbatim."
+  },
+  {
+   "claim": "UC9 step 7: I1 → C48 [in] — carry the request for a proposed split of one crowded screen",
+   "grounded": true,
+   "evidence": "tools/coyomap/cli.py:183",
+   "skeptic": "behaviour-2",
+   "note": "Read cli.py:181-183: the `balance` command hands `rest` to balance.main. I read balance.py:240-246 where `--focus <Sn>` is pulled out of that argv, and 275-282 where a focus produces 'Split proposal for <Sn>' for that one diagram."
+  },
+  {
+   "claim": "UC9 step 8: C48 → I1 [out] — print a proposed grouping for a screen that holds too many boxes",
+   "grounded": true,
+   "evidence": "tools/coyomap/balance.py:281",
+   "skeptic": "behaviour-2",
+   "note": "Read balance.py:275-282: with a focus it builds 'Split proposal for {focus}:', calls _proposal_blocks, and prints at 281. _proposal_blocks (75-110) emits the proposed groups and the member-by-member reassignment; 196-201 does the same unasked for diagrams over FANOUT_SOFT_HI."
+  },
+  {
+   "claim": "UC9 step 9: I1 → R1 — show the split as a starting point, never as ready to apply",
+   "grounded": true,
+   "evidence": "tools/coyomap/balance.py:97",
+   "skeptic": "behaviour-2",
+   "note": "Read balance.py:95-110: the proposal header ends 'STARTING POINT, not ready-to-apply:', line 109 adds 'Do not invent members not listed here. Apply via a Direct map change, then re-run validate → audit → render', and the --help text at 235-236 says 'Advisory only'."
+  }
+ ]
+}

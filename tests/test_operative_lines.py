@@ -15,15 +15,15 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from coyodex.anchors import non_operative_reason
-from coyodex.model import (
+from coyomap.anchors import non_operative_reason
+from coyomap.model import (
     Edge,
     Flow,
     FlowStep,
     ProjectModel,
     SecurityRow,
 )
-from coyodex.validate_model import call_site_anchors, check_operative_lines_model
+from coyomap.validate_model import call_site_anchors, check_operative_lines_model
 
 
 def make_repo(files: dict[str, str], tmp: str) -> Path:
@@ -101,7 +101,7 @@ def test_extends_and_implements_anchor_their_class_header_legitimately():
 def test_definition_source_anchors_are_not_call_sites():
     # a component/entity `source` is SUPPOSED to point at a definition — it makes no "acts here"
     # claim, so the check must not reach it.
-    from coyodex.model import Component, Entity
+    from coyomap.model import Component, Entity
     m = ProjectModel(components=[Component(id="C1", name="A", purpose="p", source="a.py:1")],
                      entities=[Entity(id="E1", name="Org", meaning="m", source="a.py:1")])
     assert call_site_anchors(m) == []
@@ -152,7 +152,7 @@ def test_whole_file_and_missing_anchors_are_ignored():
 def test_check_is_advisory_not_blocking():
     # the relationship is usually REAL and only its `where` drifted, so a hit must never fail a
     # build: it lands in warnings, and `validate` still exits 0.
-    from coyodex.validate_model import validate_model
+    from coyomap.validate_model import validate_model
     with tempfile.TemporaryDirectory() as tmp:
         root = make_repo({"a.py": "def handle():\n    pass\n"}, tmp)
         m = make_edge_model("a.py:1")

@@ -1,0 +1,167 @@
+{
+ "schema": "coyomap/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "C129 purpose",
+   "text": "States every field a map may hold and the exact shape of each. Names, code links and closed word lists are all fixed here. It also says how each part of the map is drawn on screen."
+  },
+  {
+   "where": "C130 purpose",
+   "text": "Decides which job to do when someone calls coyomap on a project. Build a first map, report a code change, or fold a report in. It briefs the person on what will be read before anything starts."
+  },
+  {
+   "where": "C131 purpose",
+   "text": "Says how to report what a code change does to an existing map. The report carries the exact new text for every box it touches. Folding the report in is then mechanical, with no fresh reading of code."
+  },
+  {
+   "where": "C132 purpose",
+   "text": "Holds the briefs handed word for word to the agents a build fans out to. One brief per job, from gathering the pieces to disproving the finished claims. A shared file carries the writing rules every brief appends."
+  },
+  {
+   "where": "C133 purpose",
+   "text": "Holds one written promise per change to the method or the tools. Each file says what the next build should do differently, and what a backfire would look like. A review of a finished build runs every check the change range added."
+  },
+  {
+   "where": "C134 purpose",
+   "text": "Points a coding agent at this repository so the map commands work. Kept deliberately thin, because a copy is installed into the agent and goes stale. It names the clone path and the one document to read."
+  },
+  {
+   "where": "C135 purpose",
+   "text": "Says how to score two maps of the same code and tell which one is better. A map is scored on counts, well-formedness, coverage and a model's judgement. Both maps must describe the same code, or the comparison means nothing."
+  },
+  {
+   "where": "C136 purpose",
+   "text": "Says how to review one finished build from its map and its chat. The review reports what the run revealed about the tools and the method. It changes nothing, and a standing backlog carries every proposal forward."
+  },
+  {
+   "where": "C137 purpose",
+   "text": "Explains to a newcomer what coyomap is, why it exists and how to install it. A longer page walks through how a map gets built, phase by phase. Both are read on the web by a person, never by a mapping agent."
+  },
+  {
+   "where": "C138 purpose",
+   "text": "Says how to work on coyomap itself, for a person and for an agent alike. It names what each folder is for and which tests a given change needs. It also holds the design philosophy and the words this project uses."
+  },
+  {
+   "where": "C139 purpose",
+   "text": "Keeps the story of the build that made each method rule necessary. Storing those stories here keeps them out of the text every build agent reads. A test checks that each entry still quotes a rule that exists."
+  },
+  {
+   "where": "C20 purpose",
+   "text": "Routes each typed coyomap command to the tool that runs it. The same layer decides how much of a long finding list a reader sees."
+  },
+  {
+   "where": "C21 purpose",
+   "text": "Reads a finished map and reports where it contradicts itself. The same family flags a code link pointing at a line that cannot act."
+  },
+  {
+   "where": "C22 purpose",
+   "text": "Turns the skeptics' verdict files into the map's honesty record. The four counts a gate blocks on are derived, never hand-tallied."
+  },
+  {
+   "where": "C23 purpose",
+   "text": "Applies one mechanical correction to a stored map in place. An edit matching no row, or more than one, is refused rather than guessed."
+  },
+  {
+   "where": "C24 purpose",
+   "text": "Reads a map and never changes it. Three answers: one element's stored record, what two maps differ on, and the evidence behind a claim."
+  },
+  {
+   "where": "C25 purpose",
+   "text": "Runs a build's closing steps in order and stops at the first failure. The last step writes one pre-commit verdict to a file."
+  },
+  {
+   "where": "C26 purpose",
+   "text": "Says which files a build will read and which commit its map will name. A second command prints the exact brief each helper agent is sent."
+  },
+  {
+   "where": "C27 purpose",
+   "text": "Records which session built a map, and when. Beside that it records how long each slice of the build took."
+  },
+  {
+   "where": "C80 purpose",
+   "text": "Turns a stored map into the readable file kept beside the code. Also builds the boxes and arrows the browser draws."
+  },
+  {
+   "where": "C81 purpose",
+   "text": "Works out what each feature owns: its people, its decisions, its records and the doors reaching it."
+  },
+  {
+   "where": "C82 purpose",
+   "text": "Draws every diagram, timeline and flow of one map, ready for the browser page to show."
+  },
+  {
+   "where": "C83 purpose",
+   "text": "Serves every map on this machine at a local web address. Reads a project's own code from its version history."
+  },
+  {
+   "where": "C84 purpose",
+   "text": "Lists a project's folders and files, marking each one by how far the map covers it."
+  },
+  {
+   "where": "C85 purpose",
+   "text": "Keeps the list of project folders a person has opened, so each map is one click away next time."
+  },
+  {
+   "where": "C60 purpose",
+   "text": "Loads the whole map from the server when the page opens, before any screen is drawn. Glossary words in the text then become definitions you can read in place."
+  },
+  {
+   "where": "C61 purpose",
+   "text": "Draws one card for anything on the map: its name, a tag saying its type, one sentence. Clicking a card opens that thing."
+  },
+  {
+   "where": "C62 purpose",
+   "text": "Draws a view's picture from the drawing the map recorded. Selecting a box lights it and dims everything else."
+  },
+  {
+   "where": "C63 purpose",
+   "text": "Decides what a click does on each drawn box and arrow, view by view. Holding a key drills into a box instead of selecting it."
+  },
+  {
+   "where": "C64 purpose",
+   "text": "Shows what you selected: a card floating over the picture, or a drawer along the bottom. What the pane holds changes with the kind of thing selected."
+  },
+  {
+   "where": "C65 purpose",
+   "text": "Keeps the tabs, the trail and the browser address in step with the screen on show. Copying that address gives someone else the same screen."
+  },
+  {
+   "where": "C66 purpose",
+   "text": "Draws the pages that say what the product is for and what it does. Covers the overview, the features, the happy path, actor pages and the glossary."
+  },
+  {
+   "where": "C67 purpose",
+   "text": "Draws the tables for where data is kept, how far the tests reach, and the operational lists."
+  },
+  {
+   "where": "C68 purpose",
+   "text": "Draws the decisions the product makes and the places it meets the outside world. Each rule and each interface has a page of its own."
+  },
+  {
+   "where": "C69 purpose",
+   "text": "Shows the mapped project's files, and the source of the one you open, at the map's commit. Selecting a box on a picture opens its file here."
+  },
+  {
+   "where": "C70 purpose",
+   "text": "Holds the page frame: the title bar, the tab rows, the panes and the settings dialog. Also wires the keyboard and the first-run guide."
+  },
+  {
+   "where": "C71 purpose",
+   "text": "Finds anything in the map by name as you type: elements, files, folders, glossary words. Picking a result opens it where it lives."
+  },
+  {
+   "where": "C72 purpose",
+   "text": "Projects a code change onto the map and marks what that change touches, plus what ripples out from it. Hidden from the title bar for now."
+  },
+  {
+   "where": "C73 purpose",
+   "text": "Holds every colour, size and layout rule the viewer page draws itself with. One stylesheet covers every view."
+  },
+  {
+   "where": "CAP1 purpose",
+   "text": "Turns a codebase nobody can hold in their head into a map that is grounded in the code."
+  }
+ ]
+}

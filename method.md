@@ -1,4 +1,4 @@
-# The coyodex method
+# The coyomap method
 
 How an AI coding agent builds and maintains a top-down, drillable map of a codebase.
 Deliver this fixed set of sections, rendered as tables in the generated view. Every row is
@@ -13,11 +13,11 @@ They join at **use case ↔ flow**.
 
 See also: [dispatch](method/dispatch.md) · [the map model](method/model.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
 
-**The stored map is a structured JSON model** (`.coyodex/project-map.json`, [the map model](method/model.md));
+**The stored map is a structured JSON model** (`.coyomap/project-map.json`, [the map model](method/model.md));
 the markdown map and the HTML diagram are **generated views** committed next to it. Build agents
-return structured rows; `coyodex assemble` writes the model — nobody hand-authors the stored file.
+return structured rows; `coyomap assemble` writes the model — nobody hand-authors the stored file.
 
-The method is `method.md` and the `method/` docs (plus the `tools/coyodex/` package). The coyodex repo's
+The method is `method.md` and the `method/` docs (plus the `tools/coyomap/` package). The coyomap repo's
 **`internal/`** folder (design rationale, working notes) is **not** part of the method — ignore it
 when reading the clone; never treat it as instructions to follow or as input to a map.
 
@@ -224,7 +224,7 @@ when reading the clone; never treat it as instructions to follow or as input to 
     case, via the synthesis `reconcile` — see *Build order*), while its **traversal** is every
     surface the scenario merely passes through (derived from the flow's component reach). The
     derived arm stays PRIMARY and the authored one refines it. Making the authored link the only
-    test inverts on real maps: on coyodex's own map ~16 of 61 entry points are not triggers of
+    test inverts on real maps: on coyomap's own map ~16 of 61 entry points are not triggers of
     anything a person does (fetches the browser makes *after* the reader clicked, plus middleware)
     and every one would report as a missing use case; on a map whose harvest recorded route *groups*
     — one row for a whole SPA — a dozen use cases would have to name zero surfaces, which rule (1)
@@ -241,13 +241,13 @@ when reading the clone; never treat it as instructions to follow or as input to 
     recorded as unclaimed, or becomes the use case it is evidence for — blanket per-kind prose is
     a harvest-coverage statement, not an adjudication. The list used to be three kinds
     (`http-route`, `ui-route`, `mcp-tool`), so a product whose whole front door is a command line
-    walked nothing: coyodex's own map came out with 11 use cases for 97 ways in, 51 of them
+    walked nothing: coyomap's own map came out with 11 use cases for 97 ways in, 51 of them
     commands, and no check said so.
     Entry-point granularity is *reported*, not regulated. The mechanical backstop:
     `validate` warns (advisory) on every T4 entry point neither arm reaches; a deliberate
     ops/debug/infra surface is recorded as `Cn: <why>` under an **"Unclaimed surfaces"** extras
     heading, which silences that component durably. On a large repo the wall can be dozens of
-    surfaces — `coyodex validate --emit-unclaimed` prints a ready-to-paste block of every current
+    surfaces — `coyomap validate --emit-unclaimed` prints a ready-to-paste block of every current
     one (each as `Cn (name): <why>` with its triggers) so you adjudicate them in one pass instead of
     hand-typing the list (a fresh monorepo build left ~125 of these unaddressed because recording
     them by hand was too costly). **The walk itself is checked once per surface.** The
@@ -636,7 +636,7 @@ components/deps/entities), drawn as a flow map and read as a numbered narrative.
   **Seeded-open**, like an entry point's kind: prefer a seed, mint only when none fits (there is
   deliberately no seed for CI, hardware, telephony or a browser extension), and reuse the exact
   spelling on rebuild or the eval reads one surface as two. Do NOT derive it from the ways in —
-  measured, that gives one clean answer on 4 of coyodex's 11 surfaces and 1 of mcpolis's 12, and
+  measured, that gives one clean answer on 4 of coyomap's 11 surfaces and 1 of mcpolis's 12, and
   NOTHING on a `theirs` surface, which has no ways in by definition. A real surface is several
   mechanisms: a dashboard is `ui-route` + `http-route` + `event-consumer`, and those three together
   ARE a web UI.
@@ -1133,7 +1133,7 @@ components/deps/entities), drawn as a flow map and read as a numbered narrative.
 - **Deployment & topology**: `Unit | Runs on | Exposed as | Config source`. These are NOT tabled on the System tab — that page is for facts no diagram holds. Each row's facts live on the box that represents it in the Deployment view: its **process box** for a unit that hosts code (or an untraced one), and the **dependency box** standing in for it when the unit is infrastructure hosting no code. `variants` shows there too, as an **Environments** row with its grounding anchors. **Link the code to the
   runtime with `runs_in`** — on each component, the deployment `Unit` name(s) whose process executes
   it (a component may run in several: the C4 *instance* relation, one static box → many processes). It
-  powers the **Deployment view** (`coyodex serve` → Deployment tab): processes and infra as nodes,
+  powers the **Deployment view** (`coyomap serve` → Deployment tab): processes and infra as nodes,
   their self-started threads on drill, and derived `runs` edges to the subsystems each process
   executes. It also carries the view's **process topology**, composed from `runs_in` two ways:
   **asynchronously**, via the async catalog (a channel's `publishers`/`consumers` are components, each
@@ -1325,13 +1325,13 @@ heading records the ones that are not decisions). **The canary is a floor, not a
 the wording of anchored steps with a heuristic vocabulary, so an empty worklist means "nothing
 obvious was left", never "the sweep was exhaustive".
 
-**This section is shown in the viewer** (`coyodex serve` → Business logic tab) and in the markdown
+**This section is shown in the viewer** (`coyomap serve` → Business logic tab) and in the markdown
 view as `## T7 — Business logic`, with each site rendered as *line — component*. A file several
 components claim shows EVERY one of them; a site in a file no component claims renders as
 **unverified**, which is a real state, not a rendering bug.
 
 ### Test completeness — measure against the MAP, not line %
-**This table is shown in the viewer**: the `coyodex serve` Tests tab renders the honesty note + the
+**This table is shown in the viewer**: the `coyomap serve` Tests tab renders the honesty note + the
 gap table (`Target · Tested? · Test(s) · Gap/risk · Confidence`) — so an empty table is a visible gap.
 **Be honest about whether you ran it.** A gap table built by *reading* tests is **inferred**; only
 running the suite with coverage makes it **verified**. If you don't run it (the suite is slow or
@@ -1459,12 +1459,12 @@ command is not.
 **Two shell hazards this method's own commands keep hitting.** Both are invisible until the output
 is wrong rather than absent.
 
-  * **NEVER `cd` into the coyodex clone. Not once, not in any command.** The `cd` persists across
+  * **NEVER `cd` into the coyomap clone. Not once, not in any command.** The `cd` persists across
     `;`, across `&&`, **and across separate Bash calls for the rest of the session** — that last one
     is what makes this expensive, and the sentence used to omit it. A later
-    `python3 -c "…open('.coyodex/project-map.json')…"`, in a command that mentions no clone at all,
-    then reads *coyodex's own self-map*: a wrong answer that looks like a right one, carrying
-    coyodex's vocabulary rather than the mapped project's. `git status` in the analyzed repo shows
+    `python3 -c "…open('.coyomap/project-map.json')…"`, in a command that mentions no clone at all,
+    then reads *coyomap's own self-map*: a wrong answer that looks like a right one, carrying
+    coyomap's vocabulary rather than the mapped project's. `git status` in the analyzed repo shows
     nothing, because nothing happened there.
     It has now cost two consecutive builds. One read a gate result about the wrong product; the next
     went further and EDITED the clone's committed map plus a working file, and had to repair both.
@@ -1473,8 +1473,8 @@ is wrong rather than absent.
     lead's guide, and on the 2026-09-02 build **8 of 75 sub-agents stepped into the clone, 33 times**
     — none of them had ever read this line. The shipped contracts carry it now; a brief you compose
     by hand must too.
-    `coyodex` refuses to read the clone's own `.coyodex/` unless `COYODEX_SELF_MAP=1` is set, which
-    catches the verbs — but a bare `python3` heredoc is not a coyodex verb, so the rule still has to
+    `coyomap` refuses to read the clone's own `.coyomap/` unless `COYOMAP_SELF_MAP=1` is set, which
+    catches the verbs — but a bare `python3` heredoc is not a coyomap verb, so the rule still has to
     be obeyed rather than relied on.
   * **This environment is zsh, and zsh does not word-split an unquoted expansion.** Building a
     repeated flag as a string — `VD="$VD --verdicts $f"` — arrives as ONE argument and the command
@@ -1516,19 +1516,19 @@ from memory:
 
 | you are about to hand-write | run instead |
 |---|---|
-| a walk over `build-fragments/*.json` counting rows | `coyodex dump --counts` (it reads a FRAGMENT too) |
-| a listing of ids / names / sources | `coyodex dump --legend`, `--id`, `--record`, `--edges`, `--members` |
-| a tally of `true`/`false` across the verdict files | `coyodex grounding report` — the hand tally cannot tell a tie from a stated `unverifiable` |
-| an append into an extras heading | `coyodex record --heading … --line …` |
-| **deleting or correcting a recorded line** | `coyodex record --remove "<prefix>"` / `--replace "<prefix>"` — a python splice of `extras.json` takes the heading with it when the line is the last one |
-| **a batch of recorded lines** | `coyodex record --lines-from <file\|->` — one process, one write, every line shape-checked before any of them lands |
-| **which headings may carry a comma list of ids** | `coyodex record --headings` — five of them key on free text and silence NOTHING when merged; the merged form is right only for the other six |
-| a rewrite of a rule's / entity's / **a flow step's** own TEXT | `coyodex fix row --fragments .coyodex/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly. It reaches ANY row with an id, `happy_path` steps included: `--set-why`, `--set-confidence`, `--set-risk` all work |
-| **TWO OR MORE row rewrites** | `coyodex fix rows --fragments .coyodex/build-fragments --edits <file\|->` — a JSON list of `{"id"\|"edge", "set", "set_json"}`. One process, one write, all-or-nothing, every fault reported at once. One build spent twelve consecutive turns on 37 single `fix row` calls plus 8 identical hand edits |
-| **an arrow's VERB** | `coyodex fix rows` with `{"edge": "C12:emits:C30", "set": {"verb": "queues"}}` — writing `verb` MOVES the edge, because an edge's identity is its triple, so a move onto a triple that already exists is refused as the merge it is |
-| a corrected anchor | `coyodex fix apply-drift --to-reconcile` |
-| a duplicate edge or relation resolved | `coyodex fix dedup-edge` / `dedup-relation --to-reconcile` |
-| a before/after comparison of two maps | `coyodex diff <old> <new>` |
+| a walk over `build-fragments/*.json` counting rows | `coyomap dump --counts` (it reads a FRAGMENT too) |
+| a listing of ids / names / sources | `coyomap dump --legend`, `--id`, `--record`, `--edges`, `--members` |
+| a tally of `true`/`false` across the verdict files | `coyomap grounding report` — the hand tally cannot tell a tie from a stated `unverifiable` |
+| an append into an extras heading | `coyomap record --heading … --line …` |
+| **deleting or correcting a recorded line** | `coyomap record --remove "<prefix>"` / `--replace "<prefix>"` — a python splice of `extras.json` takes the heading with it when the line is the last one |
+| **a batch of recorded lines** | `coyomap record --lines-from <file\|->` — one process, one write, every line shape-checked before any of them lands |
+| **which headings may carry a comma list of ids** | `coyomap record --headings` — five of them key on free text and silence NOTHING when merged; the merged form is right only for the other six |
+| a rewrite of a rule's / entity's / **a flow step's** own TEXT | `coyomap fix row --fragments .coyomap/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly. It reaches ANY row with an id, `happy_path` steps included: `--set-why`, `--set-confidence`, `--set-risk` all work |
+| **TWO OR MORE row rewrites** | `coyomap fix rows --fragments .coyomap/build-fragments --edits <file\|->` — a JSON list of `{"id"\|"edge", "set", "set_json"}`. One process, one write, all-or-nothing, every fault reported at once. One build spent twelve consecutive turns on 37 single `fix row` calls plus 8 identical hand edits |
+| **an arrow's VERB** | `coyomap fix rows` with `{"edge": "C12:emits:C30", "set": {"verb": "queues"}}` — writing `verb` MOVES the edge, because an edge's identity is its triple, so a move onto a triple that already exists is refused as the merge it is |
+| a corrected anchor | `coyomap fix apply-drift --to-reconcile` |
+| a duplicate edge or relation resolved | `coyomap fix dedup-edge` / `dedup-relation --to-reconcile` |
+| a before/after comparison of two maps | `coyomap diff <old> <new>` |
 
 A hand script over `project-map.json` is also how a build ends up reading a field the schema
 renamed, and how it ends up editing the ASSEMBLED map — which the next `assemble` rebuilds from the
@@ -1573,7 +1573,7 @@ single directory home, so it simply **omits `source`**, never fabricates one) �
 T2 and T4 both exist by here, and the trace is their CONSUMER, so they must precede it) →
 trace T6 + edge list, **dooring each flow as it is written** (**including the `C→E` edges**: which
 component persists/writes/reads each entity) → **re-balance the grouping against the traced edges** (the
-grouping was cut edge-blind — run `coyodex balance`, fix or justify each finding; Phase 3.5 in
+grouping was cut edge-blind — run `coyomap balance`, fix or justify each finding; Phase 3.5 in
 parallel mode) → **measure test completeness against the finished inventory**
 (the last structural step — it reads the assembled nodes + flows: use cases, T4 entry points, T5
 entities, critical-path branches) → **the `Cn → Dn` MIGRATION half of T2b** (the surfaces
@@ -1597,7 +1597,7 @@ DERIVED from the flows and must never be written by hand.
 under its own id, and one undoored step there is drawn in every story that rides it. **Halves 1–3
 belong to the TRACE, written with the steps; half 4 is the lead's, after the trace.** A trace agent
 that has the `In` rows doors its own arrival, its own hand-off and its own mid-story crossings while
-it still knows what each step does — give it `coyodex contract doors` alongside its trace contract.
+it still knows what each step does — give it `coyomap contract doors` alongside its trace contract.
 Half 4 stays with the lead because a `Cn → Dn` step can only migrate to a surface once the flows
 exist. When a build reaches this point with flows already traced door-blind — a rebuild of an older
 map, or a trace that skipped it — retrofit them here, which is what this step used to be.
@@ -1637,7 +1637,7 @@ First draft the behavioral layer (Goal → Glossary → Roles → Use cases → 
 **then** run the pre-index and let it *size and locate* while you keep *naming and judging*:
 
 ```
-.venv/bin/coyodex preindex --root <repo>       # writes .coyodex/preindex.json (committed with the map)
+.venv/bin/coyomap preindex --root <repo>       # writes .coyomap/preindex.json (committed with the map)
 ```
 
 It returns, for the whole tree: a **weight map** (LOC + file count + git churn per directory), a
@@ -1657,12 +1657,12 @@ in several places), and — when you pass `--pairs` a `{component: [paths]}` map
   it skipped and the languages without symbol data (symbols are deep for Python; other languages
   need the tree-sitter pack). An unparsed region is a region you still owe a read.
 
-**Code the map is not meant to describe — `.coyodex/.ignore`.** A repo may commit code that is
+**Code the map is not meant to describe — `.coyomap/.ignore`.** A repo may commit code that is
 genuinely outside the product: a fixture tree built to exercise the tooling, a vendored copy git
 tracks, a scratch area. `.gitignore` cannot say it (the files are meant to be committed), so the repo
 declares it once next to the map, in gitignore-like patterns:
 
-Write it to `.coyodex/.ignore`. **A `#` opens a comment only at the START of a line** — the same rule
+Write it to `.coyomap/.ignore`. **A `#` opens a comment only at the START of a line** — the same rule
 gitignore uses — so a comment goes on its own line above the pattern it explains. `pattern  # why` is
 ONE literal pattern containing spaces; it can never match a real path, and `validate` reports the
 line as unusable and drops it (write `\#` if you need a literal `#` in a pattern):
@@ -1683,7 +1683,7 @@ different questions and are not interchangeable:
 | | says | use when |
 |---|---|---|
 | `Coverage exceptions` (extras) | *mapped, deliberately coarse — stop warning* | a real part of the product folded into one box |
-| `.coyodex/.ignore` | *not part of the analysed tree at all* | code the map is not meant to describe |
+| `.coyomap/.ignore` | *not part of the analysed tree at all* | code the map is not meant to describe |
 
 **Read the disclosure it prints; do not write patterns to quiet a warning.** Every coverage check
 here re-measures the repo independently of the pre-index (GR4) precisely so a map cannot look
@@ -1720,8 +1720,8 @@ top screen tells the reader the tech stack, not the product — sparseness is an
 root only*; a mid-tree 2-child subsystem is normal) and the **single-child subsystem** (a wrapper
 level pulling no weight — inline it or grow it). One exemption: a **homogeneous family** — a dense
 screen of same-kind siblings (11 repositories, 14 plugins) sharing a directory or a name suffix —
-reads fine as a list up to ~15. `coyodex validate` warns (always-on, advisory) outside [3, 12];
-`coyodex balance` shows the full per-diagram picture (including the 10–12 soft tier), the
+reads fine as a list up to ~15. `coyomap validate` warns (always-on, advisory) outside [3, 12];
+`coyomap balance` shows the full per-diagram picture (including the 10–12 soft tier), the
 inter-subsystem edge matrix, and deterministic split proposals for over-dense screens — proposals
 are **starting points for judgment, not ready-to-apply** (on list-shaped or star-shaped screens it
 says so instead of proposing noise). A durably justified exception is recorded in the model's
@@ -1781,13 +1781,13 @@ safe: **balance never gates and only ever re-groups** — grouping is a free, vi
 (membership on the child, member lists derived), while the **leaf decision is grounded by E and out
 of bounds for balance tooling**: no balance finding may merge or split components to hit a number.
 
-**The hand-off — `coyodex preindex --report`; don't reverse-engineer the JSON.** The build run prints
+**The hand-off — `coyomap preindex --report`; don't reverse-engineer the JSON.** The build run prints
 a one-line summary to **stderr** (heaviest top-level dirs, totals, the GR1/GR2 reminders), but that
 summary carries only the top-5 dirs and the whole-repo E — while the harvest plan needs the **weight
 tree** and the **per-slice E**, which live only inside the JSON. So there is a read command:
 
 ```
-.venv/bin/coyodex preindex --report --root <repo> [--depth N] [--top N]   # weight tree + per-dir E + coverage
+.venv/bin/coyomap preindex --report --root <repo> [--depth N] [--top N]   # weight tree + per-dir E + coverage
 ```
 
 Use it instead of hand-parsing — it reads the file and writes nothing. `preindex --help` is a real
@@ -1853,8 +1853,8 @@ synthesis → parallel trace.**
     by hand:
 
     ```
-    coyodex contract <phase> --slots > <scratch>/slots.json    # every slot, empty; fill the VALUES
-    coyodex contract <phase> --fill <scratch>/slots.json \
+    coyomap contract <phase> --slots > <scratch>/slots.json    # every slot, empty; fill the VALUES
+    coyomap contract <phase> --fill <scratch>/slots.json \
                              --out <ABSOLUTE scratch path>/<agent-id>.md --brief <agent-id>
     # Re-running for the SAME agent id is REFUSED: a filled contract is that agent's whole
     # brief, so overwriting one rewrites the instructions of something that may still be
@@ -1888,7 +1888,7 @@ synthesis → parallel trace.**
     path ending `.draft.json`, so a fragment left with that name never assembles at all. The RENAME
     is what makes the work land.
 
-    **The rename is the lint's exit, not a separate step: `coyodex lint-fragment --finalize
+    **The rename is the lint's exit, not a separate step: `coyomap lint-fragment --finalize
     <id>.draft.json`.** It renames to `<id>.json` only on a CLEAN lint, refuses a target that
     already exists, and lands all of a batch or none of it. Done by hand the loop was write → lint →
     fix → lint → rename, with nothing connecting the last two, so a rename could follow a lint that
@@ -1921,7 +1921,7 @@ synthesis → parallel trace.**
     the same shape — the barrier already tells you when it closes, and a turn spent asking is a
     turn. (`Monitor` is a deferred tool — run `ToolSearch select:Monitor` once to load its schema
     before the first call, or that first call fails with an `InputValidationError`.) Hand every
-    agent an **absolute** fragment output path (`<repo-root>/.coyodex/build-fragments/<id>.json`) so
+    agent an **absolute** fragment output path (`<repo-root>/.coyomap/build-fragments/<id>.json`) so
     it can never land in a subdirectory; `assemble` warns about any fragment left in
     `build-fragments/` that you did not pass in. **The wait itself is a TEXT turn — emit no tool
     call at all.** A keep-alive `echo .` yields the turn no better than ending on text, and it costs
@@ -1962,10 +1962,10 @@ synthesis → parallel trace.**
     barrier long after its siblings — a tail that is delay, not work. Merge to fit the cap, or plan
     a deliberate second wave.
 
-    **Order by MEASURED minutes when there are any: `coyodex timings order --phase <phase>`.** The
+    **Order by MEASURED minutes when there are any: `coyomap timings order --phase <phase>`.** The
     paragraph above asks you to guess which slice is longest, and a guess is what it stays until
     somebody writes the answer down. At each barrier, record what the batch actually took —
-    `coyodex timings record --phase <phase> --slice "<name>" --minutes <m>` — and the NEXT build
+    `coyomap timings record --phase <phase> --slice "<name>" --minutes <m>` — and the NEXT build
     orders from that instead of from T5-and-entry-points folklore. `order` prints longest-first and
     says plainly when it has no record yet, so a first build is not blocked waiting for one. It is a
     second-build lever, which is why the recording half is not optional.
@@ -1997,7 +1997,7 @@ synthesis → parallel trace.**
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
     whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
     **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). **The owner's brief
-    is the filled harvest contract PLUS the T5 addendum** — `coyodex contract harvest-t5 >> <the
+    is the filled harvest contract PLUS the T5 addendum** — `coyomap contract harvest-t5 >> <the
     owner's brief>`; the addendum reaches the owner ALONE, and the shared contract carries only the
     sentence forbidding everyone else, so 13 agents no longer read the spec of a job they must not
     do. This holds even when
@@ -2078,7 +2078,7 @@ synthesis → parallel trace.**
   not exist yet. Left to the end, this section was written behind its own consumer and every flow
   was traced door-blind — measured on the 2026-09-01 argus build, **30 of 31 flows owed an opening
   and 96 steps owed a door**, and a whole extra four-agent wave went on the retrofit, after the
-  agents that wrote those steps were gone. Hand each trace agent `coyodex contract doors` alongside
+  agents that wrote those steps were gone. Hand each trace agent `coyomap contract doors` alongside
   its trace contract, and the `In` rows with their `ways_in`.
 
   **Run every sub-flow name you PRESCRIBE past the naming heuristic before you dispatch it.** A slice
@@ -2098,7 +2098,7 @@ synthesis → parallel trace.**
   `entry_point.component`, `entity.subdomain`, and the `E↔E` `relation.target` / `FK→En` markers.
   Because collisions are resolved before any edge is traced, a range overlap between two harvest
   agents can never reach the backbone; `assemble`'s duplicate-id error remains the loud backstop if
-  a stray collision slips through. **Right after synthesis, run `coyodex validate
+  a stray collision slips through. **Right after synthesis, run `coyomap validate
   --check-coverage`** — add **`--json`** whenever you need the FULL finding lists: the human report
   elides long id lists (`C1, C12, … +8 more`) and clips trigger prose, and `--json` emits every list
   whole, so recovering a hidden id never needs a throwaway script. Its unreferenced-files list is
@@ -2130,8 +2130,8 @@ synthesis → parallel trace.**
   `assemble` mints it from the harvested T4 rows — so neither can be written in the behavioral
   fragment, which was authored before either existed. Reconcile is the only mechanism, and it is
   also what makes them survive: a re-assemble re-applies them, where a hand-patch of the built map
-  is discarded by the next one. These live in a declarative **`.coyodex/reconcile.json`** (kept
-  OUTSIDE `build-fragments/` so the fragment glob does not sweep it) — **generate it with `coyodex
+  is discarded by the next one. These live in a declarative **`.coyomap/reconcile.json`** (kept
+  OUTSIDE `build-fragments/` so the fragment glob does not sweep it) — **generate it with `coyomap
   reconcile`, below; hand-author it only on a map small enough to type.** The shape it produces:
   ```json
   { "set": [ {"ids": ["C1","C2"], "subsystem": "S3"},
@@ -2139,7 +2139,7 @@ synthesis → parallel trace.**
              {"ids": ["E7"], "subdomain": "SD2"},
              {"ids": ["D5"], "bucket": "Data & storage"} ] }
   ```
-  `coyodex assemble <fragments…> --out .coyodex --reconcile .coyodex/reconcile.json` applies it AFTER
+  `coyomap assemble <fragments…> --out .coyomap --reconcile .coyomap/reconcile.json` applies it AFTER
   the fragment merge, every time — so a re-assemble never loses the assignments (a bespoke Python patch
   edits the assembled map, which the *next* assemble discards). **`--reconcile` is part of the standard
   build assemble from here on**; an assemble without it silently reverts every assignment (assemble
@@ -2148,14 +2148,14 @@ synthesis → parallel trace.**
   `deployment[]` units exist but no component sets `runs_in`, and flags a formula-filled `runs_in`.
   Keep fragment argument order stable and author the reconcile ids against the assembled ids (dedup
   survivors are first-occurrence-in-argument-order, so reordering fragments can shift surviving ids).
-  - **A dedup decision belongs here too.** `coyodex fix dedup-edge --map .coyodex/project-map.json
-    --repo . --accept-suggested --to-reconcile .coyodex/reconcile.json` writes its choices as
+  - **A dedup decision belongs here too.** `coyomap fix dedup-edge --map .coyomap/project-map.json
+    --repo . --accept-suggested --to-reconcile .coyomap/reconcile.json` writes its choices as
     `keep_edges` instead of editing the assembled map. **`--to-reconcile` needs a decision** —
     `--accept-suggested`, or explicit `--keep` tokens after reading the listing (run it without
     `--to-reconcile` to see that listing first). On its own it is refused. Editing the map does not
     survive: the next assemble restores every duplicate the fix removed. A map that cannot be
     rebuilt from its fragments has quietly stopped being generated.
-  - **Generate the file — `coyodex reconcile`.** Count IDS, not rules: a file of 25 rules can carry
+  - **Generate the file — `coyomap reconcile`.** Count IDS, not rules: a file of 25 rules can carry
     187 hand-typed ids, and "25 rules" reads as small. There is deliberately NO hand-authoring
     threshold: a size threshold is what a build reads as permission. The file wants explicit id
     LISTS, and on any real map that is hundreds of ids nobody types correctly. Write RULES against
@@ -2171,10 +2171,10 @@ synthesis → parallel trace.**
     witness no longer matches, naming both anchors. A bare `"EP1"` is still legal and buys no
     protection, so let the tool write the file.
     ```
-    .venv/bin/coyodex reconcile --rules rules.json --fragments .coyodex/build-fragments/*.json \
-                                --out .coyodex/reconcile.json [--dry-run]
+    .venv/bin/coyomap reconcile --rules rules.json --fragments .coyomap/build-fragments/*.json \
+                                --out .coyomap/reconcile.json [--dry-run]
     ```
-    (`--map .coyodex/project-map.json` instead, when re-assigning on a map that is already built.
+    (`--map .coyomap/project-map.json` instead, when re-assigning on a map that is already built.
     Mid-build, `--map` is a trap: the reconcile file is an INPUT to `assemble`, and `assemble` is
     what writes the map, so demanding a map first is a circle with no way in. If the command says
     the map is not found, you wanted `--fragments`.)
@@ -2222,7 +2222,7 @@ synthesis → parallel trace.**
   [method/templates/trace-contract.md](method/templates/trace-contract.md)** — hand every trace agent
   a POINTER to its filled copy (the pointer-dispatch rule in Phase 1), changing only the
   «angle-bracket» slots. **Get it with the verb:**
-  `coyodex contract trace > <scratch>/trace-contract.md`, then fill them in
+  `coyomap contract trace > <scratch>/trace-contract.md`, then fill them in
   place; a `Read` followed by a `Write` is one keystroke from a rewrite, and the verb prints only
   the agent's half, so the lead-facing header cannot travel with it. This was the largest fan-out
   with no contract of its own, and the rules fan-out shows what that costs: composed from memory, it
@@ -2260,11 +2260,11 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
 - Phase 3.5 Re-balance reconcile (lead, not delegated — runs ONCE, after the trace). The grouping was
   cut at Phase 2 **before any edge existed**, so re-check it now against the real graph: run
-  `coyodex balance` and reconcile each finding — apply a Drilling-deeper operation (nest / promote /
+  `coyomap balance` and reconcile each finding — apply a Drilling-deeper operation (nest / promote /
   flatten) via a Direct map change, or record a one-line justification under the model's
   `extras` "Balance exceptions" heading. The **sparse-root fix is judgment-only** (no proposal
   machinery exists for it — the product-area-first guidance drives it); the split proposals are
-  starting points, not facts. Exit criterion: `coyodex validate` emits no balance warning that is
+  starting points, not facts. Exit criterion: `coyomap validate` emits no balance warning that is
   neither fixed nor justified. This step is not part of the per-write validate → audit → render
   invariant; maintenance re-surfaces imbalance for free through validate's always-on warnings.
   `finalize` now runs `balance` itself as an INFORMATIONAL leg and records what it found, so a
@@ -2312,7 +2312,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   as its own column, and **`lint-fragment` FAILS on an `access` rule that leaves it empty** — as an
   advisory it changed nothing. Those seven keys are the WHOLE authored surface — the full field
   semantics are in `method/model.md`. **`block` is NOT in the fragment** (see below). The agent
-  writes `«repo»/.coyodex/build-fragments/«agent-id».json` itself and returns that path plus a
+  writes `«repo»/.coyomap/build-fragments/«agent-id».json` itself and returns that path plus a
   one-line inventory, under the same rule as every other fragment (never inline it). **`access`
   matters beyond display**: it is what makes a rule part of the auth surface the eval gates on, and
   what the security table folds onto — a rule about who may do what and `access: false` is a
@@ -2332,7 +2332,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
   **Sweeping a rule's sites.** Start from the code the BLOCK is about, not from the rule (a rule's
   components are derived FROM its sites, so "the anchors in the rule's components" is a circle).
-  Take the components that own that area with `coyodex dump` (`--members` for a subsystem's members,
+  Take the components that own that area with `coyomap dump` (`--members` for a subsystem's members,
   `--record` for one element's stored record — a component's `files`, a use case's flow steps —
   `--edges` for a node's backbone edges), and read the anchors the map ALREADY holds in them: the
   flow-step `where`s, the edge `where`s, the security sources. That is a median ~11 candidates per
@@ -2363,10 +2363,10 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   answer that will disagree. If you find yourself wanting a field for one of them, stop: that is the
   design being wrong, not the map.
 
-  Exit criterion: `coyodex lint-fragment` clean per fragment, then at the lead's `validate` the
+  Exit criterion: `coyomap lint-fragment` clean per fragment, then at the lead's `validate` the
   **sweep worklist** — anchored flow steps that read like a decision no rule covers — is empty or
-  fully recorded under the `Sweep debt` extras heading (`coyodex record --map
-  .coyodex/build-fragments/extras.json --heading "Sweep debt" --line "<the step's anchor>: <why>"`
+  fully recorded under the `Sweep debt` extras heading (`coyomap record --map
+  .coyomap/build-fragments/extras.json --heading "Sweep debt" --line "<the step's anchor>: <why>"`
   — name the FRAGMENT, or the next assemble discards the record). **`--line` REPEATS, and
   `--lines-from <file|->` reads a batch** — one process, one write, and every line shape-checked
   before anything is written. Every `record` example in this file used to show exactly one `--line`
@@ -2391,7 +2391,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 - Test completeness (one agent, dispatched the moment the traced map is assembled — it needs the
   finished inventory AND the flows, whose failure paths are part of its inventory — and BEFORE the
   T7 rules and the Phase 4 skeptics, so it is never the build's straggler).
-  **Get its brief with the verb:** `coyodex contract tests --slots`, fill, `--fill … --out … --brief
+  **Get its brief with the verb:** `coyomap contract tests --slots`, fill, `--fill … --out … --brief
   <id>`, and send the pointer — the hand-written brief lost the no-delegation block on one build and
   was the batch straggler on another, written and dispatched last.
   Walk the assembled map (use cases, T4 entry points, T5 entities, failure modes, critical-path
@@ -2401,7 +2401,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   **inferred**, and set `tests_note` to state the suite was not run. Running the suite with coverage
   (upgrading rows to **verified**) is the opt-in upgrade described in that section — never run an
   unknown suite by default. The table is always produced; it must never ship empty.
-- Phase 4 Adversarial verify (fan out, **fresh context**). After the map validates and `coyodex
+- Phase 4 Adversarial verify (fan out, **fresh context**). After the map validates and `coyomap
   audit` runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor
   advisories — **fix each, or record it under an `Audit exceptions` extras heading** as
   `<check-name> <Id>: <why>`, e.g. `read-never-created HP12: the token is written off-path by the
@@ -2430,21 +2430,21 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   never passes `--with-prose` has no batch files to delete; one that minted them and then decides
   not to dispatch must delete them, because leaving them says a review happened.
 
-  **Write the per-theme batches with the tool, not a hand script:** `coyodex audit <map> --batches
-  .coyodex/verify --cap 40` emits one claims file per theme, most-dangerous-first, each claim
+  **Write the per-theme batches with the tool, not a hand script:** `coyomap audit <map> --batches
+  .coyomap/verify --cap 40` emits one claims file per theme, most-dangerous-first, each claim
   carrying its `anchor` and `detail`; themes with fewer than 5 claims share `claims-small.json`
   (`theme: mixed`), because a 1-claim batch still costs a whole skeptic — the security theme never
   shares. A hand-rolled batcher drops the anchor, and the claims then
   reach the skeptics as a bare `C140 calls C78` while the prompt promised them a `path:line`. (read
-  it with `coyodex audit --json` — the machine-readable `{findings, worklist, themes, theme_counts}`
+  it with `coyomap audit --json` — the machine-readable `{findings, worklist, themes, theme_counts}`
   payload built for this batching step; never regex-parse the human report; the same rule covers the
-  model itself — look an id up with **`coyodex dump`** (`--id` resolves kind/name/source/members,
+  model itself — look an id up with **`coyomap dump`** (`--id` resolves kind/name/source/members,
   `--record` the full stored record, `--edges` a node's in/out backbone edges, `--members` a group's
   members — a subsystem, subdomain, capability or block) rather than hand-parsing
   `project-map.json`, which is how a build ends up with a throwaway script that reads a field the
   schema renamed. **`dump` also reads a build FRAGMENT**, so use it during Phases 1-3 too instead of
   scripting over `build-fragments/*.json`. **To see what an edit actually did, keep the map you are
-  about to replace and run `coyodex diff <old-map> <new-map>`** — rows added, dropped and changed,
+  about to replace and run `coyomap diff <old-map> <new-map>`** — rows added, dropped and changed,
   with the fields that moved. It is the only row-level before/after signal there is: the assemble
   digest is one line, and a count gate cannot see a row moving between two arrays. Its scope is two
   assembles of the SAME work — before and after a `fix`, or one round of edits — never two
@@ -2478,9 +2478,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   one fresh-context skeptic per batch — hand each one a POINTER to its filled copy of
   [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
   contract (the pointer-dispatch rule in Phase 1), rather than composing one from this section.
-  **Get every brief with the verb, never by reading and retyping:** `coyodex contract skeptic
-  --slots` prints the slot skeleton (leave «BATCH» and «CLAIMS» empty), and `coyodex contract
-  skeptic --from-batches .coyodex/verify --fill <slots.json> --out-dir <scratch>/briefs --votes
+  **Get every brief with the verb, never by reading and retyping:** `coyomap contract skeptic
+  --slots` prints the slot skeleton (leave «BATCH» and «CLAIMS» empty), and `coyomap contract
+  skeptic --from-batches .coyomap/verify --fill <slots.json> --out-dir <scratch>/briefs --votes
   security=3` writes one brief per claims file, filling «BATCH» and «CLAIMS» from the file names,
   the voters as `security-1-a/b/c` over `claims-security-1.json`; it skips any brief that already
   exists and prints the pointer prompts to send. Every build so far hand-wrote that loop, with
@@ -2510,7 +2510,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   the code is the build-context blind spot the fresh-context rule exists to break, reintroduced at
   the last step. Give each row a `skeptic` id so two independent agreements are never mistaken for
   one vote counted twice. And note what a tie IS: `grounding write` files it under `unverifiable`,
-  which is right for the count and wrong for the reader, so run **`coyodex grounding report`** to
+  which is right for the count and wrong for the reader, so run **`coyomap grounding report`** to
   see ties listed apart from the claims a skeptic actually called unverifiable.
 - **Re-verify every REFUTATION against the code before applying it.** A refutation rewrites the map;
   a false one corrupts it silently and no gate can tell the difference. The majority vote is a
@@ -2520,11 +2520,11 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   **closer** agent with only the refuted claims — each with its skeptic's `evidence` and `note` —
   and the repo; never the build reasoning, and never the confirming rows. It opens each
   refutation's file and returns **uphold / reject** per refutation with the line it read.
-  **Use `coyodex contract closer`; do not compose the brief from this paragraph.** And note what
+  **Use `coyomap contract closer`; do not compose the brief from this paragraph.** And note what
   that contract requires of YOU: a refuted claim is a claim about a MAP ROW, so paste
   `dump --id <element>` and `dump --edges <element>` under each claim. The closer is denied
-  `.coyodex/` on purpose — seeing the map whole would hand it the build's reasoning back — so a row
-  you leave out is a row it cannot get. A brief that forbade `.coyodex/` and then asked a map-only
+  `.coyomap/` on purpose — seeing the map whole would hand it the build's reasoning back — so a row
+  you leave out is a row it cannot get. A brief that forbade `.coyomap/` and then asked a map-only
   question got a wrong answer, blocked the ship gate, and cost 5 turns to undo. WHY not
   the lead's own read by default: the lead re-reading the code is the build-context blind spot the
   fresh-context rule exists to break, reintroduced at the very step that decides what the map ends
@@ -2533,7 +2533,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   outcome — say so in `grounding.note`.
 - **Do NOT pre-gather a skeptic's evidence. It was tried, measured, and it cost more.** The
   reasoning was good: 52-62% of a skeptic's bill is re-reading its own accumulated context, so hand
-  it what it was going to fetch. `coyodex context` builds exactly that bundle. On a controlled A/B
+  it what it was going to fetch. `coyomap context` builds exactly that bundle. On a controlled A/B
   over the same planted batches — two skeptics with the bundle, two without — the bundle arm read
   **1.47x more context** and cost **1.34x more**, at **identical recall** (both arms 20/20).
   The reason is not a bug in the bundle, and it cannot be tuned away: a bundle a skeptic is told to
@@ -2564,8 +2564,8 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   worklist and the verdicts you have:
 
   ```
-  .venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json \
-    --verdicts .coyodex/verify/*.json --partial \
+  .venv/bin/coyomap grounding write --worklist .coyomap/verify/worklist.json \
+    --verdicts .coyomap/verify/*.json --partial \
     --note '319 of 1,608 challenged: ranked top-down, stopped at the theme budget' --out …
   ```
 
@@ -2583,7 +2583,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   produced 20 labels, and "Four superseded claims had been CONFIRMED" where the true count was 11,
   leaving seven overrides undisclosed. Both numbers were on screen when the note was written.
 
-  **`coyodex grounding report` lists what `write` only counts.** Its `ADDED SINCE THE PIN` section
+  **`coyomap grounding report` lists what `write` only counts.** Its `ADDED SINCE THE PIN` section
   names the claims the shipped map carries that the pinned worklist never held, and
   `REFUTED BUT NOT SUPERSEDED` names refuted claims the map still carries verbatim — the count
   appears on the report's first line AND its last, so neither a `head` nor a `tail` can lose it.
@@ -2605,7 +2605,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   makes the record lie. `validate` warns when coverage is thin, and warns when a map with a real
   claim surface carries no `grounding` record at all: an unchallenged map and a fully-verified one
   otherwise look identical in every view and pass every gate the same way. **GATE — run the free pass BEFORE you dispatch a single
-  skeptic, not after the barrier:** `coyodex validate --check-sources` (and `coyodex anchor-drift
+  skeptic, not after the barrier:** `coyomap validate --check-sources` (and `coyomap anchor-drift
   --map …` with NO `--verdicts`) flags every call-site anchor pointing at a line that cannot act — a `def` header, an
   import, a comment. That is deterministic, needs no skeptics, and on live maps it reproduced what
   the skeptics found by reading; spend the skeptics on what it cannot decide. Stated as prose in
@@ -2632,7 +2632,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   row per claim (or per vote when N skeptics run), `claim` matching the worklist text verbatim so
   the tool can pair it, `evidence` the true call site.
 
-  **LINT the verdicts as they land, at the barrier — `coyodex grounding lint`.** It is the one
+  **LINT the verdicts as they land, at the barrier — `coyomap grounding lint`.** It is the one
   mechanical check on the pass and it goes unrun because nothing named it: on one build it appeared
   zero times in the transcript, zero times in this file, and zero times in the skill, while the lead
   hand-wrote half of it twice. **Run it after EVERY wave, over every verdicts file so far** — never
@@ -2641,8 +2641,8 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   the citation check runs without the flag.
 
   ```
-  coyodex grounding lint --verdicts .coyodex/verify/verdicts-a.json \
-                         --verdicts .coyodex/verify/verdicts-b.json … \
+  coyomap grounding lint --verdicts .coyomap/verify/verdicts-a.json \
+                         --verdicts .coyomap/verify/verdicts-b.json … \
                          --expect security-1,security-2,rule-1,…      # every batch you dispatched
                          --agent-transcripts <dir>    # optional: defaults to this session's subagents/
   ```
@@ -2659,17 +2659,17 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   glob after one flag is an error. Run it the moment the barrier closes, not at `grounding write`:
   `write` refuses the same malformed shapes at the END of the build, where the skeptic that produced
   them is a hundred turns gone. `--agent-transcripts` adds the check no shape test can make — whether
-  a note claiming a read is backed by the agent's own transcript. **Write the record with `coyodex
+  a note claiming a read is backed by the agent's own transcript. **Write the record with `coyomap
   grounding write`, never a hand tally:**
 
   ```
   # CAPTURE the worklist BEFORE any refutation is applied, and keep the file — the record is
   # written last, by which point a fresh audit no longer matches the verdicts.
-  .venv/bin/coyodex audit .coyodex/project-map.json --json > .coyodex/verify/worklist.json
+  .venv/bin/coyomap audit .coyomap/project-map.json --json > .coyomap/verify/worklist.json
   # …skeptics run, refutations get applied, THEN:
-  .venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json \
-      $(for f in .coyodex/verify/verdicts-*.json; do printf ' --verdicts %s' "$f"; done) \
-      --out .coyodex/build-fragments/grounding.json
+  .venv/bin/coyomap grounding write --worklist .coyomap/verify/worklist.json \
+      $(for f in .coyomap/verify/verdicts-*.json; do printf ' --verdicts %s' "$f"; done) \
+      --out .coyomap/build-fragments/grounding.json
   ```
 
   It derives all four counts and REFUSES two things a hand tally cannot see: a verdict whose claim
@@ -2685,22 +2685,22 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
   ```
   # 1. reconcile the refutations INTO THE FRAGMENTS, then:
-  .venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex \
-      --reconcile .coyodex/reconcile.json
+  .venv/bin/coyomap assemble .coyomap/build-fragments/*.json --out .coyomap \
+      --reconcile .coyomap/reconcile.json
   # 2. the record, measured against the map it describes:
-  .venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json \
-      --map .coyodex/project-map.json \
-      $(for f in .coyodex/verify/verdicts-*.json; do printf ' --verdicts %s' "$f"; done) \
-      --out .coyodex/build-fragments/grounding.json
+  .venv/bin/coyomap grounding write --worklist .coyomap/verify/worklist.json \
+      --map .coyomap/project-map.json \
+      $(for f in .coyomap/verify/verdicts-*.json; do printf ' --verdicts %s' "$f"; done) \
+      --out .coyomap/build-fragments/grounding.json
   # 3. the SAME assemble again, to carry the record in:
-  .venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex \
-      --reconcile .coyodex/reconcile.json
+  .venv/bin/coyomap assemble .coyomap/build-fragments/*.json --out .coyomap \
+      --reconcile .coyomap/reconcile.json
   ```
 
   Step 3 is safe because `assemble` is idempotent on claims, so it cannot invalidate what step 2
   measured.
 
-  **Then READ what the record only counts — `coyodex grounding report --map`, same arguments.**
+  **Then READ what the record only counts — `coyomap grounding report --map`, same arguments.**
   `write` reduces the pass to four numbers plus a digest; `report` prints WHICH claims were
   superseded, refuted, tied, unverifiable or unvoted. Read it before writing `grounding.note`, and
   check two things the counts cannot show:
@@ -2721,18 +2721,18 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   within total, the confirmed+refuted+unverifiable split, no negatives) are all self-consistent
   against a stale pin. `finalize` raises an advisory when the pin and the live worklist disagree,
   and L3 assertions 13 and 14 watch the ordering and the number. `--verdicts` is REPEATABLE: pass
-  the per-batch files, do not hand-merge. **Then run `coyodex anchor-drift --map … --verdicts …`** —
+  the per-batch files, do not hand-merge. **Then run `coyomap anchor-drift --map … --verdicts …`** —
   a deterministic check that flags any CONFIRMED claim whose stored `where` drifts from the line the
   skeptics found; reconcile each by **fixing the map's `where`** (the check flags, you apply — the
   LLM only observed the line). **Apply the drift fixes with the tool, never a hand script:**
-  `coyodex anchor-drift … --json` emits the corrected anchors and `coyodex fix apply-drift --map …
+  `coyomap anchor-drift … --json` emits the corrected anchors and `coyomap fix apply-drift --map …
   --verdicts …` writes them, matching each on the full `(src, verb, dst)` triple — an endpoints-only
   key swaps a paired `persists`/`reads` edge. `apply-drift` rewrites a drifted **rule SITE** anchor
   the same way, so a skeptic's corrected auth-check line lands with the tool, not a hand
   re-serialize. (It also still rewrites a legacy `security[].source`. **`fix security-row` and `fix
   dedup-security` act on `security[]` only**, which the T7 fold leaves empty — on a map built with
   the current method they print "no security rows" and exit 0, so a rule's TEXT is fixed in its
-  fragment, not with a verb.) To drop a **refuted** edge as a terminal post-assemble fix, `coyodex
+  fragment, not with a verb.) To drop a **refuted** edge as a terminal post-assemble fix, `coyomap
   fix drop-edge` removes it and reports (or, with `--repoint`/`--drop-steps`, heals) the flow steps
   that rode it; **`--to-reconcile <file>` records the drop as a `drop_edges` directive instead of
   editing the map**, which is what makes it survive the next assemble. Reconcile every refutation
@@ -2744,12 +2744,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
   | what came back | where it goes |
   | --- | --- |
-  | refuted, an edge | `coyodex fix drop-edge` (or repoint) |
-  | refuted, an anchor moved | `coyodex fix apply-drift` |
+  | refuted, an edge | `coyomap fix drop-edge` (or repoint) |
+  | refuted, an anchor moved | `coyomap fix apply-drift` |
   | refuted, an ACCESS rule's TEXT is wrong ("that line guards nothing, the real gate is X") | fix the owning T7 fragment's rule (`statement` / `why` / `risk` / `access`) and re-assemble — there is no `fix` verb for a rule's text |
-  | refuted, an access rule's SITE is wrong (the enforcement line moved) | `coyodex fix apply-drift` — a rule site is a claim-shaped, drift-eligible anchor like any other |
+  | refuted, an access rule's SITE is wrong (the enforcement line moved) | `coyomap fix apply-drift` — a rule site is a claim-shaped, drift-eligible anchor like any other |
   | two fragments harvested one auth check | fuse them in the fragment: one decision enforced in several places is ONE `access` rule with several sites |
-  | **true, but your note / list / transition is wrong** | fix the fragment, or `coyodex record` the decision — it is NOT a refutation and no counter will miss it |
+  | **true, but your note / list / transition is wrong** | fix the fragment, or `coyomap record` the decision — it is NOT a refutation and no counter will miss it |
   | unverifiable | the `unverifiable` verdict, and a line in `grounding.note` |
 
   The *true, but your note / list / transition is wrong* row is the one that disappears, because
@@ -2777,18 +2777,18 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   — the mechanical duplication detector only catches *identical* runs, so depth-inconsistent
   retellings are found here; fix by extracting a sub-flow or aligning the depths. Re-validate →
   re-audit → render after fixes.
-  - **Ordering — ONE sequence, and `coyodex ship` RUNS it.** The list below is the reference for
+  - **Ordering — ONE sequence, and `coyomap ship` RUNS it.** The list below is the reference for
     what happens; the way to execute steps 2–12 is the verb, which stops at the first failing step
     and names every step that did not run:
 
     ```
-    .venv/bin/coyodex ship <repo>                       # PREPARE: steps 2-5, then stop — read the
+    .venv/bin/coyomap ship <repo>                       # PREPARE: steps 2-5, then stop — read the
                                                         #   report it ends on, write the note
-    .venv/bin/coyodex ship <repo> --note-file <path> \
+    .venv/bin/coyomap ship <repo> --note-file <path> \
         [--partial] [--access-baseline <old-map>]       # FINISH: through step 12
     ```
 
-    It derives every path from `<repo>/.coyodex/` (map, fragments, reconcile.json, the pinned
+    It derives every path from `<repo>/.coyomap/` (map, fragments, reconcile.json, the pinned
     `verify/worklist.json`, `verify/verdicts-*.json`) and refuses, naming the missing input, rather
     than running a shorter sequence — so a skipped step can never read as a clean one. Steps 0, 1
     and 13 stay yours: the collection-time verdicts lint, the refutation reconcile, and the commit.
@@ -2822,7 +2822,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     11. validate `--check-sources`, then audit, then render.
     12. finalize with the verdicts AND `--emit-gate-block`, in ONE run.
     12b. YOURS — if this build ran an EXPERIMENT the backlog asked for, write its answer somewhere
-        durable BEFORE the commit: `COYODEX_HOME/eval/retro/backlog.md`, or the map's own extras. A
+        durable BEFORE the commit: `COYOMAP_HOME/eval/retro/backlog.md`, or the map's own extras. A
         scratchpad is not a destination: on one build the experiment ran, answered its question with
         real numbers, and the 53-line write-up was left in a temp folder, one sweep from gone, while
         the backlog row still read unanswered. That question had been parked three times before
@@ -2858,7 +2858,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     only for a genuinely terminal touch-up after step 6, and re-run `grounding write` if you do. If
     Phase 4 surfaces a change that must live in a fragment, edit the fragment, re-assemble, and
     re-run the grounding reconcile after (never the other way round). Keep the **verdicts file OUT
-    of `build-fragments/`** (e.g. under `.coyodex/verify/`) so a `*.json` glob into `assemble` can't
+    of `build-fragments/`** (e.g. under `.coyomap/verify/`) so a `*.json` glob into `assemble` can't
     pick it up — `assemble` now skips a stray verdicts file with a note, but keeping it out of the
     fragment dir is the clean habit.
   - **Where each reconcile lives — reconcile file vs `fix` verbs.** Build-time drop/dedup (a
@@ -2886,13 +2886,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     re-derives the edge from it** — so heal it, or the drop does not stick. `assemble` prints the
     unhealed count in its final digest line for exactly this reason. Zero matches warns, never fails,
     so a directive that outlives its edge does not rot the build.
-  - **A duplicated domain relation BLOCKS validate — resolve it with `coyodex fix dedup-relation`.**
+  - **A duplicated domain relation BLOCKS validate — resolve it with `coyomap fix dedup-relation`.**
     The same `E→E` relation declared on both entity cards (or twice on one) is a hard validate error,
     not an advisory, so the build cannot finish until you pick a survivor. Run it with no `--drop` to
     LIST each duplicate with the token that resolves it, then re-run naming the occurrence to remove:
     ```
-    .venv/bin/coyodex fix dedup-relation --map .coyodex/project-map.json
-    .venv/bin/coyodex fix dedup-relation --map .coyodex/project-map.json --drop <En:verb:Em>
+    .venv/bin/coyomap fix dedup-relation --map .coyomap/project-map.json
+    .venv/bin/coyomap fix dedup-relation --map .coyomap/project-map.json --drop <En:verb:Em>
     ```
     Same ordering rule as the other `fix` verbs: it edits the assembled map, so run it AFTER the last
     assemble, or fix the duplicate in the fragment and re-assemble instead.
@@ -2909,11 +2909,11 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 **Harvest-prompt template (Phase 1).** The copyable contract is
 [method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every harvest
 agent a POINTER to its filled copy (the pointer-dispatch rule above), changing only the file list
-and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
-contract harvest --slots` prints the slot skeleton, and `coyodex contract harvest --fill
+and the background blurb. **Get it with the verb, never by copying the file:** `coyomap
+contract harvest --slots` prints the slot skeleton, and `coyomap contract harvest --fill
 <slots.json> --out <scratch>/briefs/<agent-id>.md --brief <agent-id>` writes the brief and prints
 the pointer to send, one call per slice. The `--fill` is what records the brief's
-«EXPECTED_COMPONENTS» in `.coyodex/verify/budgets.json` (a hand-filled copy records nothing), and
+«EXPECTED_COMPONENTS» in `.coyomap/verify/budgets.json` (a hand-filled copy records nothing), and
 `finalize` sums those budgets against what shipped (the `component budget` leg, held to the same
 ±40 % band each slice is held to): 60 budgeted and 114 shipped is a sentence at assemble time, not
 a `Balance exceptions` record 450 turns later.
@@ -2926,7 +2926,7 @@ the ones that have gone missing) from the contract every agent is handed.
 
 **Business-rule contract (Phase 3).** The copyable contract is
 [method/templates/rules-contract.md](method/templates/rules-contract.md). Get it the same way —
-`coyodex contract rules > <scratch>/rules-contract.md` — then fill the «angle-bracket» slots, and
+`coyomap contract rules > <scratch>/rules-contract.md` — then fill the «angle-bracket» slots, and
 for the same reason. A rule agent authors every `statement` and every `risk`, the two fields a
 reader meets when asking what the product decides. This template exists because one build had none:
 the lead composed the rules contract from prose and told all eleven rule agents to put a `block`
@@ -2964,14 +2964,14 @@ folds — the pre-index guardrail applies); a cheap deterministic backstop exist
 and never-referenced dirs.
 
 **Output files — model + generated views.** Build writes a **new** baseline and overwrites any
-existing `.coyodex/` map, so you should only be here for a first map or a user-confirmed rebuild —
+existing `.coyomap/` map, so you should only be here for a first map or a user-confirmed rebuild —
 [dispatch](method/dispatch.md) routes an existing baseline to Analyze, not Build. The committed
-source of truth is `.coyodex/project-map.json` ([the map model](method/model.md)),
-written by `coyodex assemble` together with its generated markdown view, `.coyodex/project-map.md`
-(readable diffs). Both are committed — and so is the structural pre-index `.coyodex/preindex.json`
+source of truth is `.coyomap/project-map.json` ([the map model](method/model.md)),
+written by `coyomap assemble` together with its generated markdown view, `.coyomap/project-map.md`
+(readable diffs). Both are committed — and so is the structural pre-index `.coyomap/preindex.json`
 when the build produced one: the viewer's symbol search reads it, pinned to the map's commit, so it
 must ship with the map (it is generated at that commit, so its `file:line` anchors match). The
-interactive C4 diagram is not a committed file: it is served live by `coyodex serve` (built on
+interactive C4 diagram is not a committed file: it is served live by `coyomap serve` (built on
 demand from the model). Record the commit the map was built
 at in the model's `commit`/`committed`/`built` fields (the baseline pin — see the pin gate below).
 
@@ -2979,18 +2979,18 @@ at in the model's `commit`/`committed`/`built` fields (the baseline pin — see 
 *exactly* this commit". The map you just read reflects the **working tree**, so if the code has
 uncommitted changes, HEAD alone is a misleading pin (and a later `git diff <pin>..<now>` would miss
 the edits already baked into the map). So before recording the pin, check the analyzed repo for
-uncommitted **code** — coyodex's own files under `.coyodex/` (map / markdown view / report) don't count, they
+uncommitted **code** — coyomap's own files under `.coyomap/` (map / markdown view / report) don't count, they
 are always in flux and the workflow commits them:
 
 ```
-git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is committed
+git -C <repo> status --porcelain -- . ':(exclude).coyomap'   # empty = code is committed
 ```
 
 - **Code committed** (empty output) → record the pin from HEAD:
   `git -C <repo> rev-parse --short HEAD` (the sha) and
   `git -C <repo> show -s --format=%cs HEAD` (its commit date, `YYYY-MM-DD`).
 - **Uncommitted code** → first LOOK at the diff. When it is **trivial** — comments and/or whitespace
-  only, no code lines (`git -C <repo> diff -w --ignore-blank-lines -- . ':(exclude).coyodex'` empty,
+  only, no code lines (`git -C <repo> diff -w --ignore-blank-lines -- . ':(exclude).coyomap'` empty,
   and any untracked files are non-source) — do NOT block: proceed automatically as **B** below and
   note the pin choice + the trivial diff in your report. Otherwise STOP and give the user a choice,
   then **loop**:
@@ -3004,7 +3004,7 @@ git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is c
   explicitly chose B, **or** the auto-B trivial-diff rule above applied.
 
   **Asked once, not twice.** [dispatch](method/dispatch.md) Step 0 puts this same A/B question to the
-  user BEFORE the build starts, off the `coyodex scope` briefing. If it was answered there, honour
+  user BEFORE the build starts, off the `coyomap scope` briefing. If it was answered there, honour
   that answer and record the pin — re-asking at the end, after the user already decided and waited
   out a whole build, is the annoyance this gate is supposed to prevent.
 
@@ -3015,17 +3015,17 @@ header line).
 **`built` is stamped LAST and copied BACKWARDS — never guessed early and reused.** The header
 fragment is authored during Assemble and the stamp belongs after the map is written and validated,
 so on a real build they are an HOUR apart. Capture the minute early and reuse it, and both the
-header and `provenance.json` carry the wrong minute permanently — and `coyodex-eval retro-precheck`
+header and `provenance.json` carry the wrong minute permanently — and `coyomap-eval retro-precheck`
 reads exactly that field to decide whether a build has finished.
 
 So: write `header.json` with `built` **empty**, and fill it from the stamp at the end.
 
 **Stamp the conversation (provenance).** After the map is written and validated, record which
-conversation built it — run (paths under the coyodex clone, like `.venv/bin/coyodex`):
+conversation built it — run (paths under the coyomap clone, like `.venv/bin/coyomap`):
 
 ```
-.venv/bin/coyodex provenance stamp <repo> --mode build \
-    --update-header <repo>/.coyodex/build-fragments/header.json   # NO --built-at: real clock
+.venv/bin/coyomap provenance stamp <repo> --mode build \
+    --update-header <repo>/.coyomap/build-fragments/header.json   # NO --built-at: real clock
 # --update-header writes the stamped minute into `built` for you. Then re-run `assemble` and
 # `render` so the filled header reaches the map.
 ```
@@ -3038,24 +3038,24 @@ last write of the whole build was a hand-script.
 Pass `--built-at` only when you are deliberately restating a time you did not just measure (an
 `accept` pass re-stamping an earlier build). On a build it is the flag that makes the map lie.
 
-It reads this session's id from `$CLAUDE_CODE_SESSION_ID` and writes `<repo>/.coyodex/provenance.json`
+It reads this session's id from `$CLAUDE_CODE_SESSION_ID` and writes `<repo>/.coyomap/provenance.json`
 (committed — session id + build time), so a later `.venv/bin/python tools/map_backup.py backup <repo>`
 can bundle the map **and** the exact transcript deterministically. Run it in the **main** build
 session, not a delegated sub-agent, so the id recorded is the driver conversation's. **Commit
 `provenance.json`** with the map + diagram.
 
 **Assemble the model from the agents' fragments — never hand-author the stored file.** Each agent
-wrote its JSON fragment to the scratch dir (`.coyodex/build-fragments/<agent>.json` — the harvest
-prompt's output rule); `coyodex assemble` itself writes a `.coyodex/.gitignore` entry ignoring
+wrote its JSON fragment to the scratch dir (`.coyomap/build-fragments/<agent>.json` — the harvest
+prompt's output rule); `coyomap assemble` itself writes a `.coyomap/.gitignore` entry ignoring
 `build-fragments/`, so the scratch dir never dirties the tree (you may still delete it after a
 successful assemble — the model is the record). Write one small `header.json` fragment yourself
 (`title`, `goal`, the pin fields — as **top-level keys**, NOT wrapped in a `header` object), and
-**lint it too before assembling** (`coyodex lint-fragment .coyodex/build-fragments/header.json`): the
+**lint it too before assembling** (`coyomap lint-fragment .coyomap/build-fragments/header.json`): the
 header is the one hand-authored fragment that otherwise skips the self-check every sub-agent runs, so a
 stray key here is the one thing that still fails `assemble`. Then run:
 
 ```
-.venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex
+.venv/bin/coyomap assemble .coyomap/build-fragments/*.json --out .coyomap
 ```
 
 It validates every fragment against the schema (a malformed fragment fails ALONE, with its file and
@@ -3067,8 +3067,8 @@ the stored JSON is always tool-written, so its validity is guaranteed by the ser
 (The old markdown template,
 [`method/templates/project-map.template.md`](method/templates/project-map.template.md), now only
 documents the generated view's shape — it is no longer filled in by hand.) Run the validator —
-`.venv/bin/coyodex validate .coyodex/project-map.json --check-sources --check-coverage`
-([tools/coyodex/validate_model.py](tools/coyodex/validate_model.py)) — after each assemble/patch and
+`.venv/bin/coyomap validate .coyomap/project-map.json --check-sources --check-coverage`
+([tools/coyomap/validate_model.py](tools/coyomap/validate_model.py)) — after each assemble/patch and
 fix the model (via fragments / field edits + re-assemble or re-render) until it passes
 (`--check-sources` reads each entity's `source` to reject synthesized entities — names with no real
 named type; `--check-coverage` re-walks the repo and WARNS — non-blocking — when many sibling source
@@ -3082,8 +3082,8 @@ anything at or under it — one `plugins/` line replaces a per-plugin record for
 it. It is **boundary-scoped**: a real gap in an *unlisted* dir still warns, and `plugins/` never
 silences a `plugins-legacy/` sibling. (The component-count-vs-E advisory has its own token — the
 literal `granularity` under "Balance exceptions".) **Then run the adversarial pass** —
-`.venv/bin/coyodex audit .coyodex/project-map.json`
-([tools/coyodex/audit_model.py](tools/coyodex/audit_model.py)). Where validate asks *is the map
+`.venv/bin/coyomap audit .coyomap/project-map.json`
+([tools/coyomap/audit_model.py](tools/coyomap/audit_model.py)). Where validate asks *is the map
 well-formed*, audit asks *is it self-contradictory*: it makes the map's two layers — the narrative
 Happy Path (step order, actors) and the mechanism (T6 flows + the backbone edge list) — refute each
 other, deterministically, with no code. The map is **over-determined** (each precondition is encoded
@@ -3112,14 +3112,14 @@ after every write is **validate --check-sources → audit → render** (`--check
 optional — it is the deterministic backstop that a nonexistent-file anchor / wrong repo-root prefix
 can never slip through).
 
-**Run `coyodex finalize` as the pre-commit read.** It runs that sequence plus the SHAPE-ONLY
-anchor-drift pass in one command, and writes every finding to `.coyodex/finalize-report.{json,md}`
+**Run `coyomap finalize` as the pre-commit read.** It runs that sequence plus the SHAPE-ONLY
+anchor-drift pass in one command, and writes every finding to `.coyomap/finalize-report.{json,md}`
 with whole lists. The verdict-based drift pass runs only when you hand it `--verdicts`; without
 that flag the leg simply does not run and nothing in the report says so, so a run without it is
 not the full pre-commit read:
 
 ```
-.venv/bin/coyodex finalize .coyodex/project-map.json --repo <repo> [--verdicts <file>]...
+.venv/bin/coyomap finalize .coyomap/project-map.json --repo <repo> [--verdicts <file>]...
 ```
 
 It adds no check of its own. What it adds is a record and an answer:
@@ -3140,7 +3140,7 @@ It adds no check of its own. What it adds is a record and an answer:
   **`grep -v` on a gate's output is the same move in disguise:** filtering a family out of your own
   view is not reconciling it. If a family is noise, record an exception; never delete it from the
   report you are reading. When a message says a recorded exception silenced more than it names, the
-  re-read is **`coyodex validate <map> --ignore-exceptions`** — not a hand-edited copy of the map.
+  re-read is **`coyomap validate <map> --ignore-exceptions`** — not a hand-edited copy of the map.
 - **it says whether every check actually ran.** Run the three commands by hand and a skipped one
   looks exactly like a clean one. A leg that should have run and did not makes the verdict
   `INCOMPLETE`, which exits non-zero — "the gate did not run" must never read as "the gate passed".
@@ -3152,7 +3152,7 @@ An honest verdict in chat and a clean-sounding commit message are not the same d
 commit is the only record a future reader sees. `finalize --emit-gate-block <file>` writes the block
 to paste, so the durable record is generated rather than remembered.
 
-**Then actually commit.** The build is not over at `finalize`. Stopping there leaves `.coyodex/`
+**Then actually commit.** The build is not over at `finalize`. Stopping there leaves `.coyomap/`
 untracked, so a map that cost hours and hundreds of dollars exists only in one working tree — and
 the whole argument for generating the gate block is that the commit is the durable half. `finalize`
 prints the exact `git add -f` line to use; run it, and commit the pre-index and provenance with the
@@ -3163,7 +3163,7 @@ reason to believe them is the pinned worklist, the claims batches and every skep
 plus the fragments each agent authored. `grounding.note` cites the verdict rows BY COUNT as that
 reason. Ship the counts without the rows and a fresh clone has the conclusion and can check no part
 of it — which is what happened on the 2026-09-02 mcpolis build: 71 verify files and 47 fragments,
-force-added by nothing, in a repo whose `.gitignore` ignores `.coyodex/`. The `git add -f` line
+force-added by nothing, in a repo whose `.gitignore` ignores `.coyomap/`. The `git add -f` line
 `finalize` prints now names both directories. They are also what makes the NEXT build's
 change-analysis and the eval's archive possible; regenerating them costs another full build.
 
@@ -3172,7 +3172,7 @@ against what the map's extras actually record. Read that table rather than the r
 
 **ADVISORIES is not a pass** — fix each one, or record it under the extras heading its message
 names. **Where a verb exists, use it.** `validate`'s "the '<verb>' edge is declared N times with
-differing call sites" has one: **`coyodex fix dedup-edge --map … --repo …`** lists every conflicting
+differing call sites" has one: **`coyomap fix dedup-edge --map … --repo …`** lists every conflicting
 triple with its competing anchors and suggests the likeliest true site, and `--keep
 <src:verb:dst:path:line>` drops the rest. **Some advisories deliberately name no heading.**
 `tests/test_method_contract.py`'s `KNOWN_NO_ESCAPE` is that list, each entry with its own reason,
@@ -3194,10 +3194,10 @@ line that silences nothing looks exactly like no line at all. **A bucket the see
 has its own escape: `Bucket vocabulary`.** A project whose real vocabulary needs a bucket the
 library seeds never named (an MCP gateway genuinely has an "MCP protocol" bucket) would otherwise be
 told to rename it on every rebuild, forever — advice that pulls against itself, because reusing the
-previous map's spelling for stability is what earns the warning. Record ``coyodex record --map
-.coyodex/build-fragments/extras.json --heading "Bucket vocabulary" --line "MCP protocol: <why this
+previous map's spelling for stability is what earns the warning. Record ``coyomap record --map
+.coyomap/build-fragments/extras.json --heading "Bucket vocabulary" --line "MCP protocol: <why this
 project needs it>"`` — **name the FRAGMENT**, not the assembled map: `--map` defaults to
-`.coyodex/project-map.json`, and `record --help` calls that "the edit the next assemble discards". A
+`.coyomap/project-map.json`, and `record --help` calls that "the edit the next assemble discards". A
 record written into the map is a decision that silently un-records itself. and the nudge stops for
 that bucket only; a summary line still reports what the record silenced. **A decision-sounding step
 that is NOT a business rule has its own escape: `Sweep debt`.** Once a map carries business rules,
@@ -3205,10 +3205,10 @@ that is NOT a business rule has its own escape: `Sweep debt`.** Once a map carri
 the sweep worklist, and the only thing that says whether the sweep finished. There is deliberately
 no `swept` field to set: a boolean asserting "I searched the whole repo" is unfalsifiable, and
 hand-assigned data rendered as derived is what makes a screen confidently wrong. So the list shrinks
-two ways only — write the rule, or say why the step is not one. Record ``coyodex record --heading
+two ways only — write the rule, or say why the step is not one. Record ``coyomap record --heading
 "Sweep debt" --line "<the step's anchor>: <why this is plumbing, not a decision>"`` under the
 **"Sweep debt"** extras heading — **name the FRAGMENT** (`--map
-.coyodex/build-fragments/extras.json`), not the assembled map, for the reason the bucket paragraph
+.coyomap/build-fragments/extras.json`), not the assembled map, for the reason the bucket paragraph
 above gives. The key is whatever the advisory prints: the step's own `path:line` for a
 decision-sounding step, and a `BRn` for the other finding this heading answers — a rule whose sites
 land in files no component claims, which renders with no component and cannot be verified. Both work
@@ -3218,7 +3218,7 @@ silently). Every suppression is REPORTED, and it moves a derived number: a recor
 swept. **OPEN THE FILE before recording one.** The escape is for "the skeptics read a sibling file
 and the stored anchor is right" — a claim about what is at a `path:line`, which you cannot know
 without looking. Reasoning about what an anchor "is defined to point at" is not looking. (L3
-assertion 17 watches this.) Write the record with **`coyodex record --heading "Drift exceptions"
+assertion 17 watches this.) Write the record with **`coyomap record --heading "Drift exceptions"
 --line "…"`** rather than a hand-rolled append: it checks the heading is one a check actually reads,
 refuses a key with no why, and `--replace <prefix>` is how you correct a record whose facts moved.
 `finalize` exits non-zero for what validate and audit already block on, and for `INCOMPLETE`;
@@ -3231,34 +3231,34 @@ blocking contradiction (advisories reconciled), regenerate the committed markdow
 model (assemble already wrote it; re-run after any patch):
 
 ```
-.venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.md
+.venv/bin/coyomap render .coyomap/project-map.json .coyomap/project-map.md
 ```
 
 It is a *rendering* of the model (no second source; never hand-edit it — `validate` flags a stale
 view) — commit it alongside the model so the two stay in step. The interactive diagram is not a file:
-it is served live from the model by `coyodex serve`. **Finish by reporting the artifacts as links** —
-the model (`.coyodex/project-map.json`) and the markdown view (`.coyodex/project-map.md`), as relative
+it is served live from the model by `coyomap serve`. **Finish by reporting the artifacts as links** —
+the model (`.coyomap/project-map.json`) and the markdown view (`.coyomap/project-map.md`), as relative
 paths. **Then give the reader the URL to open the interactive map in a browser through the
-coyodex map server** — that is where the diagram, file browser, and code viewer light up (data + source
+coyomap map server** — that is where the diagram, file browser, and code viewer light up (data + source
 served from git at the map's commit). Rendering just registered this project with the server, so it shows up there as a
-card. Tell the reader: if the server isn't already running, start it once from the coyodex clone —
-`make start` (or `.venv/bin/coyodex serve`) — then open `http://127.0.0.1:8765/coyodex/<repo-folder-name>/`
+card. Tell the reader: if the server isn't already running, start it once from the coyomap clone —
+`make start` (or `.venv/bin/coyomap serve`) — then open `http://127.0.0.1:8765/coyomap/<repo-folder-name>/`
 (the `<repo-folder-name>` is the mapped repo's folder name), or the landing page
-`http://127.0.0.1:8765/` and click this project. (Paths like `.venv/bin/coyodex` are relative to the
-coyodex clone, like the validator above.) For the address of ONE element — a use case the reader asked
-about, a rule — `.venv/bin/coyodex url <ID> --repo <repo>` prints it, port included.
+`http://127.0.0.1:8765/` and click this project. (Paths like `.venv/bin/coyomap` are relative to the
+coyomap clone, like the validator above.) For the address of ONE element — a use case the reader asked
+about, a rule — `.venv/bin/coyomap url <ID> --repo <repo>` prints it, port included.
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /
-added / deleted), then accept: patch the MODEL (`.coyodex/project-map.json` — surgical field
+added / deleted), then accept: patch the MODEL (`.coyomap/project-map.json` — surgical field
 edits), bump the baseline pin, re-stamp provenance
 (`.venv/bin/python tools/map_backup.py stamp <repo> --mode accept --built-at '<YYYY-MM-DD HH:MM>'`,
 which appends this session), **re-run validate → audit** (a patch can introduce a fresh
 self-contradiction — e.g. a re-ordered Happy Path step now reads before it creates), **re-render
-the markdown view** (`coyodex render … project-map.md`, so it tracks the patched model; the diagram
+the markdown view** (`coyomap render … project-map.md`, so it tracks the patched model; the diagram
 is served live) and, when the map has a pre-index, **regenerate it at the new pin**
-(`coyodex preindex --root <repo>`, so the viewer's symbol search stays aligned with the re-pinned
-map), save the annotated diff under `.coyodex/analysis-changes/<date>.md`, and commit the
+(`coyomap preindex --root <repo>`, so the viewer's symbol search stays aligned with the re-pinned
+map), save the annotated diff under `.coyomap/analysis-changes/<date>.md`, and commit the
 model + markdown view + pre-index + `provenance.json` with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
@@ -3277,7 +3277,7 @@ one map**, three ways:
 
 All three are ordinary single-map edits; the viewer then drills the new level automatically. **Altitude may
 be uneven** — refine only where you need detail; an area you haven't drilled stays a single box. This
-**supersedes child maps** (a second `.coyodex/<area>/project-map.md`): a separate file is a separate ID
+**supersedes child maps** (a second `.coyomap/<area>/project-map.md`): a separate file is a separate ID
 space, so links can't cross it and Analyze/Accept won't track it — see [dispatch](method/dispatch.md).
 
 **How to apply.** Lead with the behavioral layer (T0 Goal → Glossary → Roles → Use cases →
