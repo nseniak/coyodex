@@ -1908,24 +1908,26 @@ def test_the_two_views_number_steps_differently_on_purpose() -> None:
     assert "→ SF1 step 7" in t7_section(m)                  # the AUTHORED n, matching T6b
 
 
-def test_the_readme_lists_the_business_rules_tab_in_tab_order() -> None:
-    """The tab list is the product's advertised surface — a view missing from it does not exist for a
-    reader, and one listed out of order contradicts the bar they are looking at. The README names the
-    five GROUPS, each bullet naming its own views, so it has to agree on both: the group row's order,
-    and the view order inside each group."""
+def test_the_readme_names_the_viewer_groups_and_no_tab() -> None:
+    """The README describes each GROUP in one sentence and shows its tabs in a screenshot, so the text
+    has to agree with the viewer on the groups (name and order) and must not name a tab in bold: a tab
+    named in prose goes stale the day it is renamed (Subsystems became Components on 2026-09-13 while
+    the README still said Subsystems), whereas a screenshot is retaken. Group labels are READ from
+    viewer.js's VIEW_GROUPS, the one list the viewer boots its top row from."""
+    js = (VIEWER / "viewer.js").read_text(encoding="utf-8")
+    groups_src = js[js.index("const VIEW_GROUPS = ["):]
+    groups_src = groups_src[:groups_src.index("];")]
+    groups = [label for _gid, label in re.findall(r"\['(\w+)', '([^']+)',", groups_src)]
+    assert groups, "no groups found in viewer.js"
+    html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
+    tabs = set(re.findall(r'<button data-view="[a-z]+" data-group="[a-z]+">([^<]+)</button>', html))
+
     readme = (REPO / "README.md").read_text(encoding="utf-8")
-    body = readme[readme.index("The viewer presents its views in five groups"):
-                  readme.index("## Why not just ask my agent")]
-    groups = [l.split("**")[1] for l in body.splitlines() if l.startswith("- **")]
-    assert groups == ["Product", "Data", "Code", "Operations", "Glossary"], groups
-    # Each group's bullet names its views, in the order the sub-tab row draws them.
-    inside = {g: body.split(f"- **{g}**")[1].split("\n- **")[0] for g in groups}
-    for group, views in (("Product", ["Features", "Happy Path", "Interfaces", "Rules"]),
-                         ("Data", ["Entities", "Storage"]),
-                         ("Code", ["Subsystems", "Dependencies", "Tests"]),
-                         ("Operations", ["Deployment", "System"])):
-        at = [inside[group].index(f"**{v}**") for v in views]   # raises if a view is unlisted
-        assert at == sorted(at), (group, views)
+    body = readme[readme.index("## What coyodex shows"):readme.index("## Why not just ask my agent")]
+    named = [l.split("**")[1] for l in body.splitlines() if l.startswith("**")]
+    assert named == groups, (named, groups)
+    stale = set(re.findall(r"\*\*([^*]+)\*\*", body)) & tabs
+    assert not stale, f"a tab named in the README's prose goes stale when it is renamed: {stale}"
 
 
 def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:

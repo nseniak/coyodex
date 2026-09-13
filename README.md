@@ -10,53 +10,62 @@
 
 ## What is coyodex?
 
-coyodex analyzes your project and builds an interactive map where every box is
-annotated in plain language by your coding agent and anchored to code locations.
-Use it to understand what your system does and how, top-down, without reading all
-of it. Drill into the code only where and when you actually need to.
+coyodex analyzes your project and builds an interactive map of its features, in plain language,
+linked to the underlying architecture and code. Use it to understand what your product does and
+how it is implemented, top-down, without reading all the code. Drill into the code only where and
+when you actually need to.
 
 ## Why coyodex?
 
-When your agent generates a lot of code for you, you can end up with code you've
-completely lost track of. It runs fine until the day you need to understand it,
-and then you find there's nothing under your feet. This is the Coyote Effect.
+When coding agents generate most of your code, you can lose track of your project's features
+and implementation. Everything runs fine until the day you look down and see there is nothing
+under your feet. This is the Coyote Effect.
 
 coyodex helps you recover from this situation and oversee your agent's work moving forward.
 
+The map is also a shared picture: a product manager reads what is in the project on the same map
+the developer works from.
+
 ## What coyodex shows
 
-<img src="assets/viewer.png" alt="The coyodex viewer: one group of a project's entities drawn on the left, the plain-language explanation of the selected entity below it, and that entity's source code on the right. Above the diagram, the five view groups and the views inside the open one." width="100%">
+The viewer shows a map in two groups.
 
-*The viewer: one part of a project's domain model, the selected box explained in plain language, and the code it is grounded in.*
+**Product** — the product's functionality: its features and use cases, the happy path, the rules it
+enforces, and what it knows about.
 
-The viewer presents its views in five groups, and each view answers one question:
+<img src="assets/viewer-product.png" alt="The coyodex viewer on a project's Features page: the people who use the product on the left, its features in happy-path order in the middle, and the data each feature owns on the right. No code on screen." width="100%">
 
-- **Product** — what it does for the people who use it: its **Features** and the use cases inside
-  each one, the **Happy Path** end to end, the **Interfaces** where it meets the outside world, and
-  the **Rules** it enforces.
-- **Data** — what it knows about: the **Entities** and how they relate, and the **Storage** they
-  live in.
-- **Code** — what it is made of: its **Subsystems**, the **Dependencies** it pulls in from outside,
-  and what the **Tests** cover.
-- **Operations** — what runs and how you run it: the **Deployment** topology, and the **System**
-  facts no diagram holds (how to run it, watch it, secure it, configure it).
-- **Glossary** — what this project's own words mean.
+*The Product group, on the Features page: who uses the product, what it does, and the data behind each
+feature.*
 
-## Why not just ask my agent to diagram the code?
+**Under the hood** — how it is built and run: its components and their dependencies, where data is
+stored, how it is deployed.
 
-Sure, you can ask your agent to analyze the code and draw mermaid diagrams. But coyodex differs in
-three ways:
+<img src="assets/viewer-hood.png" alt="The coyodex viewer on a project's Components page: the map of one subsystem with one component selected and explained in a sentence, and that component's source code open on the right at the line the map points to." width="100%">
 
-1. **Grounded, explorable map.** Every box is anchored to a real `file:line`, and explorable through
-   an interactive UI: drillable top-down, from high level components to code locations, and back.
-2. **Annotated in plain language.** Every box and arrow carries a natural-language explanation of the functionality and the implementation.
-3. **Tool-guided extraction and verification.** Indexing and code-sizing tools help the agent extract information from the code, then a final adversarial pass has fresh agents try to disprove each claim against the code.
+*Under the hood, on the Components page: one subsystem's map, the selected component explained in one
+sentence, and its code beside it at the line the map points to.*
 
+Start from a feature and drill down: the interfaces and data it touches, the components that do the
+work, and the code behind each.
+
+## Why not just ask my agent to explain the code?
+
+Sure, you can ask your agent to analyze the code and draw diagrams. But coyodex differs in
+two ways:
+
+- coyodex builds an explorable, hierarchical map: every box has a plain-language note, links to
+  related boxes, and links into the architecture and code. The map is saved with the project, so
+  everyone sees the same one.
+- An AI agent can miss things or make things up. So coyodex reads the code with the help of an
+  index, makes every claim point at a real file and line, checks the map for gaps and
+  contradictions, and has fresh agents try to prove each claim wrong before the map is written.
 
 ## How to use
 
 coyodex runs as an agent skill on Claude Code, Codex, and Cursor. Install it once, then drive
-everything with `/coyodex`.
+everything with `/coyodex`. You need a checkout of the project and one of the three agents. Having
+written the code, or reading it, is not required.
 
 ### Installing
 
@@ -75,8 +84,8 @@ make install
 This installs the skill into each agent's global skills home (`~/.claude/skills` for Claude Code,
 `~/.agents/skills` for Codex and Cursor).
 
-It also builds a repo-local virtualenv with the `coyodex` CLI. Re-run `make install` only if you move
-the repo.
+It also builds a repo-local virtualenv with the `coyodex` CLI. After you update the clone
+(`git pull`), or if you move it, run `make install` again: it refreshes both the tool and the skill.
 
 ### Building a map
 
@@ -86,9 +95,15 @@ the repo.
 /coyodex
 ```
 
-Writes the map to `.coyodex/` (a JSON model plus a readable markdown view), pinned to the current
-commit. Commit the `.coyodex/` folder with your code. The interactive viewer isn't a committed file;
-it's served live from the model (below).
+Before reading anything, coyodex prints what it is about to read: how many files, what each ignore
+pattern removed, and which commit the map will be pinned to. If you have uncommitted changes, it
+asks whether to wait for a commit.
+
+The map lands in `.coyodex/`, pinned to that commit: the map itself (JSON), a readable markdown
+rendering of it, the code index, a stamp saying which session built it, and the verdicts of the
+verification pass. Commit the folder with your code. The interactive viewer isn't a committed file;
+it's served live from the map (below). With a map already there, `/coyodex` tells you whether the
+map still matches the code; it never rebuilds on its own.
 
 **2. View the map.** A small local server renders the viewer. Start it once, from the coyodex clone:
 
@@ -96,10 +111,10 @@ it's served live from the model (below).
 make start
 ```
 
-It serves a landing page at `http://127.0.0.1:8765/`. Every project you map shows up there as a card;
-click it to open the map. Leave the server running. A map's address starts with `/coyodex/`, and
-`.venv/bin/coyodex url <ID> --repo <repo>` prints the address of one element, already selected — ask
-your agent to "show me X in the map" and it ends with that link.
+It opens a landing page at `http://127.0.0.1:8765/`. Pick your project's folder there once; the
+server remembers it and shows it as a card from then on. Leave the server running. A map's address
+starts with `/coyodex/`, and `.venv/bin/coyodex url <ID> --repo <repo>` prints the address of one
+element, already selected — ask your agent to "show me X in the map" and it ends with that link.
 
 ### Asking for map changes
 
@@ -113,6 +128,9 @@ You can also **just ask for changes** in plain language, and coyodex edits the m
 /coyodex drill deeper into the "Billing" subsystem — I need more detail there
 ```
 
+Every edit runs the same checks as a build. Ask for a feature the code does not have, and coyodex
+says so instead of drawing it.
+
 **A rebuild is a fresh start.** If you later rebuild the map from scratch (which you have to ask for
 explicitly), your manual tweaks aren't re-applied.
 
@@ -125,27 +143,31 @@ coyodex takes every file in your project, except two sets: what your `.gitignore
 `.coyodex/.ignore` excludes. git decides the first one, so all the usual rules hold, including a
 `.gitignore` inside a subfolder. `.coyodex/.ignore` uses the same syntax, and is for the other case:
 code that *is* committed, but that you don't want on the map — a vendored copy, checked-in build
-output, a fixture tree.
+output, a fixture tree. The build reports what each pattern removed, so an exclusion never goes
+unnoticed.
 
 ## Status
 
-**Alpha. Experimental and incomplete.** Expect breaking changes, including to the on-disk map format,
-so a newer version may not read an older map. Good for evaluating and giving feedback; not yet
-something to depend on. The version number lives in the [`VERSION`](VERSION) file at the repo root.
+**Work in progress, in daily use.** As of September 2026, coyodex has built 35 maps of three real
+projects. Before a map is written, fresh agents challenge its claims against the code, and their
+verdicts are stored next to the map. The version number lives in the [`VERSION`](VERSION) file at
+the repo root.
 
 **What works today**
 
-- Build a baseline map of a repo and render it as an interactive, drillable C4 viewer.
+- Build a map of a repo and render it as an interactive, drillable viewer.
 - Ask for map changes in plain language — move, split, rename, or drill deeper into any part.
 - Open a component's or entity's source straight from the viewer, in your editor (VS Code, Cursor,
   IntelliJ, …) or on GitHub.
 
 **Known gaps / rough edges**
 
-- The map format and the method are still moving; treat maps as disposable.
-- Tested mainly on small and medium repos; behavior on large codebases is unexplored.
-- Map quality depends on the coding agent and model; expect to review and correct it.
-- The viewer is a browser page. On github.com the committed HTML shows as source, not rendered; view
-  it via GitHub Pages or a raw-HTML proxy (e.g. raw.githack.com).
+- The stored map format still moves: a newer coyodex may not read an older map. A rebuild is the
+  fix, and it is cheap, so treat a map as replaceable.
+- Two builds of the same commit agree on the code, not on the wording: names and sentences can
+  differ between rebuilds.
+- Exercised on repos of 400 to 1,000 tracked files; larger codebases are unexplored.
+- Map quality depends on the coding agent and model: read it, and correct it. If you do not read
+  code, the code link is what you hand to someone who does.
 
 Feedback and bug reports are welcome, please [open an issue](../../issues).
