@@ -3897,3 +3897,43 @@ def test_a_detail_row_holding_blank_lines_draws_paragraphs_too() -> None:
         assert got == ["First note, on its own.", "Second note, on its own."]
         assert page.js_errors == []
 
+
+
+def test_a_tab_left_below_its_top_wears_the_head_path_chevron_and_no_label_moves() -> None:
+    """A tab you are NOT on that would reopen a page below its top says so, with the › the page head
+    showed while you were inside — and says so OUT OF THE FLOW: every label and every tab box sits
+    where it sat before the mark came. The lit tab wears none, because the head's path is that mark;
+    a tab left at its overview wears none, because it reopens the overview."""
+    labels = """() => [...document.querySelectorAll('button[data-view]')].filter((b) => !b.hidden)
+        .map((b) => { const r = document.createRange(); r.selectNodeContents(b);
+                      const t = r.getBoundingClientRect(); const x = b.getBoundingClientRect();
+                      return [b.dataset.view, Math.round(t.left * 10), Math.round(t.right * 10),
+                              Math.round(x.left * 10), Math.round(x.right * 10)]; })"""
+    marks = """() => [...document.querySelectorAll('button[data-view]')].filter((b) => !b.hidden)
+        .map((b) => [b.dataset.view, b.classList.contains('held'),
+                     getComputedStyle(b, '::after').content, b.title])"""
+    with _served() as url, _page(url + "#v=capability&cap=CAP1") as page:
+        _settle(page)
+        before = page.evaluate(labels)
+        assert [m[0] for m in page.evaluate(marks) if m[1]] == [], "nothing is held before a tab is left"
+        page.evaluate("() => document.querySelector('button[data-view=\"domain\"]').click()")
+        _settle(page)
+        assert page.evaluate(labels) == before, "the mark moved a label or widened a tab"
+        got = {m[0]: m[1:] for m in page.evaluate(marks)}
+        assert got["usecases"][0] is True and got["usecases"][1] == '"›"', got["usecases"]
+        assert got["usecases"][2].startswith("Reopens at "), got["usecases"]
+        assert [v for v, m in got.items() if m[0]] == ["usecases"], got
+        # back to Features: it reopens the feature, and the lit tab wears no mark of its own
+        page.evaluate("() => document.querySelector('button[data-view=\"usecases\"]').click()")
+        _settle(page)
+        assert "cap=CAP1" in page.evaluate("() => location.hash")
+        got = {m[0]: m[1:] for m in page.evaluate(marks)}
+        assert got["usecases"][0] is False and got["usecases"][2] == "Back to Features", got["usecases"]
+        # the lit tab again resets it to its overview; leave once more: nothing below the top, no mark
+        page.evaluate("() => document.querySelector('button[data-view=\"usecases\"]').click()")
+        _settle(page)
+        page.evaluate("() => document.querySelector('button[data-view=\"domain\"]').click()")
+        _settle(page)
+        assert [m[0] for m in page.evaluate(marks) if m[1]] == [], "a tab at its overview holds nothing"
+        assert page.evaluate(labels) == before
+        assert page.js_errors == []

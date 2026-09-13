@@ -206,7 +206,8 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #viewsw { display: inline-flex; flex-wrap: wrap; }
 #viewsw button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 7px 6px; border: 0;
                  background: transparent; color: #4b5563; border-radius: 0; cursor: pointer;
-                 flex: 0 0 auto; white-space: nowrap; border-bottom: 2px solid transparent; }
+                 flex: 0 0 auto; white-space: nowrap; border-bottom: 2px solid transparent;
+                 position: relative; }   /* the anchor for the held mark below */
 #viewsw button:hover { color: #3730a3; }
 #viewsw button.active { color: #4338ca; border-bottom-color: #6366f1; }
 /* THE PAGE HERO, on a page you have DRILLED into: what this page's subject is. It replaces the state
@@ -263,19 +264,19 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
                 background: none; color: #4338ca; cursor: pointer; }
 .hero-details:hover { text-decoration: underline; }
 .hero-details::after { content: " \203a"; }
-/* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
-   whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab
-   reads as "you are here", so this one has to read as "you are inside here": the pill hollows out to an
-   outline, and a small up-arrow says which direction the click goes. It also gains a hover, which the
-   at-the-top tab deliberately has not — an inert control should not pretend otherwise. */
-#viewsw button.active.drilled {
-  background: transparent; box-shadow: inset 0 0 0 1px #c7d2fe; color: #4338ca;
+/* A TAB YOU ARE NOT ON THAT HOLDS A PAGE BELOW ITS TOP (button.held, set by renderChrome): the same ›
+   the page head shows while you are inside the view, moved up to the tab once you leave, so the tab
+   says it will reopen a page rather than the view's overview. Drawn OUT OF THE FLOW: an absolute
+   pseudo-element adds no width, so no label moves when the mark comes or goes. It sits in the tab's
+   own right padding, tight to its label and clear of the next one, so it reads as this tab's and not
+   as a separator between two. The lit tab wears none: the head's path is that mark, under the label.
+   (An up-arrow on the LIT tab was the earlier idea, dropped the day it was drawn: the path already
+   said it.) */
+#viewsw button.held::after {
+  content: "\203a"; position: absolute; left: calc(100% - 5px); top: 0; bottom: 1px;
+  display: flex; align-items: center; font-weight: 400; font-size: 13px; color: #9ca3af;
 }
-#viewsw button.active.drilled::after {
-  content: "\2191"; margin-left: 5px; font-weight: 400; opacity: .75;
-}
-#viewsw button.active.drilled:hover { background: #eef2ff; box-shadow: inset 0 0 0 1px #a5b4fc; }
-#viewsw button.active:not(.drilled):hover { background: #e0e7ff; }   /* at the top: nothing to click to */
+#viewsw button.active:hover { background: #e0e7ff; }
 /* The FEATURES overview: one card per capability, the whole product readable on one screen. A grid of
    equal cards rather than a list, because the cards are peers to be scanned, not steps to be read in
    order. Each card is a <button>, so it is keyboard-reachable like every other drill in the viewer. */

@@ -5207,6 +5207,12 @@ function goTab(view) {
   const saved = tabLast[view];
   go(saved ? { ...saved } : { kind: view }, true);  // instant: a tab switch never plays the drill zoom
 }
+// The page a click on this tab would reopen BELOW the view's top, or null: the tabLast entry goTab
+// replays, when it is not the view's own overview. What the tab's › mark and its hover tip read.
+function heldPage(view) {
+  const saved = tabLast[view];
+  return saved && stateKey(saved) !== stateKey({ kind: view }) ? saved : null;
+}
 // Reset the current tab to its overview: fresh fit, nothing selected, default panel. Drop the remembered
 // camera for the overview so it re-fits instead of reopening at an old zoom. A tab click never animates,
 // so a reset from a drill-down cuts straight to the overview (instant); already sitting on the overview,
@@ -8089,20 +8095,22 @@ function renderChrome(s) {
     // above it says nothing. The strip still renders at its normal height (#stagesubrow min-height), so
     // opening that group does not shunt the diagram up and back down again.
     const lone = groupViews(tg).length < 2;
-    // A tab has THREE states, not two: off, open-at-its-top, and open-but-BELOW. The third is the one
-    // that was missing, and it is the only visible way back up from a page whose breadcrumb is empty —
-    // a feature's page has no crumb, because its parent IS this tab. Clicking an already-open tab has
-    // always jumped to the top of that view (resetTab); nothing on screen said so, because a lit tab
-    // reads as "you are here" rather than as somewhere you can click.
+    // The lit tab below its top wears no mark of its own: the page head's path ("Features ›") names
+    // the way back up, directly under the label, and clicking the lit tab does the same (resetTab).
     const atRoot = stateKey(s) === stateKey({ kind: tv });
     viewsw.querySelectorAll('button[data-view]').forEach((b) => {
       b.hidden = lone || b.dataset.group !== tg;
       const on = b.dataset.view === tv;
       b.classList.toggle('active', on);
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
-      // The drilled state is gone: the breadcrumb names every level again, and its first segment — the
-      // view, sitting directly under this tab's label — is the visible way back up.
+      // A tab you are NOT on that would reopen BELOW its top (goTab replays tabLast) says so: the same
+      // › the head shows while you are inside, moved up to the tab once you leave. Without it the tab
+      // promised the view and opened a page. Only a drill counts — a selection or a zoom on the
+      // overview still lands on the overview — which is the test atRoot makes for the lit tab.
+      const held = on ? null : heldPage(b.dataset.view);
+      b.classList.toggle('held', !!held);
       if (on && !atRoot) b.title = 'Back to ' + (VIEW_LABEL[tv] || tv);
+      else if (held) b.title = 'Reopens at ' + stateTitle(held);
       else b.removeAttribute('title');
     });
   }
