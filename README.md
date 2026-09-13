@@ -14,7 +14,8 @@ When coding agents generate most of your code, you can lose track of your projec
 and implementation. Everything runs fine until the day you look down and see there is nothing under
 your feet. This is the Coyote Effect.
 
-coyodex helps you recover from this situation.
+coyodex helps you avoid the Coyote Effect: you keep visibility into the project and find your way
+around it as it grows.
 
 ## What is coyodex?
 
@@ -23,8 +24,7 @@ linked to the underlying architecture and code. Use it to understand what your p
 how it is implemented, top-down, without reading all the code. Drill into the code only where and
 when you actually need to.
 
-The map is also a shared picture of the project, for teammates and colleagues who never open the
-code, product managers included.
+It is also a shared picture of the project for your non-developer teammates.
 
 ## What coyodex shows
 
