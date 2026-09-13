@@ -1,10 +1,10 @@
 <div align="center">
 
-# coyodex
-
 <img src="assets/running-off-the-cliff.png" alt="Wile E. Coyote running off the cliff, drawn as ASCII art: teal characters on black, the cliff edge in orange on the left" width="640">
 
-### Agentic coding without running off the cliff — a map of your project, from features down to the code
+# coyodex: agentic coding without running off the cliff
+
+A map of your project, from features down to the code
 
 </div>
 
