@@ -169,6 +169,12 @@ function applyBundle(b) {
   HAS_INTERFACES = !!b.hasInterfaces;
 }
 
+// The boot guard in the shell (a plain inline script) shows a "could not start" panel unless this
+// is set — it is the only signal that the module really ran. Set FIRST, before the top-level await
+// below, so a slow or failed data fetch does not read as a dead page: that case has its own,
+// better message in bootError.
+window.__coyodexBooted = true;
+
 function bootError(msg) {
   const d = document.getElementById('diagram');
   if (d) d.innerHTML = '<div style="padding:2rem;color:#b91c1c;font:14px/1.5 system-ui,sans-serif">' + msg + '</div>';

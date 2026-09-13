@@ -18,6 +18,7 @@ Conventions: top-level test functions, no classes/fixtures (helpers are `make_*`
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -120,8 +121,13 @@ def _page(url: str) -> Iterator[Any]:
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.js_errors = errors  # type: ignore[attr-defined]
         page.goto(url)
-        page.wait_for_selector("#crumb h1", state="attached")
-        page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
+        if url.startswith("file:"):
+            # The viewer never boots here — that IS the case under test. Wait for the shell's own
+            # guard instead of a screen the page cannot reach.
+            page.wait_for_timeout(1200)
+        else:
+            page.wait_for_selector("#crumb h1", state="attached")
+            page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
         try:
             yield page
         finally:
@@ -320,6 +326,77 @@ def test_a_hosted_map_never_asks_for_an_address_the_export_did_not_write() -> No
         page.wait_for_timeout(600)
         assert not misses, f"the hosted map asked for something the export did not write: {misses}"
         assert not page.js_errors, page.js_errors
+
+
+def test_the_export_carries_a_launcher_anyone_can_double_click() -> None:
+    """A browser cannot start a local server, so the folder has to bring one. Without the execute
+    bit a double-click opens the script in a text editor instead of running it."""
+    import os
+    import stat
+    from coyodex.viewer.export import LAUNCHER
+    with make_export() as out:
+        launcher = out / LAUNCHER
+        assert launcher.is_file()
+        assert os.stat(launcher).st_mode & stat.S_IXUSR, "the launcher is not executable"
+        body = launcher.read_text()
+        assert body.startswith("#!/bin/sh")
+        # It must RUN each candidate, not just look it up: on a stock Mac `command -v python3`
+        # finds a stub that cannot execute.
+        assert 'probe python3 -c ""' in body
+        assert "ruby" in body and "node" in body
+
+
+def test_the_launcher_actually_serves_the_map() -> None:
+    """Run it for real and fetch the page through it — the one check that the script is not merely
+    well-formed text."""
+    import shutil as _sh
+    import subprocess
+    import time
+    from urllib.request import urlopen
+    from coyodex.viewer.export import LAUNCHER
+    if not _sh.which("python3") and not _sh.which("ruby"):
+        pytest.skip("no runtime the launcher can use on this machine")
+    with make_export() as out:
+        port = "8731"
+        proc = subprocess.Popen(["sh", str(out / LAUNCHER)], cwd=str(out),
+                                env={**os.environ, "PORT": port, "PATH": os.environ.get("PATH", "")},
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            page = None
+            for _ in range(50):
+                try:
+                    with urlopen(f"http://127.0.0.1:{port}/index.html") as r:
+                        page = r.read().decode("utf-8", "replace")
+                    break
+                except Exception:
+                    time.sleep(0.2)
+            assert page and "coyodex viewer" in page, "the launcher never served the map"
+        finally:
+            proc.terminate()
+            proc.wait(timeout=10)
+
+
+def test_opening_the_export_as_a_local_file_says_what_to_do() -> None:
+    """THE FIRST THING ANYONE DOES with a folder of files is double-click index.html, and a browser
+    refuses to run a module script off the disk — so `viewer.js` never executes and cannot report
+    anything. Without the shell's own inline guard the reader gets the bare shell, tabs and all, and
+    no explanation. That is exactly what happened the first time someone opened one."""
+    with make_export() as out:
+        with _page((out / "index.html").as_uri()) as page:
+            text = str(page.evaluate("() => document.body.innerText"))
+            assert "has to be served" in text, text[:400]
+            assert "open-map.command" in text, text[:400]
+            # the address is a LINK, not text to retype
+            assert page.evaluate(
+                "() => !!document.querySelector('a[href=\"http://localhost:8000/\"]')")
+
+
+def test_a_served_export_never_shows_the_boot_guard() -> None:
+    """The guard must not fire on a working page: the module sets the flag it watches for."""
+    with make_export() as out, plain_file_server(out) as url, _page(url) as page:
+        assert page.evaluate("() => window.__coyodexBooted") is True
+        assert "has to be served" not in str(page.evaluate("() => document.body.innerText"))
+        assert "could not start" not in str(page.evaluate("() => document.body.innerText"))
 
 
 # --- the served viewer still works ------------------------------------------------------------------

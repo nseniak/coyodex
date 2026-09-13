@@ -346,6 +346,80 @@
     </div>
   </div>
 </div>
+<!-- BOOT GUARD. `viewer.js` is a MODULE, and a browser refuses to load one over `file://`: a page
+     opened straight off the disk gets an opaque origin, module loading always goes through the
+     cross-origin check, and an opaque origin can never pass it. So the script never runs and cannot
+     report anything. A reader who double-clicks `index.html` therefore gets this shell with its tabs
+     and no content and no explanation, which is exactly what happened to the first person who tried.
+     THIS script is a plain inline one, which `file://` does allow, so it is the only thing that can
+     speak there. It also catches the other way a static copy fails to start: a host that serves
+     `.js` under a content type the browser will not execute. Same symptom, same answer. -->
+<script>
+(function () {
+  function panel(head, parts) {
+    var wrap = document.createElement('div');
+    wrap.setAttribute('style', 'position:fixed;inset:0;z-index:99999;overflow:auto;background:#fff;'
+      + 'color:#111827;font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;padding:2.5rem 1.5rem');
+    var box = document.createElement('div');
+    box.setAttribute('style', 'max-width:640px;margin:0 auto');
+    var h = document.createElement('h1');
+    h.setAttribute('style', 'font-size:1.3rem;margin:0 0 1rem');
+    h.textContent = head;
+    box.appendChild(h);
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i], el;
+      if (part.code) {
+        el = document.createElement('pre');
+        el.setAttribute('style', 'background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;'
+          + 'padding:.75rem 1rem;overflow-x:auto;margin:0 0 1rem;'
+          + 'font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace');
+        el.textContent = part.code;
+      } else {
+        el = document.createElement('p');
+        el.setAttribute('style', 'margin:0 0 1rem');
+        el.appendChild(document.createTextNode(part.text || ''));
+        if (part.link) {
+          // A REAL LINK, not text to retype. It only answers once a server is up, which is why it
+          // comes after the line that starts one.
+          var a = document.createElement('a');
+          a.href = part.link;
+          a.textContent = part.link;
+          a.setAttribute('style', 'color:#4f46e5');
+          el.appendChild(a);
+          if (part.after) el.appendChild(document.createTextNode(part.after));
+        }
+      }
+      box.appendChild(el);
+    }
+    wrap.appendChild(box);
+    document.body.appendChild(wrap);
+  }
+  if (location.protocol === 'file:') {
+    panel('This map has to be served, not opened as a file', [
+      { text: '\u201cFile\u201d and \u201cweb page\u201d are different things to a browser. A page '
+            + 'opened off the disk is not allowed to load its own script, so nothing here can start. '
+            + 'The files are fine \u2014 they need a web address rather than a folder path.' },
+      { text: 'THE EASY WAY: double-click \u201copen-map.command\u201d, in this same folder. It '
+            + 'starts a small web server and opens the map for you.' },
+      { text: 'Or do it by hand: open a terminal in this folder, run one of these, and then open ' },
+      { code: 'python3 -m http.server 8000\nruby -run -e httpd . -p 8000\nnpx serve -l 8000' },
+      { text: '', link: 'http://localhost:8000/', after: ' \u2014 whichever of those your machine '
+            + 'already has. Putting the folder on a web host works the same way.' },
+    ]);
+    return;
+  }
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (window.__coyodexBooted) return;
+      panel('This map could not start', [
+        { text: 'The page loaded but its script never ran. That usually means the web server here is '
+              + 'handing back viewer.js as something the browser will not execute, so the server '
+              + 'needs to send it as JavaScript.' },
+      ]);
+    }, 15000);
+  });
+})();
+</script>
 <script type="module" src="viewer.js"></script>
 </body>
 </html>
