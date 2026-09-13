@@ -328,54 +328,6 @@ def test_a_hosted_map_never_asks_for_an_address_the_export_did_not_write() -> No
         assert not page.js_errors, page.js_errors
 
 
-def test_the_export_carries_a_launcher_anyone_can_double_click() -> None:
-    """A browser cannot start a local server, so the folder has to bring one. Without the execute
-    bit a double-click opens the script in a text editor instead of running it."""
-    import os
-    import stat
-    from coyodex.viewer.export import LAUNCHER
-    with make_export() as out:
-        launcher = out / LAUNCHER
-        assert launcher.is_file()
-        assert os.stat(launcher).st_mode & stat.S_IXUSR, "the launcher is not executable"
-        body = launcher.read_text()
-        assert body.startswith("#!/bin/sh")
-        # It must RUN each candidate, not just look it up: on a stock Mac `command -v python3`
-        # finds a stub that cannot execute.
-        assert 'probe python3 -c ""' in body
-        assert "ruby" in body and "node" in body
-
-
-def test_the_launcher_actually_serves_the_map() -> None:
-    """Run it for real and fetch the page through it — the one check that the script is not merely
-    well-formed text."""
-    import shutil as _sh
-    import subprocess
-    import time
-    from urllib.request import urlopen
-    from coyodex.viewer.export import LAUNCHER
-    if not _sh.which("python3") and not _sh.which("ruby"):
-        pytest.skip("no runtime the launcher can use on this machine")
-    with make_export() as out:
-        port = "8731"
-        proc = subprocess.Popen(["sh", str(out / LAUNCHER)], cwd=str(out),
-                                env={**os.environ, "PORT": port, "PATH": os.environ.get("PATH", "")},
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        try:
-            page = None
-            for _ in range(50):
-                try:
-                    with urlopen(f"http://127.0.0.1:{port}/index.html") as r:
-                        page = r.read().decode("utf-8", "replace")
-                    break
-                except Exception:
-                    time.sleep(0.2)
-            assert page and "coyodex viewer" in page, "the launcher never served the map"
-        finally:
-            proc.terminate()
-            proc.wait(timeout=10)
-
-
 def test_opening_the_export_as_a_local_file_says_what_to_do() -> None:
     """THE FIRST THING ANYONE DOES with a folder of files is double-click index.html, and a browser
     refuses to run a module script off the disk — so `viewer.js` never executes and cannot report
@@ -384,11 +336,68 @@ def test_opening_the_export_as_a_local_file_says_what_to_do() -> None:
     with make_export() as out:
         with _page((out / "index.html").as_uri()) as page:
             text = str(page.evaluate("() => document.body.innerText"))
-            assert "has to be served" in text, text[:400]
-            assert "open-map.command" in text, text[:400]
+            assert "has to be served" in text, text[:500]
+            # all three servers, each its own block with its own Copy — you run ONE of them
+            cmds = page.evaluate("() => [...document.querySelectorAll('.cycmd pre')].map(e => e.textContent)")
+            assert sum("http.server" in c for c in cmds) == 1, cmds
+            assert sum(c.startswith("ruby ") for c in cmds) == 1, cmds
+            assert sum(c.startswith("npx ") for c in cmds) == 1, cmds
+            assert page.evaluate("() => document.querySelectorAll('.cycmd .cycopy').length") == len(cmds)
+            assert page.evaluate("() => document.querySelectorAll('.cyor').length") == 2
             # the address is a LINK, not text to retype
             assert page.evaluate(
-                "() => !!document.querySelector('a[href=\"http://localhost:8000/\"]')")
+                "() => !!document.querySelector('.cylink a[href=\"http://localhost:8000/\"]')")
+
+
+def test_the_local_file_page_names_the_folder_it_is_actually_in() -> None:
+    """The page works its own folder out from its own address, so a folder the reader MOVED or
+    renamed still prints the right `cd`. A space in the name is the case that breaks naive quoting,
+    and \"my maps\" is not an exotic thing to call a folder."""
+    with make_export() as out:
+        moved = out.parent / "my maps" / "coyodex map"
+        moved.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(out, moved)
+        with _page((moved / "index.html").as_uri()) as page:
+            cmds = page.evaluate("() => [...document.querySelectorAll('.cycmd pre')].map(e => e.textContent)")
+            cd = [c for c in cmds if c.startswith("cd ")]
+            assert len(cd) == 1, cmds
+            # shell-quoted, so the path survives its spaces when pasted
+            assert cd[0] == f"cd '{moved}'", cd[0]
+
+
+def test_the_local_file_page_copies_a_command_to_the_clipboard() -> None:
+    """The Copy button is the point of splitting the blocks — a long path is what nobody wants to
+    retype. Clicked here for real, then read back out of the clipboard."""
+    with make_export() as out:
+        with _page((out / "index.html").as_uri()) as page:
+            page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+            page.evaluate("() => document.querySelectorAll('.cycmd .cycopy')[0].click()")
+            page.wait_for_timeout(300)
+            assert page.evaluate("() => document.querySelectorAll('.cycmd .cycopy')[0].textContent") \
+                == "Copied"
+            got = page.evaluate("async () => await navigator.clipboard.readText()")
+            assert str(got) == f"cd '{out}'", got
+
+
+def test_the_local_file_page_shows_nothing_of_the_dead_shell() -> None:
+    """Not one control in the shell works without the script, so a tab bar you can click that
+    answers nothing is worse than no tab bar. Covering it was tried and leaked: the source rail is
+    `position:fixed` under a static parent, so it escapes to the viewport and competes with the
+    overlay whatever z-index the overlay carries."""
+    with make_export() as out:
+        with _page((out / "index.html").as_uri()) as page:
+            leaked = page.evaluate("""() => [...document.querySelectorAll('header, #srcrail, """
+                                   """[data-view], [data-group]')]
+                .filter(e => e.getClientRects().length > 0).map(e => e.id || e.tagName)""")
+            assert leaked == [], f"the dead shell is still on screen: {leaked}"
+
+
+def test_the_export_ships_no_script_of_its_own() -> None:
+    """The launcher was tried and removed: an export is files a web host serves, and a shell script
+    in it is a thing to explain, to trust, and to keep working on three platforms."""
+    with make_export() as out:
+        assert not list(out.glob("*.command")), "an export must not ship an executable"
+        assert not list(out.glob("*.sh"))
 
 
 def test_a_served_export_never_shows_the_boot_guard() -> None:

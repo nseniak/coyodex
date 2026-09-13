@@ -24,7 +24,8 @@ how it is implemented, top-down, without reading all the code. Drill into the co
 when you actually need to.
 
 The map is also a shared picture of the project, for teammates and colleagues who never open the
-code, product managers included.
+code, product managers included. You can hand it to them as a link: coyodex writes the whole map out
+as a plain website you host wherever you like, and a reader needs no repo and nothing installed.
 
 ## What coyodex shows
 
@@ -112,6 +113,27 @@ It opens a landing page at `http://127.0.0.1:8765/`. Pick your project's folder 
 server remembers it and shows it as a card from then on. Leave the server running. A map's address
 starts with `/coyodex/`, and `.venv/bin/coyodex url <ID> --repo <repo>` prints the address of one
 element, already selected — ask your agent to "show me X in the map" and it ends with that link.
+
+**3. Share it.** To show the map to someone who has neither your repo nor coyodex, export it as an
+ordinary website:
+
+```
+.venv/bin/coyodex export <your project> --out ./site
+```
+
+That writes a folder of plain files: the viewer, the map, and your code at the commit the map is
+pinned to. Nothing runs on the server. Put the folder on GitHub Pages, Netlify, a cloud bucket or an
+internal web server, and send the link.
+
+Who may open it is your host's business, so a private project's map can live somewhere private.
+
+Everything a reader can do on your own screen works on the shared copy: every view, the drill-downs,
+the source code, the search, and links that open on one exact screen. The one exception is the
+change-impact explorer, which needs git behind it.
+
+The folder is a website, so it has to be served rather than opened as a file — the page says so, and
+tells the reader how, if they try. It is also a snapshot pinned to one commit, so export again after
+the map changes.
 
 ### Asking for map changes
 

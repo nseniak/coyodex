@@ -58,49 +58,6 @@ from coyodex.viewer.serve import (
 # those files from the code viewer for no reason the publisher could see.
 NOJEKYLL = ".nojekyll"
 README = "README.md"
-# Double-clickable in Finder (that is what `.command` means to macOS), and a plain shell script
-# everywhere else. It exists because the alternative is asking a reader to open a terminal — and a
-# browser cannot start a local server itself, so SOMETHING has to, and a file they can double-click
-# is the least the reader has to know.
-LAUNCHER = "open-map.command"
-
-# NOT just `python3`. macOS has not shipped a usable Python since 12.3: `/usr/bin/python3` is a stub
-# that pops the Xcode Command Line Tools installer, so `command -v python3` succeeds on a stock Mac
-# where python3 cannot actually run. Hence `probe`, which RUNS each candidate rather than looking it
-# up, and hence three candidates: Ruby still ships with macOS, and Node is common on a dev machine.
-_LAUNCHER_TEXT = """#!/bin/sh
-# Serve this folder and open the map. Double-click me (macOS), or run: sh open-map.command
-cd "$(dirname "$0")" || exit 1
-PORT=${PORT:-8000}
-URL="http://localhost:$PORT/"
-
-probe() { command -v "$1" >/dev/null 2>&1 && "$@" >/dev/null 2>&1; }
-
-open_browser() {
-  sleep 1
-  if command -v open >/dev/null 2>&1; then open "$URL"
-  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL"
-  else echo "Open $URL in your browser."
-  fi
-}
-
-echo "Serving this map at $URL"
-echo "Leave this window open while you read. Press Ctrl-C to stop."
-if probe python3 -c ""; then
-  open_browser & exec python3 -m http.server "$PORT"
-elif probe ruby -e ""; then
-  open_browser & exec ruby -run -e httpd . -p "$PORT"
-elif probe node -e ""; then
-  open_browser & exec npx --yes serve -l "$PORT" .
-else
-  echo ""
-  echo "No web server found on this machine (tried python3, ruby and node)."
-  echo "Install any one of them, or put this folder on a web host and open it there."
-  echo "Press Return to close."
-  read -r _dummy
-  exit 1
-fi
-"""
 
 
 class ExportError(Exception):
@@ -114,13 +71,11 @@ the commit the map describes. It is plain files — nothing runs on the server.
 
 ## Reading it on your own machine
 
-**Double-click `open-map.command`** in this folder. It starts a small web server and opens the map.
-Leave its window open while you read.
+It has to be SERVED. Do not double-click `index.html`: a browser never runs a page's script when the
+page comes straight off the disk, so you get an empty shell. (Open it anyway and the page tells you
+this, with the commands below already filled in for your folder.)
 
-Do not double-click `index.html`: a page opened straight off the disk is not allowed to load its own
-script, so you get an empty shell. The launcher exists to avoid that.
-
-By hand instead, in a terminal in this folder, whichever your machine has:
+In a terminal in this folder, whichever your machine has:
 
 ```
 python3 -m http.server 8000
@@ -288,9 +243,6 @@ def export_project(proj: Project, out: Path) -> ExportReport:
         shutil.copyfile(_FRONTEND_DIR / name, out / name)
     (out / NOJEKYLL).write_text("", encoding="utf-8")
     (out / README).write_text(_README_TEXT, encoding="utf-8")
-    launcher = out / LAUNCHER
-    launcher.write_text(_LAUNCHER_TEXT, encoding="utf-8")
-    launcher.chmod(0o755)  # without the execute bit a double-click opens it in a text editor
 
     # The page's questions, answered in advance under the addresses it actually asks.
     bundle = dict(project_view(proj))
@@ -400,9 +352,11 @@ def main(argv: list[str] | None = None) -> int:
     if report.skipped_unsafe:
         print(f"  {len(report.skipped_unsafe)} file(s) left out for an unsafe path: "
               f"{', '.join(report.skipped_unsafe[:3])}", file=sys.stderr)
-    print("  To read it here: double-click open-map.command in that folder (it serves the map and "
-          "opens it). Opening index.html directly shows an empty page — a browser will not run the "
-          "viewer's script off the disk.")
+    print("  To read it here, serve the folder — a browser will not run the viewer's script off the "
+          "disk, so opening index.html directly shows an empty page (which says so, and gives you "
+          "these commands):")
+    print(f"    cd '{report.out}' && python3 -m http.server 8000")
+    print("    then open http://localhost:8000/")
     print("  To share it: put the folder on a web host and send that link.")
     return 0
 

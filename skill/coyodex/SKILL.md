@@ -7,8 +7,10 @@ description: >
   ("map this repo", "with the coyodex method"), analyze the change impact of a diff against an
   existing map, accept a change-impact report into the baseline, or work with a map that already
   exists: look one thing up in it, open it, link to it ("show me the use case about X in the map",
-  "where is Y in the map"). The modes and their commands live in the clone, never here. Triggers on
-  "coyodex", "project map", "codebase map", "change impact", "accept the map", "in the map".
+  "where is Y in the map"), or export it as a static site to share with people who have neither the
+  repo nor coyodex ("share the map", "send the map to the team", "publish the map"). The modes and
+  their commands live in the clone, never here. Triggers on "coyodex", "project map", "codebase map",
+  "change impact", "accept the map", "in the map", "share the map", "export the map".
 ---
 
 # coyodex
