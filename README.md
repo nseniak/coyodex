@@ -1,10 +1,10 @@
 <div align="center">
 
-# coyodex
+<img src="assets/running-off-the-cliff.png" alt="Wile E. Coyote running off the cliff, drawn as ASCII art: teal characters on black, the cliff edge in orange on the left" width="640">
 
-<img src="assets/running-off-the-cliff.jpg" alt="Wile E. Coyote, having run past the edge of the cliff, hanging in mid-air just before he looks down" width="640">
+# coyodex: agentic coding without running off the cliff
 
-### Agentic coding without running off the cliff
+A map of your project, from features down to the code
 
 </div>
 
@@ -14,7 +14,8 @@ When coding agents generate most of your code, you can lose track of your projec
 and implementation. Everything runs fine until the day you look down and see there is nothing under
 your feet. This is the Coyote Effect.
 
-coyodex helps you recover from this situation.
+coyodex helps you avoid the Coyote Effect: you keep visibility into the project and find your way
+around it as it grows.
 
 ## What is coyodex?
 
@@ -23,9 +24,9 @@ linked to the underlying architecture and code. Use it to understand what your p
 how it is implemented, top-down, without reading all the code. Drill into the code only where and
 when you actually need to.
 
-The map is also a shared picture of the project, for teammates and colleagues who never open the
-code, product managers included. You can hand it to them as a link: coyodex writes the whole map out
-as a plain website you host wherever you like, and a reader needs no repo and nothing installed.
+It is also a shared picture of the project for your non-developer teammates. Hand it to them as a
+link: coyodex writes the map out as a plain website you can host anywhere, and a reader needs no
+repo and nothing installed.
 
 ## What coyodex shows
 
