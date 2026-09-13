@@ -2887,6 +2887,14 @@ def test_35_reads_the_clone_by_its_old_name_in_a_transcript_from_before_the_rena
     assert _cd_case("cd /Users/x/Projects/coyodex") == (0, 1)
 
 
+def test_35_reads_the_old_command_and_the_old_map_folder_too():
+    """Both spellings on both turns: the command and the relative map path as an old transcript has them."""
+    turns = (make_turn(1, make_bash("cd /Users/x/Projects/coyodex")),
+             make_turn(2, make_bash("coyodex validate .coyodex/project-map.json")))
+    a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
+    assert (a.observed, a.of) == (0, 1)
+
+
 def test_38_does_not_count_a_filename_named_in_a_DOCUMENT_heredoc():
     """`cat > report.md <<'EOF' … v.json … EOF` is a markdown file being WRITTEN that happens to
     name the path. Counting it credits the run for the very thing this assertion measures."""

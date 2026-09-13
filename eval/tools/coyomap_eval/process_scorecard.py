@@ -312,10 +312,10 @@ def _invokes(command: str, subcommand: str, output: str = "") -> bool:
     2026-09-01 argus build. A `ship` invocation therefore counts as invoking every subcommand its
     own plan runs — the full list with a `--note-file`, the prepare prefix without one."""
     sub = re.escape(subcommand)
-    named = re.compile(r"^(?:[\w./~-]*/)?(?:\.?venv/bin/)?coyomap(?:-eval)?\s+" + sub + r"\b")
+    named = re.compile(r"^(?:[\w./~-]*/)?(?:\.?venv/bin/)?coyo(?:map|dex)(?:-eval)?\s+" + sub + r"\b")
     aliased = re.compile(r"^\"?\$\{?\w+\}?\"?\s+" + sub + r"\b")
     allow_alias = subcommand in _COYOMAP_SUBCOMMANDS
-    ship_named = re.compile(r"^(?:[\w./~-]*/)?(?:\.?venv/bin/)?coyomap(?:-eval)?\s+ship\b")
+    ship_named = re.compile(r"^(?:[\w./~-]*/)?(?:\.?venv/bin/)?coyo(?:map|dex)(?:-eval)?\s+ship\b")
     ship_aliased = re.compile(r"^\"?\$\{?\w+\}?\"?\s+ship\b")
     for seg in _segments(command):
         seg = re.sub(r"^(?:sudo|time|nohup|env(?:\s+\w+=\S+)*)\s+", "", seg)
@@ -1094,7 +1094,7 @@ def _false_gate_claim(commit_text: str) -> str | None:
 #: gate-block`, a `tee` of a hand-written block, or a `cat` of an ARCHIVED build's block
 #: (`dev-rebuilds/…`) would otherwise launder a verdict, and a review reproduced all three.
 _LIVE_GATE_BLOCK_READ = re.compile(
-    r"\b(?:cat|head|tail|sed|less|more)\b[^|;&>\n]*(?<![\w/.-])\.coyomap/verify/gate-block\.md\b")
+    r"\b(?:cat|head|tail|sed|less|more)\b[^|;&>\n]*(?<![\w/.-])\.coyo(?:map|dex)/verify/gate-block\.md\b")
 
 
 def _reads_live_gate_block(command: str) -> bool:
@@ -1818,7 +1818,7 @@ def read_agent_lint_calls(session: Path) -> tuple[tuple[str, str], ...]:
                     # source, and counting that as a narrowed self-check inflated the tally by one
                     # in both halves — the shape this whole assertion exists to measure honestly.
                     before = cmd[max(0, m.start() - 80):m.start()]
-                    if not re.search(r"coyomap(?:-eval)?[\s/\\]*$|\bcoyomap\s+$", before.strip() + " "):
+                    if not re.search(r"coyo(?:map|dex)(?:-eval)?[\s/\\]*$|\bcoyo(?:map|dex)\s+$", before.strip() + " "):
                         if "coyomap" not in before:
                             continue
                     # `\|` inside a grep pattern is an alternation, not a pipe: without the escaped
@@ -2918,7 +2918,7 @@ def _blank_heredocs(command: str) -> str:
     the READ scan a few lines later must still see inside an interpreter heredoc. Deleting the body
     would make the two scans disagree about where every later character is."""
     return _HEREDOC.sub(lambda m: " " * (m.end() - m.start()), command)
-_RELATIVE_MAP_PATH = re.compile(r"(?<![\w/.])\.coyomap/")
+_RELATIVE_MAP_PATH = re.compile(r"(?<![\w/.])\.coyo(?:map|dex)/")
 
 #: Text where a `.coyomap/` mention is not a path being READ: a heredoc body, an `echo`/`print`
 #: string, and `git`'s own pathspec (`git -C <abs> ... -- .coyomap/x`, which resolves against `-C`).
