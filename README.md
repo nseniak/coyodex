@@ -2,9 +2,9 @@
 
 # coyodex
 
-<img src="assets/running-off-the-cliff.jpg" alt="Wile E. Coyote, having run past the edge of the cliff, hanging in mid-air just before he looks down" width="640">
+<img src="assets/running-off-the-cliff.png" alt="Wile E. Coyote running off the cliff, drawn as ASCII art: teal characters on black, the cliff edge in orange on the left" width="640">
 
-### Agentic coding without running off the cliff
+### Agentic coding without running off the cliff — a map of your project, from features down to the code
 
 </div>
 
