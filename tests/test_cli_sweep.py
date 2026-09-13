@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -104,6 +105,14 @@ def _with_coyodex_dir(tmp: Path) -> Path:
 #: because `dict[str, object]` made every `RECIPES[verb](...)` an uncallable `object`.
 Recipe = Callable[[Path, Path], list[str]]
 
+def _staged_project_export(tmp: Path, map_path: Path) -> list[str]:
+    """Put the assembled map in a project folder of its own, and export THAT."""
+    proj = tmp / "proj"
+    (proj / ".coyodex").mkdir(parents=True, exist_ok=True)
+    shutil.copy(map_path, proj / ".coyodex" / "project-map.json")
+    return ["export", str(proj), "--out", str(tmp / "site")]
+
+
 RECIPES: dict[str, tuple] = {
     "validate":      (lambda t, m: ["validate", str(m), "--check-sources", "--check-coverage"], OK),
     "audit":         (lambda t, m: ["audit", str(m), "--json"], OK),
@@ -118,6 +127,11 @@ RECIPES: dict[str, tuple] = {
     # Read-only: the address of one element. With no server running it prints the path alone and
     # says so on stderr, still exit 0 — the link is what it could give.
     "url":           (lambda t, m: ["url", "UC1", "--map", str(m)], OK),
+    # `export` takes a PROJECT FOLDER, not a map path, so the recipe stages one: the assembled map
+    # in a `.coyodex/` of its own. The code read out of git comes back empty (the map's pin is not a
+    # commit of this staged folder) and the command still has to produce a whole site — which is the
+    # shape a publisher hits with a map pinned to a commit they have not fetched.
+    "export":        (_staged_project_export, OK),
     "scope":         (lambda t, m: ["scope"], OK),
     "reconcile":     (lambda t, m: ["reconcile", "--rules", str(FIXTURE / "rules.json"),
                                     "--fragments", str(FIXTURE / "fragments"),

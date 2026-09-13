@@ -104,7 +104,7 @@ def _page(url: str, stylesheet: str | None = None) -> Iterator[Any]:
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.js_errors = errors  # type: ignore[attr-defined]
         if stylesheet is not None:
-            page.route("**/static/viewer.css", lambda route: route.fulfill(
+            page.route("**/viewer.css", lambda route: route.fulfill(
                 status=200, content_type="text/css", body=stylesheet))
         page.goto(url)
         page.wait_for_selector("#crumb h1", state="attached")

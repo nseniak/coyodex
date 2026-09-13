@@ -3270,6 +3270,10 @@ class ViewBundle(TypedDict):
     """
     repoRoot: str
     repoState: str                 # 'ok' | 'no-repo' | 'no-commit' — can the viewer read this map's code?
+    #: True only in a STATIC EXPORT (`coyodex export`) — a folder of files on a web host with no
+    #: coyodex server behind it. The builder always writes False; the export flips it. It is what
+    #: tells the page not to offer the things only a live server with git can answer.
+    exported: bool
     ghRepo: str | None
     ghCommit: str | None
     graph: dict[str, Any]          # the MERGED graph (base+diff, with Context nodes added)
@@ -3401,7 +3405,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
         annotate_unit_dep_facts(mg, graph)
         annotate_run_by(mg, graph)
     return ViewBundle(
-        repoRoot=repo_root, repoState=repo_state(anchor, graph.get('commit')),
+        repoRoot=repo_root, repoState=repo_state(anchor, graph.get('commit')), exported=False,
         ghRepo=gh_repo, ghCommit=gh_commit,
         graph=mg,
         mermaidBase=base_mm, mermaidDiff=diff_mm, mermaidContext=context_mm,

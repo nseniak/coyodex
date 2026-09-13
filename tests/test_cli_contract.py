@@ -32,6 +32,7 @@ COMMAND_MODULE: dict[str, str] = {
     "grounding": "grounding", "record": "record", "scope": "scope",
     "provenance": "provenance", "contract": "contract", "ship": "ship",
     "timings": "timings", "context": "context", "url": "viewer.url",
+    "export": "viewer.export",
 }
 
 

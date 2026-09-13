@@ -51,6 +51,11 @@ let DEPLOY_ENVS;           // declared deployment environments (variant names), 
 let DEPLOY_ENV = null;     // the selected environment (null = All); persists across the session
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let REPO_STATE = 'ok';    // 'ok' | 'no-repo' | 'no-commit' — whether the server can read this map's code
+// True when this map is a STATIC EXPORT — a folder of files on a web host, with no coyodex server
+// behind it. Everything the page reads is still there (its data, the file tree, the code at the map's
+// commit, the symbols), so the map itself is whole; what is gone is everything that needs git to
+// answer a question the export could not have written down in advance. Set from the bundle at boot.
+let EXPORTED = false;
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
 let SUBFLOW_BY_ID = {};   // SFn -> the shared sub-use case itself, for its name and its own screen
 let SUBFLOW_CHIPS = {};   // SFn -> the people, doors and records inside it, for its collapsed box
@@ -126,6 +131,7 @@ function applyBundle(b) {
   HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
   HAS_HP = b.hasHp; HAS_DIFF = b.hasDiff; META = b.meta; DIFF_STATE = b.diffState;
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
+  EXPORTED = !!b.exported;
   REPO_STATE = b.repoState || 'ok';   // the notice is painted at boot (below), not here:
                                       // applyBundle runs under top-level await, before the
                                       // code-pane elements are bound.
@@ -14319,7 +14325,7 @@ async function initServerMode() {
   // real control, so it takes a button's role, a keyboard tab stop and Enter/Space, which a clickable
   // span otherwise silently withholds.
   const brand = document.querySelector('header .brand');
-  if (brand) {
+  if (brand && !EXPORTED) {
     brand.classList.add('home-link');
     brand.title = 'Back to all maps';
     brand.setAttribute('role', 'link');
@@ -14857,6 +14863,10 @@ let cvDiffKey = null;   // the range (base+target) the current inline diff was r
 // set is DIFF_FILE_STATUS (built once per (un)load by recomputeDiffPaths) — no per-call rebuild.
 function wantDiffFor(path) { return !!LIVE_DIFF && DIFF_FILE_STATUS[path] != null; }
 function diffKeyFor(asDiff) { return asDiff && LIVE_DIFF ? (LIVE_DIFF.base + '\x00' + LIVE_DIFF.target) : null; }
+// A repo path as URL SEGMENTS for `api/src/<path>` — each part encoded on its own, so the slashes
+// stay real slashes. The path is in the address itself, never a query: a static export answers this
+// request with a file on disk, and no file host can read a `?path=`.
+function srcPathSegs(path) { return String(path).split('/').map(encodeURIComponent).join('/'); }
 function diffRangeQS() {  // the active range as query params for api/srcdiff (mirrors the loaded diff)
   if (!LIVE_DIFF) return '';
   return '&base=' + encodeURIComponent(LIVE_DIFF.base || '') + '&target=' + encodeURIComponent(LIVE_DIFF.target || '');
@@ -14976,7 +14986,7 @@ async function loadCode(path, line) {
   const url = asDiff
     ? (API_BASE + (LIVE_DIFF && LIVE_DIFF.impact ? 'impactsrcdiff' : 'srcdiff')
        + '?path=' + encodeURIComponent(path) + diffRangeQS())
-    : (API_BASE + 'src?path=' + encodeURIComponent(path));
+    : (API_BASE + 'src/' + srcPathSegs(path));
   let r = null;
   try {
     r = await fetch(url, { cache: 'no-store' });
@@ -16251,7 +16261,10 @@ async function loadImpactCommits() {
   host.querySelectorAll('.diffcommit').forEach((b) =>
     b.addEventListener('click', () => { document.getElementById('impBase').value = b.getAttribute('data-sha'); }));
 }
-if (impactbtn) {
+// The impact explorer needs git on a server to answer at all, so an export never offers it. It is
+// hidden in the shell today for its own reasons; this is the gate that survives un-hiding it.
+if (EXPORTED && impactctl) impactctl.hidden = true;
+if (impactbtn && !EXPORTED) {
   impactbtn.addEventListener('click', (e) => { e.stopPropagation(); impactpop.hidden ? openImpactPop() : closeImpactPop(); });
   document.addEventListener('click', (e) => { if (!impactpop.hidden && !impactctl.contains(e.target)) closeImpactPop(); });
   document.getElementById('impSinceMap').addEventListener('click', () => loadImpact('', DIFF_WORKTREE));

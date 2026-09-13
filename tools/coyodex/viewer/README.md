@@ -26,8 +26,10 @@ same table-splitting grammar (`tools/coyodex/grammar.py`) — a genuinely separa
 input (the diff overlay's report), not the map itself.
 
 The frontend lives in **`viewer.html`** (the generic shell), **`viewer.css`**, and **`viewer.js`**
-(edited as normal HTML/CSS/JS). `coyodex serve` ships them from `/static/` unchanged for every
-project — identical for every map; only the per-project data differs, fetched at boot from `api/view`.
+(edited as normal HTML/CSS/JS). `coyodex serve` ships them unchanged for every project — identical
+for every map; only the per-project data differs, fetched at boot from `api/view`. The shell asks for
+its script and stylesheet RELATIVELY, so one shell works both under `/coyodex/<slug>/` and in a
+static export; the server answers those names under the map's own path as well as `/static/`.
 Mermaid + svg-pan-zoom load from a pinned + SRI CDN.
 
 ## Run
@@ -40,6 +42,25 @@ make start                       # opens the landing page in a browser
 .venv/bin/coyodex serve --port 8765 --open
 .venv/bin/coyodex serve ~/code/myrepo   # add + serve a folder right away
 ```
+
+### Sharing a map: `coyodex export`
+
+A served map is on one machine. `coyodex export` writes the SAME viewer out as a folder of plain
+files, which any web host can serve — so a link reaches someone with neither the repo nor coyodex:
+
+```bash
+.venv/bin/coyodex export ~/code/myrepo --out ./site     # then publish ./site anywhere
+```
+
+It answers every address the page asks a server for (`api/view`, `api/health`, `api/tree`,
+`api/symbols`, `api/rawmap`, and `api/src/<path>` per file at the map's commit) by writing each one
+as a file. Nothing runs on the host, and the addresses are the SERVED ones — there is no static-mode
+fork of `viewer.js`, on purpose. The impact explorer is the one thing an export cannot carry: it
+projects an arbitrary diff onto the map, which takes git and a live engine.
+
+`tests/test_export.py` opens a real browser on an exported folder behind a plain file server. Its
+drift gate fails if the page asks for anything the export did not write — which is how a new
+`fetch(API_BASE + …)` in `viewer.js` gets caught before a hosted map breaks.
 
 ### Linking to one element
 

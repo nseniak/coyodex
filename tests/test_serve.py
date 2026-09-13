@@ -31,7 +31,7 @@ from coyodex.viewer.serve import (
     _FRONTEND_DIR,
     _has_coyodex,
     _loopback_host,
-    _safe_rel,
+    safe_rel,
     _strip_dirty,
     _valid_commit,
     build_projects,
@@ -105,14 +105,14 @@ def test_loopback_host() -> None:
 
 
 def test_safe_rel_rejects_escapes() -> None:
-    assert _safe_rel("src/app.py")
-    assert _safe_rel("a/b/c.txt")
-    assert not _safe_rel("")                       # empty
-    assert not _safe_rel("/etc/passwd")            # absolute
-    assert not _safe_rel("../../etc/passwd")       # traversal
-    assert not _safe_rel("a/../../b")              # traversal mid-path
-    assert not _safe_rel("a\\b")                   # backslash
-    assert not _safe_rel("a\x00b")                 # null byte
+    assert safe_rel("src/app.py")
+    assert safe_rel("a/b/c.txt")
+    assert not safe_rel("")                       # empty
+    assert not safe_rel("/etc/passwd")            # absolute
+    assert not safe_rel("../../etc/passwd")       # traversal
+    assert not safe_rel("a/../../b")              # traversal mid-path
+    assert not safe_rel("a\\b")                   # backslash
+    assert not safe_rel("a\x00b")                 # null byte
 
 
 # --- git reads (real temp repo, no patching) ------------------------------------

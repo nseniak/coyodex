@@ -330,7 +330,7 @@ def git_blob_size(repo_root: Path, commit: str, path: str) -> int | None:
     directory, which resolves to a git tree). One ``cat-file --batch-check`` gives object type + size,
     so the src route can reject an oversized blob BEFORE ``git_show`` buffers it into memory, and reject
     a directory path (whose ``git show`` would otherwise dump a bare filename listing)."""
-    if not _valid_commit(commit) or not _safe_rel(path):
+    if not _valid_commit(commit) or not safe_rel(path):
         return None
     try:
         p = subprocess.run(["git", "-C", str(repo_root), "cat-file",
@@ -349,14 +349,18 @@ def git_blob_size(repo_root: Path, commit: str, path: str) -> int | None:
 
 def git_show(repo_root: Path, commit: str, path: str) -> bytes | None:
     """Contents of ``path`` at ``commit`` (``git show <commit>:<path>``); None if it doesn't exist."""
-    if not _valid_commit(commit) or not _safe_rel(path):
+    if not _valid_commit(commit) or not safe_rel(path):
         return None
     code, out = _git(repo_root, ["show", f"{commit}:{path}"])
     return out if code == 0 else None
 
 
-def _safe_rel(path: str) -> bool:
-    """A repo-relative path with no traversal / absolute escape — the only thing we'll read."""
+def safe_rel(path: str) -> bool:
+    """A repo-relative path with no traversal / absolute escape — the only thing we'll read.
+
+    Public because `export.py` guards the same thing on the WRITE side: a path that may not be read
+    out of a commit may not be written into an export folder either, and one rule for both is the
+    point."""
     if not path or path.startswith("/") or "\\" in path or "\x00" in path:
         return False
     return ".." not in Path(path).parts
@@ -392,11 +396,11 @@ def resolve_ref(repo_root: Path, ref: str) -> str | None:
 
 
 def worktree_read(root: Path, path: str) -> bytes | None:
-    """A guarded read of a WORKING-TREE file for `api/src?at=WORKTREE`. `_safe_rel` alone is not a
+    """A guarded read of a WORKING-TREE file for `api/src?at=WORKTREE`. `safe_rel` alone is not a
     disk-I/O guard, so: realpath containment inside the repo (a tracked symlink must not escape),
     `.git/` excluded, and only files git accounts for — tracked or untracked-not-ignored — are
     served (a gitignored `.env` never leaks through the viewer)."""
-    if not _safe_rel(path) or path.split("/", 1)[0] == ".git":
+    if not safe_rel(path) or path.split("/", 1)[0] == ".git":
         return None
     try:
         real = (root / path).resolve(strict=True)
@@ -443,7 +447,7 @@ def impact_commits(proj: Project, limit: int = 25) -> dict[str, object]:
 def impact_file_diff(proj: Project, path: str, base_ref: str, target_ref: str) -> dict[str, object]:
     """One file's inline diff across an ARBITRARY range (the impact explorer's code view) — same
     payload shape as `file_diff`, without the pin-at-one-end constraint. Raises ValueError → 400."""
-    if not _safe_rel(path):
+    if not safe_rel(path):
         raise ValueError("bad path")
     base_sha = impact_resolve_ref(proj.repo_root, base_ref)
     if base_sha == IMPACT_WORKTREE:
@@ -593,7 +597,7 @@ def list_dirs(path: Path) -> dict[str, object]:
 
 # --- HTTP -----------------------------------------------------------------------------------------
 
-_TEXT_MAX = 4_000_000  # refuse to stream an absurdly large blob into the browser code viewer
+TEXT_MAX = 4_000_000  # refuse to stream an absurdly large blob into the browser code viewer
 _DIFF_CONTEXT = 3      # lines of unchanged context around each hunk in the code-view diff
 _DIFF_MAX_ROWS = 20_000  # cap the rows in one file's diff response (a pathological diff guard)
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -667,6 +671,13 @@ class Handler(BaseHTTPRequestHandler):
             proj = self.projects.get(parts[1])
             if proj is None:
                 return self._send(404, "text/plain; charset=utf-8", b"unknown project")
+            if len(parts) == 2 and not parsed.path.endswith("/"):
+                # A map's address ENDS IN A SLASH, and the bare form is redirected to it rather than
+                # answered. Everything the page then asks for is relative to its own directory — its
+                # data (`./api/`), its script and its stylesheet — and without the slash the browser
+                # treats the slug as a FILE name and drops it, so every one of those resolves a level
+                # too high. The page used to render from the bare form and then fail to load a thing.
+                return self._redirect(map_url(proj.slug) + (f"?{parsed.query}" if parsed.query else ""))
             ensure_fresh(proj)  # a map edited while the server runs is picked up on the next request
             warn_if_code_changed()  # …but an edit to THIS tool's Python needs a restart; say so
             return self._project(proj, parts[2:], query)
@@ -748,6 +759,11 @@ class Handler(BaseHTTPRequestHandler):
     def _project(self, proj: Project, rest: list[str], query: dict[str, list[str]]) -> None:
         if rest and rest[0] == "api":
             return self._project_api(proj, rest[1:], query)
+        if len(rest) == 1 and rest[0] in _STATIC_FILES:
+            # The shared frontend, under THIS map's path as well as /static/. The shell asks for
+            # `viewer.js` / `viewer.css` RELATIVELY, so that one spelling works both here and in an
+            # export, where there is no server root to hang a /static/ on.
+            return self._static(rest[0])
         if not rest:
             # The generic shell — identical for every project; it fetches this map's data from
             # api/view at boot. Under --dev it carries the live-reload script as well.
@@ -799,9 +815,14 @@ class Handler(BaseHTTPRequestHandler):
             # Never fatal: a missing/broken pre-index yields an empty list, so the search just falls back
             # to map elements + files. No git or model work here, so nothing else to catch.
             return self._json({"symbols": project_symbols(proj), "commit": proj.commit})
-        if rest == ["src"]:
-            path = (query.get("path") or [""])[0]
-            if not _safe_rel(path):
+        if rest and rest[0] == "src":
+            # THE PATH RIDES IN THE URL'S OWN SEGMENTS (`api/src/<path>`), never a query string. A
+            # static export answers this exact request with a file on disk, and a file host cannot
+            # read a query — so the one spelling has to be the one a folder of files can satisfy.
+            # Each segment arrives already percent-decoded (see do_GET); `safe_rel` on the rejoined
+            # path is what stops `..`/absolute escapes, decoded ones included.
+            path = "/".join(rest[1:])
+            if not safe_rel(path):
                 return self._send(400, "text/plain; charset=utf-8", b"bad path")
             # `at=` (impact explorer): read the file at another commit, or from the working tree.
             # Default stays the map's pin — the frozen-snapshot behavior is unchanged without it.
@@ -810,7 +831,7 @@ class Handler(BaseHTTPRequestHandler):
                 data = worktree_read(proj.repo_root, path)
                 if data is None:
                     return self._send(404, "text/plain; charset=utf-8", b"file not in working tree")
-                if len(data) > _TEXT_MAX:
+                if len(data) > TEXT_MAX:
                     return self._send(413, "text/plain; charset=utf-8", b"file too large")
                 return self._send(200, "text/plain; charset=utf-8", data)
             if not _valid_commit(at):
@@ -818,7 +839,7 @@ class Handler(BaseHTTPRequestHandler):
             size = git_blob_size(proj.repo_root, at, path)  # size + is-it-a-file check first
             if size is None:
                 return self._send(404, "text/plain; charset=utf-8", b"file not in commit")
-            if size > _TEXT_MAX:  # reject BEFORE git_show buffers a huge blob into memory
+            if size > TEXT_MAX:  # reject BEFORE git_show buffers a huge blob into memory
                 return self._send(413, "text/plain; charset=utf-8", b"file too large")
             blob = git_show(proj.repo_root, at, path)
             if blob is None:
@@ -875,6 +896,14 @@ class Handler(BaseHTTPRequestHandler):
         if ctype is None:
             return self._send(404, "text/plain; charset=utf-8", b"not found")
         return self._send_file(_FRONTEND_DIR / name, ctype)
+
+    def _redirect(self, location: str) -> None:
+        """A 301 to `location` — only ever a path this server composed, never user input echoed back."""
+        self.send_response(301)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
 
     def _send_file(self, path: Path, ctype: str) -> None:
         try:
