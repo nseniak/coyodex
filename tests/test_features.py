@@ -489,6 +489,29 @@ def test_a_bundle_built_without_a_readable_map_still_renders_the_rest():
     assert b["features"] == {} and b["graph"]
 
 
+def test_a_feature_says_which_way_its_data_moves():
+    """The feature page words its data sentence from this: `in` its steps read a record, `out` they
+    store into one. A FIXED "stores and reads" was measured wrong on 1 of the two live maps' 13
+    features — mcpolis's Audit trail only ever reads — so the direction the map already carries on
+    the step is summed here and the page reads the answer rather than the steps."""
+    m = load_model(json.dumps(make_map(steps=[
+        {"n": 1, "src": "C1", "dst": "E1", "phrase": "store it", "where": "a.py:1",
+         "direction": "out"},
+    ])))
+    b = as_bundle(build_index(m, EXTENTS))
+    assert b["features"][0]["dataDirections"] == ["out"]
+
+
+def test_a_feature_whose_steps_touch_no_record_claims_no_direction():
+    """An empty list, not a guess. The page falls back to stating what the list holds when it has
+    no direction to report, which is the honest answer for a map that records none."""
+    m = load_model(json.dumps(make_map(steps=[
+        {"n": 1, "src": "C1", "dst": "C2", "phrase": "call it", "where": "a.py:1"},
+    ])))
+    b = as_bundle(build_index(m, EXTENTS))
+    assert b["features"][0]["dataDirections"] == []
+
+
 if __name__ == "__main__":     # pragma: no cover
     import sys
     import pytest

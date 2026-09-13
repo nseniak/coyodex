@@ -208,13 +208,6 @@ def _dashboard_steps(maps: dict) -> str:
             f"list they are noise.")
 
 
-def _dashboard_steps_viewer(maps: dict) -> str:
-    from coyodex import validate_model as V
-    steps, walks = _dashboard(maps["mcpolis"], V)
-    return (f"mcpolis's dashboard draws {steps} of them from {walks} different walks, and read as "
-            f"one list they are noise.")
-
-
 def _dashboard(m, V) -> tuple[int, int]:
     """The Dashboard interface's steps, grouped the way `interface_steps_by_use_case` groups them —
     the function both sentences describe. Raises if the interface is gone, so the row ERRORs rather
@@ -323,11 +316,6 @@ LEDGER: tuple[Claim, ...] = (
                 "they are noise.",
           measure=_dashboard_steps,
           note="why interface steps are grouped by story"),
-    Claim(site="tools/coyodex/viewer/viewer.js:12976", maps=("mcpolis",),
-          quote="mcpolis's dashboard draws 141 of them from 31 different walks, and read as one "
-                "list they are noise.",
-          measure=_dashboard_steps_viewer,
-          note="the same fact, restated on the viewer's What crosses block"),
     Claim(site="tools/coyodex/validate_model.py:1303", maps=("coyodex",),
           quote="On this repo's own map, 3 files are claimed by 3-4 components each and hold 5 "
                 "of its 245 call-site anchors (2%)",
