@@ -33,6 +33,7 @@ from urllib.request import urlopen
 
 import pytest
 
+from browser_harness import new_page
 from coyodex.viewer.export import ExportError, _safe_target, export_project, main
 from coyodex.viewer.serve import load_project
 
@@ -124,28 +125,20 @@ def plain_file_server(folder: Path) -> Iterator[str]:
 @contextmanager
 def _page(url: str) -> Iterator[Any]:
     """A Chromium page on `url`, first-run overlay dismissed, JS errors collected on `js_errors`."""
-    playwright = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
-    with playwright.sync_playwright() as p:
-        try:
-            browser = p.chromium.launch()
-        except Exception as exc:  # driver installed, browser binary not
-            pytest.skip(f"chromium not available: {exc}")
-        page = browser.new_page()
-        errors: list[str] = []
-        page.on("pageerror", lambda e: errors.append(str(e)))
-        page.js_errors = errors  # type: ignore[attr-defined]
-        page.goto(url)
-        if url.startswith("file:"):
-            # The viewer never boots here — that IS the case under test. Wait for the shell's own
-            # guard instead of a screen the page cannot reach.
-            page.wait_for_timeout(1200)
-        else:
-            page.wait_for_selector("#crumb h1", state="attached")
-            page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
-        try:
-            yield page
-        finally:
-            browser.close()
+    # ONE browser per process, a fresh PAGE per test (see tests/browser_harness.py).
+    page = new_page()
+    page.goto(url)
+    if url.startswith("file:"):
+        # The viewer never boots here — that IS the case under test. Wait for the shell's own
+        # guard instead of a screen the page cannot reach.
+        page.wait_for_timeout(1200)
+    else:
+        page.wait_for_selector("#crumb h1", state="attached")
+        page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
+    try:
+        yield page
+    finally:
+        page.close()
 
 
 # --- the files ------------------------------------------------------------------------------------

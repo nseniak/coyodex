@@ -28,6 +28,7 @@ from urllib.request import urlopen
 
 import pytest
 
+from browser_harness import new_page
 from coyodex.viewer.recents import RecentsStore
 from coyodex.viewer.serve import Handler, build_projects
 
@@ -93,26 +94,17 @@ def _page(url: str, stylesheet: str | None = None) -> Iterator[Any]:
 
     `stylesheet` serves that text in place of the viewer's own, from the FIRST layout on — the only
     way to test what the viewer does when its stylesheet cannot give the drawing room."""
-    playwright = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
-    with playwright.sync_playwright() as p:
-        try:
-            browser = p.chromium.launch()
-        except Exception as exc:  # the driver is installed but the browser binary is not
-            pytest.skip(f"chromium not available: {exc}")
-        page = browser.new_page()
-        errors: list[str] = []
-        page.on("pageerror", lambda e: errors.append(str(e)))
-        page.js_errors = errors  # type: ignore[attr-defined]
-        if stylesheet is not None:
-            page.route("**/viewer.css", lambda route: route.fulfill(
-                status=200, content_type="text/css", body=stylesheet))
-        page.goto(url)
-        page.wait_for_selector("#crumb h1", state="attached")
-        page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
-        try:
-            yield page
-        finally:
-            browser.close()
+    # ONE browser per process, a fresh PAGE per test (see tests/browser_harness.py). The page is
+    # what has to be new: it carries its own localStorage, and the viewer remembers a reader's
+    # settings and tab there, so a shared one would leak state from test to test.
+    page = new_page(stylesheet)
+    page.goto(url)
+    page.wait_for_selector("#crumb h1", state="attached")
+    page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
+    try:
+        yield page
+    finally:
+        page.close()
 
 
 def _crumb(page: Any) -> str:
