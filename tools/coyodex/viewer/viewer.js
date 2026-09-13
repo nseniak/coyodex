@@ -1415,6 +1415,9 @@ function plainCardHtml(o) {
     glyph: !o.k ? false : undefined,
     wordHtml: (o.pill || '') + (o.count ? countPillOf(o.count) : ''),
     cls: 'ecard',
+    // The SAME labelled context line the element card takes, for the same reason: a card that is not
+    // a map element still has a fact about where it sits, and it should wear it the one way.
+    foot: o.foot || '',
     attrs: ` data-key="${esc(o.key)}" tabindex="0"`,
   });
 }
@@ -4858,7 +4861,7 @@ const tabLast = {};
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
 const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sf', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
-                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'iface', 'id'];
+                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'iface', 'id', 'sec'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sf ? ':' + s.sf : '')
@@ -4875,7 +4878,10 @@ function stateKey(s) {
     + (s.epk ? ':' + s.epk : '')   // …and one entry-point KIND inside the Entry points collection
     + (s.iface ? ':' + s.iface : '')  // …and one SURFACE inside the Interfaces list
     + (s.sys ? ':' + s.sys : '')   // one System collection, the drill out of its cards
-    + (s.id ? ':' + s.id : '');    // …and one element's own details page
+    + (s.id ? ':' + s.id : '')     // …and one element's own details page
+    + (s.sec ? ':' + s.sec : '');  // …and WHICH PART of a feature's page: its use cases, or one of
+                                   // the three lists beside them. The parts SWITCH, so each is a
+                                   // screen of its own and has to be one the address can name.
 }
 // --- the URL says which screen you are on ---------------------------------------
 // The part of the URL after `#` carries the screen: its kind, every field `stateKey` distinguishes
@@ -7862,7 +7868,15 @@ function elementSidePillsHtml(id) {
 }
 function stateTitle(s) {
   if (s.kind === 'context') return 'Dependencies';
-  if (s.kind === 'container') return 'Subsystems';
+  // THE TAB IS 'Components', the boxes on it are still SUBSYSTEMS. A reader comes here looking for
+  // the parts of the code; a subsystem is the word for a set of those parts, and it keeps that word
+  // everywhere it appears — on its boxes, its cards, its own page and the breadcrumb into it. Same
+  // split the other renamed tabs make (`usecases` → Features, `domain` → Data, `context` →
+  // Dependencies): the label is the reader's word, the kind stays the code's.
+  if (s.kind === 'container') return 'Components';
+  // UNREACHABLE, and it now shares its title with the tab above. Nothing calls `go({kind:'component'})`
+  // — only a hand-typed `#v=component` arrives here. Left alone rather than renamed around: giving a
+  // dead view a distinct name would be inventing a word for a screen nobody can open.
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Data';  // user-facing label for the `domain` view (the tab): the things the product knows about
   if (s.kind === 'rules') {  // the view lists RULES; "business logic" named a code layer, not the content
@@ -8461,58 +8475,124 @@ function featEmpty(text) { return `<p class="feat-empty">${esc(text)}</p>`; }
 // by its subdomain, both of which ride the same `parent` pointer. Thirty-one loose chips is a wall and
 // says nothing about shape; the same thirty-one under six subsystem names says which parts of the
 // machine this feature lives in, which is the question "built from" was really asking.
-function featChipGroupsHtml(ids) {
-  const groups = [];
+// ── ONE ORDER FOR EVERY LIST ON A FEATURE'S PAGE ────────────────────────────────────────────────
+// MOST CHARACTERISTIC FIRST. A thing touched by this feature alone says what the feature IS; one
+// touched by seven of them is plumbing that happens to be on the path. Measured on mcpolis: 34
+// components are reached by one feature, 16 by two, down to 2 reached by seven — a real spread, so
+// the sort has something to bite on.
+//
+// It replaced ID ORDER, which is what `sorted_ids` ships and what every list here drew. Ids are
+// never on screen, by design, so the one fact driving the order was invisible: CAP1 opened with
+// Sign-in machinery and buried Teams and members third, because C10 happens to be lower than C11.
+//
+// NOTHING MARKS IT ON SCREEN. That is a deliberate choice and it has a cost: an order the reader
+// cannot explain is a different mystery, not a solved one. It is here because the FIRST items are
+// right even when the rule is invisible, which was not true of the id order.
+//
+// Three lists, one comparator, so "most characteristic first" cannot come to mean three things.
+let FEATURE_SHARE = null;
+function featureShare(id) {
+  if (!FEATURE_SHARE) {
+    FEATURE_SHARE = new Map();
+    // Components arrive counted (`componentFeatures`, the Python join); records and decision areas
+    // are counted here from the same feature list the page itself reads, so no second join exists.
+    for (const [cid, fs] of Object.entries(COMP_FEATURES || {})) FEATURE_SHARE.set(cid, (fs || []).length);
+    for (const f of (FEATURES.features || [])) {
+      for (const e of (f.entities || [])) FEATURE_SHARE.set(e, (FEATURE_SHARE.get(e) || 0) + 1);
+    }
+    for (const b of ((RULES_VIEW || {}).blocks || [])) {
+      FEATURE_SHARE.set(b.id, ((b.specifiedUnder || []).length) || 1);
+    }
+  }
+  return FEATURE_SHARE.get(id) || 1;
+}
+// HOW BIG the thing is, in its own units: a part by the files it owns, a record by the fields it
+// holds. The tie-break under specificity, largest first — between two things equally this feature's
+// own, the bigger one is more of it.
+function featureItemSize(id) {
+  const n = GRAPH.nodes[id] || {};
+  return (n.files || []).length + (n.attrs || []).length;
+}
+function nameOf(id) { return ((GRAPH.nodes[id] || {}).name || id); }
+// fewest features first, then biggest, then by name. A COPY — the caller's list is the shipped one.
+function byFeatureRelevance(ids) {
+  return (ids || []).slice().sort((a, b) =>
+    featureShare(a) - featureShare(b)
+    || featureItemSize(b) - featureItemSize(a)
+    || nameOf(a).localeCompare(nameOf(b)));
+}
+// THE PARTS OF THE CODE A FEATURE RUNS ON, under the CONTAINER each one lives in. A container is a
+// real element with a page, a mark and a sentence of its own, so it is drawn as one: its mark, its
+// name as a door, its purpose, and its parts as pills inside.
+//
+// PILLS INSIDE, NOT CARDS. Cards were asked for and measured first: mcpolis's Upstream MCPs is 28
+// parts in 11 containers, which is 39 cards at 126px — about 4900px of panel against 1160px as
+// pills — and the containers hold 2.5 parts each, so most of that height would be frame around two
+// names. The biggest feature on that map, Running the service, is 37 parts in 15 containers.
+//
+// NOT FOLDED ANY MORE. The fold existed because this was the last of five stacked sections and the
+// page was long; it is a panel of its own now, so there is nothing below it to push down and a
+// reader who chose this panel has already said they want the parts.
+function featComponentGroupsHtml(ids) {
   const byParent = new Map();
-  for (const id of ids) {
+  for (const id of byFeatureRelevance(ids)) {
     const p = (GRAPH.nodes[id] || {}).parent || '';
-    if (!byParent.has(p)) { byParent.set(p, []); groups.push(p); }
+    if (!byParent.has(p)) byParent.set(p, []);
     byParent.get(p).push(id);
   }
-  const chips = (list) => `<div class="feat-chips">${list.map((id) =>
-    itemPillHtml(id)
-  ).join('')}</div>`;
-  // A single group, or none named, is not a grouping — draw the chips plain rather than under one
-  // heading that repeats what the section heading already said.
-  if (groups.length < 2) return chips(ids);
-  return groups.map((p) => {
-    const name = p && GRAPH.nodes[p] ? GRAPH.nodes[p].name : '';
-    return '<div class="feat-chipgroup">'
-      + (name ? `<div class="feat-chipgroup-name">${esc(name)}</div>` : '')
-      + chips(byParent.get(p)) + '</div>';
-  }).join('');
+  // A CONTAINER TAKES ITS MEMBERS' ORDER: its most characteristic part is how characteristic it is,
+  // then how many of this feature's parts it holds, then its name. Its own `files` would answer a
+  // different question — how big the container is in the codebase, not how much of it is this
+  // feature — so the container is measured by what this feature has in it.
+  const order = [...byParent.keys()].sort((a, b) =>
+    featureShare(byParent.get(a)[0]) - featureShare(byParent.get(b)[0])
+    || byParent.get(b).length - byParent.get(a).length
+    || nameOf(a).localeCompare(nameOf(b)));
+  const chips = (list) => `<div class="feat-chips">${list.map((id) => itemPillHtml(id)).join('')}</div>`;
+  // A single group, or none named, is not a grouping — draw the pills plain rather than under one
+  // container heading that repeats what the panel heading already said.
+  if (order.length < 2) return chips(ids);
+  return '<div class="feat-cgroups">' + order.map((p) => {
+    const n = p && GRAPH.nodes[p];
+    if (!n) return `<div class="feat-cgroup">${chips(byParent.get(p))}</div>`;
+    const c = cardFacts(p);
+    const desc = c && c.desc ? `<p class="feat-cgroup-what">${mdInline(c.desc)}</p>` : '';
+    return '<section class="feat-cgroup">'
+      + '<div class="feat-cgroup-head">'
+      + `<span class="feat-cgroup-gly">${itemGlyphSvg(n.kind)}</span>`
+      + `<button type="button" class="feat-cgroup-name" data-godrill="${esc(p)}"`
+      + ` title="Open this container">${esc(n.name)}</button>`
+      + `<span class="feat-cgroup-n">${esc(countLabel(byParent.get(p).length, 'component'))}</span>`
+      + '</div>' + desc + chips(byParent.get(p)) + '</section>';
+  }).join('') + '</div>';
 }
 
-// "How you reach it", by the KIND of way in — the same canonical kind the System tab groups by, so
-// `http` and `http-route` land in one group on both screens. A map that records no ways in on its use
-// cases (measured: one live map names 0 of 664) must SAY it is not recorded, never show a blank.
-function featEntryPointsHtml(ids) {
-  // Grouped by SURFACE when the map records one for each way in — a product word ("Customer
-  // dashboard") beats a code word ("http-route"), and it is the same cut the Interfaces tab makes.
-  // Falls back to the canonical kind on every map that records no interfaces.
-  const ifaceOf = {};
-  for (const i of ifaceList()) for (const ep of (i.waysIn || [])) ifaceOf[ep] = i.name;
-  const byKind = {};
-  const order = [];
-  for (const id of ids) {
-    const e = EP_BY_ID[id];
-    if (!e) continue;
-    const k = ifaceOf[id] || ((e.canonical_kind || e.kind || 'other').trim()) || 'other';
-    if (!byKind[k]) { byKind[k] = []; order.push(k); }
-    byKind[k].push(e);
-  }
-  if (!order.length) return featEmpty('Not recorded: no use case here names a way in.');
-  return '<div class="feat-eps">' + order.map((k) => '<div class="feat-ep-kind">'
-    + `<span class="feat-ep-kindname">${esc(k)}</span>`
-    + '<div class="feat-ep-list">' + byKind[k].map((e) => {
-      const trig = e.trigger ? mdInline(e.trigger) : '<span class="muted">(way in)</span>';
-      return e.component && GRAPH.nodes[e.component]
-        ? `<button type="button" class="featep" data-id="${esc(e.component)}" `
-          + `data-idx="${e.index || 0}">${trig}</button>`
-        : `<span class="feat-ep-plain">${trig}</span>`;
-    }).join('') + '</div></div>').join('') + '</div>';
+// A FEATURE'S DECISION AREAS, as the SAME cards the Rules tab draws. Not its rules: the map never
+// picked a rule for a feature. An AREA carries the authored list of the features it is specified
+// under, and the page used to expand that to every rule inside — measured on mcpolis's Upstream
+// MCPs, 16 rule rows standing on 2 authored answers, and only 4 of the 16 have any code link to one
+// of that feature's use cases. Cards per area say exactly what the map knows and no more.
+//
+// `Also under` rides along, from the board's own builder: Protecting stored secrets is specified
+// under two features, and a reader deciding whether a rule is really this feature's needs that.
+function featRuleAreas(ruleIds) {
+  const mine = new Set(ruleIds || []);
+  // The same order the other two lists take: an area specified under this feature alone leads, one
+  // shared with another follows, and between equals the one holding more rules comes first.
+  return ruleBlockGroups().filter((g) => g.rules.some((r) => mine.has(r.id)))
+    .sort((a, b) => featureShare(a.id) - featureShare(b.id)
+      || b.rules.length - a.rules.length
+      || (a.name || '').localeCompare(b.name || ''));
 }
-
+function featRuleAreasHtml(groups) {
+  if (!groups.length) return '';
+  return cardGridHtml(groups.map((g) => ruleAreaCardHtml(
+    g, (g.specifiedUnder || []).filter((f) => f !== CUR_FEATURE_ID && featureName(f) !== UNKNOWN_NAME)
+  )).join(''));
+}
+// Which feature's page is being drawn, so an area's `Also under` can leave that feature out — the
+// board names every feature because it is a board of all of them; here one of them is the page.
+let CUR_FEATURE_ID = '';
 // The rules of one feature, under the DECISION AREA each belongs to — the same cut the Rules tab makes,
 // so a reader who knows an area from that tab meets it again by the same name here. One grouping,
 // shared with the component pane's "How it decides", because two implementations of "rules by area"
@@ -8547,21 +8627,6 @@ function featRuleNotes() {
       + 'Every feature\u2019s rule list is a floor, not the whole answer.');
   }
   return out;
-}
-function featRulesHtml(ids) {
-  // No note here. What the rule JOIN could and could not reach is a fact about coyodex's own analysis,
-  // and the product views carry none of those: they all live together under System › About this map.
-  const notes = '';
-  if (!ids.length) return notes + featEmpty('No rule this map records is enforced on this feature.');
-  // The same grouped card list the Actors view uses: sections cut by decision area, each a macro card
-  // holding its rules. Hand-rolled here first, which is exactly the drift the shared component ends.
-  // THE SAME RULE CARD the decision area's own page draws: its reason under its sentence, and no type
-  // word, because every card under "What it decides" is a rule and the section says so.
-  return notes + elementCardGroupsHtml(rulesByBlock(ids).map((g) => ({
-    title: g.name, ids: g.rules.map((r) => r.id),
-    count: countLabel(g.rules.length, 'rule'),
-    per: (id) => ({ noType: true, foot: ruleWhyFootHtml(id) }),
-  })));
 }
 
 
@@ -8657,44 +8722,126 @@ function featureHeadHtml(capId) {
 // Everything under the use cases: the ways in, the decisions, the data and the code. In that order,
 // which walks the reader from what a person touches down to what the machine is made of. Returns the
 // sections AND their index entries, so the chip bar and the page are built from one list.
-function featureSectionsHtml(capId) {
+// THE THREE LISTS BESIDE A FEATURE'S USE CASES, each as a PANEL the index strip switches to — not a
+// section the page scrolls to. One panel is on screen at a time (see featurePanels): four stacked
+// sections made the strip a table of contents for a page nobody could see the end of, and the use
+// cases, which ARE the feature, shared the window with a 28-part list.
+//
+// Returns the panels in reading order. Two sections were removed from this page and the reasons are
+// different.
+//
+// "How you reach it" listed the addresses a use case NAMES, which is authored and never checked.
+// Measured on mcpolis: of the 24 use-case-and-address pairs this feature page drew, 3 had nothing in
+// the use case's own flow reaching them, and across the map 6 rows claimed an address their flow
+// never touches. Deriving it instead was measured too and is worse: the tightest test keeps 35 of
+// 121 rows, the loosest 48, because a step and an address are joined only by comparing two line
+// numbers — there is no reference from one to the other in the model.
+//
+// "What it reaches out to" repeated the interface pills the use case cards on this same page already
+// carry: measured on all 15 features of the two live maps, it was a SUBSET of those pills every
+// time. That is exactly the box-does-not-repeat-its-picture rule.
+function featurePanels(capId) {
   const f = FEAT_BY_ID[capId];
-  if (!f) return { secs: [], html: '' };
-  const secs = [];
-  let html = featSection(secs, 'eps', 'How you reach it', f.entryPoints.length,
-    featEntryPointsHtml(f.entryPoints), itemGlyphSvg('interface'));
-  // WHAT IT REACHES OUT TO — the other half of a feature's outside edge, and the half no screen
-  // carried before. It is EMPTY on most features until the walks step at the services themselves
-  // (measured on one live map: 8 of 344 steps do), so the section states that rather than vanishing.
-  if (HAS_INTERFACES) {
-    html += featSection(secs, 'out', 'What it reaches out to', (f.reachesOut || []).length,
-      (f.reachesOut || []).length
-        ? '<div class="feat-eps"><div class="feat-ep-list">' + f.reachesOut.map((id) => {
-            const i = ifaceById(id);
-            return i ? itemPillHtml(id, { kind: 'interface', name: i.name, ikind: i.kind }) : '';
-          }).join('') + '</div></div>'
-        : featEmpty('Not stated: no step of this feature\u2019s walks is drawn at an outside service.'),
-      itemGlyphSvg('dep'));
-  }
-  html += featSection(secs, 'rules', 'What it decides', f.rules.length,
-    featRulesHtml(f.rules));   // no mark: the map draws no glyph for a rule
-  // The DATA MODEL is main implementation information, which the reader wants without drilling — so the
-  // entities are full cards, each carrying where it is stored, not a row of bare names.
-  html += featSection(secs, 'ents', 'What it knows', f.entities.length,
-    f.entities.length ? elementCardListHtml(f.entities)
-                      : featEmpty('No entity this map records is touched by its use cases.'),
-    itemGlyphSvg('entity'));
-  // The CODE is the lowest-priority thing on this page: the reader wants the story first, the main
-  // implementation facts second, and the parts list a distant third. So it is the one section that
-  // arrives folded — its heading still states how many components there are, which is the fact worth
-  // scanning, and the names are one click away for the reader who actually wants them.
-  html += featSection(secs, 'comps', 'What it runs on', f.components.length,
-    f.components.length
-      ? '<details class="feat-fold"><summary>Show the parts</summary>'
-        + featChipGroupsHtml(f.components) + '</details>'
-      : featEmpty('No use-case walk here passes through a component.'),
-    itemGlyphSvg('component'));
-  return { secs, html };
+  if (!f) return [];
+  CUR_FEATURE_ID = capId;
+  // A BARE NUMBER, like every other chip on the strip. It counts RULES, not the areas the panel
+  // draws: the reader is comparing how much each part of the page holds, and `2 decision areas ·
+  // 16 rules` made one chip in four a sentence while the others said `8`, `5`, `28`. Each area card
+  // states its own rule count, so the breakdown is one glance away and not on the strip.
+  const areas = featRuleAreas(f.rules);
+  return [
+    // UNDER IT, not "it uses". The link is where a person writing the spec would put these rules
+    // (`Block.specified_under`), which is an authoring home, not a call at run time — and the map's
+    // own field records that every attempt to DERIVE that home failed. Measured on Upstream MCPs:
+    // of its 16 rules, 4 have any code link to one of its use cases and none sits on a step's line.
+    // EACH PANEL IS NAMED FOR ITS TAB — Rules, Data, Components — so a reader meets the same word
+    // for the same kind of thing whether they are on the whole map or inside one feature. The
+    // qualifier moved into the sentence under it, which is where it can be said properly: "under
+    // this feature" is what the rules link actually is, and the title has no room to be careful.
+    featPanel('rules', 'Rules', f.rules.length, itemGlyphSvg('block'),
+      'Every decision area specified under this feature.',
+      featRuleAreasHtml(areas)
+        || featEmpty('Not recorded: no decision area says it is specified under this feature.')),
+    // DATA IT TOUCHES — the records a step of this feature's walks actually names. A GRID, not a
+    // stack: every card here is a door to that record on the Data view, and a grid is the shape for
+    // a set to be CHOSEN between. Full-width rows left a quarter of each line empty.
+    featPanel('ents', 'Data', f.entities.length, itemGlyphSvg('entity'),
+      dataSentence(f.dataDirections),
+      f.entities.length ? elementCardGridHtml(byFeatureRelevance(f.entities))
+        : featEmpty('No record this map keeps is touched by this feature\u2019s use cases.')),
+    // COMPONENTS — the parts of the code its walks pass through, under the container each lives in.
+    // RUNS ON, not "that implement it". Most of these parts are not this feature's: on CAP1, 4 of
+    // 19 are touched by it alone and 3 are touched by five or more features — "Live change delivery"
+    // by seven of the ten. "Runs on" is true whether a part is shared or not.
+    featPanel('comps', 'Components', f.components.length, itemGlyphSvg('component'),
+      'Components this feature uses.',
+      f.components.length ? featComponentGroupsHtml(f.components)
+        : featEmpty('No use case of this feature passes through a component.')),
+  ];
+}
+// ── A PAGE THAT IS A STRIP AND ONE PANEL ────────────────────────────────────────────────────────
+// Two pages are this shape now: a feature's and an interface's. Both were four framed sections
+// stacked on one scroll, and on both the page grew past what a scroll can carry — measured, the
+// Dashboard interface came to 15678px, with `What crosses` 11348px of it. Stacking also made the
+// index a table of contents rather than a control, and put the thing the page is named after in
+// competition with three lists beside it.
+//
+// The FIRST panel is the page's default and writes no field, so every link made before the switch
+// existed still opens what it always did.
+function paneStripHtml(panels, now, label) {
+  return '<div class="tab-index feat-panebar">'
+    + `<nav class="feat-panes" aria-label="${esc(label)}">`
+    + panels.map((x) => `<button type="button" class="tab-index-chip${x.key === now ? ' active' : ''}"`
+      + ` data-pane="${esc(x.key)}"${x.key === now ? ' aria-current="true"' : ''}>${esc(x.title)}`
+      + `<span class="tab-index-n">${esc(Array.isArray(x.count) ? x.count.join(' \u00b7 ') : String(x.count))}</span>`
+      + '</button>').join('') + '</nav></div>';
+}
+// A switch is a NAVIGATION, not a widget state: it goes through `go`, so the address names the
+// panel, a link reopens it and the browser's own Back steps off it. Held in the page it would
+// survive a drill and be lost on a reload, which is the wrong answer to both.
+function bindPaneSwitch(root, pick) {
+  root.querySelectorAll('.feat-panes .tab-index-chip').forEach((b) =>
+    b.addEventListener('click', () => pick(b.getAttribute('data-pane'))));
+}
+// Which panel a state asks for, or the first — the one the page opens on.
+function panePicked(panels, want) {
+  const hit = panels.find((x) => x.key === want);
+  return hit ? hit.key : (panels[0] || {}).key;
+}
+// WHAT THIS FEATURE DOES WITH ITS RECORDS, in the feature's own words. `in` its steps read a record,
+// `out` they store into one — the direction the map already carries on the step, summed per feature
+// by `coyodex.features` and shipped, never re-read from the steps here.
+//
+// WORDED PER FEATURE because a fixed sentence was wrong. "The data this feature stores and reads"
+// was measured across the two live maps: 12 of 13 features do both, and mcpolis's Audit trail does
+// not — its one record step is a read ("read the matching activity rows"), so that page promised a
+// write that never happens. Twelve pages read the same as before; the thirteenth is now true.
+function dataSentence(dirs) {
+  const d = dirs || [];
+  const reads = d.indexOf('in') >= 0 || d.indexOf('both') >= 0;
+  const stores = d.indexOf('out') >= 0 || d.indexOf('both') >= 0;
+  if (reads && stores) return 'The data this feature stores and reads.';
+  if (stores) return 'The data this feature stores.';
+  if (reads) return 'The data this feature reads.';
+  // A map that records no direction on these steps gets the plain statement of what the list holds,
+  // rather than a guess at which way the data went.
+  return 'The records this feature\u2019s use cases touch.';
+}
+// ONE PANEL, wearing the SAME framed section every item page's blocks wear — the grey strip with the
+// mark, the title, the count and one sentence, and the body in the frame under it. The use-case
+// panel was already built that way (it is `board`, an `itemSectionHtml`), and the other three were
+// bare bodies under a lit chip: four panels, two designs, on one page.
+//
+// THE SENTENCE SAYS WHAT THE LIST HOLDS, and stops there. It named the ORDER too for a while —
+// "the ones only it touches first" — and that was dropped: the sentence is about the content, and
+// the order is a thing the reader either notices or does not. Nothing on screen states it now.
+// NOT `panel`: that name is taken by the info pane element, and shadowing it blanked the whole
+// viewer with `Identifier 'panel' has already been declared`.
+function featPanel(key, title, count, glyph, note, body) {
+  // The TITLE and the COUNT go to the switch, not to the strip. The lit segment carries both, and
+  // the strip sits directly under it — so the strip draws the mark and the sentence only.
+  return { key, title, count, glyph,
+           html: itemSectionHtml([], 'feat-' + key, '', '', note, body, glyph) };
 }
 
 // Wire the page's names. Elements go through `selectFromTree`, the one place that answers "which view
@@ -8704,10 +8851,15 @@ function bindFeaturePage(root) {
   // crumb then runs through the use case's feature, which on this page is the page you are on.
   bindJourney(root, {});
   bindItemPills(root);
-  // `.featep` is ONE kind of chip now: a way in, which opens the component at that entry point. The
-  // interfaces this feature reaches out to shared the class and are item pills, wired above.
-  root.querySelectorAll('.featep').forEach((b) => b.addEventListener('click', () => {
-    selectEntryPoint(b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0);
+  // The decision-area cards, opening the area's own page — the SAME door the Rules board gives them,
+  // from the same binder, so an area reached from here and from there lands on one screen.
+  bindElementCards(root, (id) => go({ kind: 'rules', blk: id }));
+  bindPlainCards(root, (key) => go({ kind: 'rules', blk: key }));
+  // A container name over a group of parts. `drillInto` is the one place that answers "which view
+  // shows this id", so a subsystem opens its map and anything else opens whatever its own home is.
+  root.querySelectorAll('[data-godrill]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    drillInto(b.getAttribute('data-godrill'));
   }));
 }
 
@@ -8786,8 +8938,10 @@ function renderUseCases(sel) {
   // On a feature's page the board is the page's first section, framed and headed like the actor
   // page's — the same strip, the same mark, the same count the chip bar states.
   const ucTotal = shown.reduce((n, g) => n + g.ucs.length, 0);
+  // NO TITLE AND NO COUNT, like the other three panels: this is only ever built on a feature's page,
+  // where the switch above it carries both. A caption head is what a titleless one draws.
   const board = page
-    ? itemSectionHtml(secs, 'uc', 'Use cases', ucTotal,
+    ? itemSectionHtml(secs, 'uc', '', '',
         'Every use case of this feature, in the order the happy path runs, grouped by who drives each.',
         featureRailHtml(page), itemGlyphSvg('usecase'))
     : '';
@@ -8838,17 +8992,48 @@ function renderUseCases(sel) {
   // On a feature's page the use-case section is the FIRST of five, and the rest of the map — filtered to
   // this feature — follows it. The pinned index is built from every section, so it and the page cannot
   // disagree about what is on screen.
-  const extra = page ? featureSectionsHtml(page) : null;
-  // On a FEATURE's page the chip bar carries each section's count, so the strip is the page's
-  // contents and its summary in one line — "what is in here, and how much of it" answered before
-  // any scrolling. The sections' own headings then drop the count they were stating twice.
-  const index = tabIndexHtml(extra ? secs.concat(extra.secs) : secs);
+  // ── A FEATURE'S PAGE IS A STRIP AND ONE PANEL ───────────────────────────────────────────────────
+  // The strip names the parts and says how big each is; the part you pick is the whole page under
+  // it. It was four sections stacked under a strip that scrolled you to them, and that made the
+  // strip a table of contents rather than a control: the use cases, which ARE the feature, shared
+  // the window with a 28-part list and a 16-rule list, and the reader scrolled past the thing the
+  // page is named after to reach anything else.
+  //
+  // ABOVE the board, not below it. Below, it read as a footer to the use cases; above, it is what
+  // the page offers, and the panel under it is the answer.
+  if (page) {
+    const panels = [{ key: 'usecases', title: 'Use cases', count: ucTotal,
+                      html: board + (sections || '') }].concat(featurePanels(page));
+    const now = panels.some((x) => x.key === sel.sec) ? sel.sec : 'usecases';
+    const shown = panels.find((x) => x.key === now);
+    // TWO LAYERS, and both are needed. The BAR is the sticky full-width strip the page scrolls
+    // under — it keeps the `tab-index` class, so it is the element the shadow logic finds and marks
+    // when it reaches the top. The CONTROL inside it is the segmented capsule.
+    // A SEGMENTED CONTROL, not a row of pills. The switch changes the whole page and an element pill
+    // opens one element, and the two were measured identical: same 22px height, same 12px type, one
+    // filled and one outlined. Joining the parts into one track is what says "these are alternatives,
+    // pick one" — and nothing else in this viewer draws that shape, so it cannot be mistaken again.
+    const strip = paneStripHtml(panels, now, 'Parts of this feature');
+    // The PANEL wears no heading of its own: the lit chip directly above it is the heading, and a
+    // title repeating it is the same word twice with nothing between them.
+    diagram.innerHTML = `<div class="usecases-wrap pane-page">${head}${strip}`
+      // NO WRAPPER ROUND THE PANEL. It held nothing — no style, no binder, no reader — and it made
+      // this page's tree one level deeper than the interface page's, which draws the same shape.
+      // The two are structurally identical now, so one rule dresses both.
+      + shown.html + '</div>';
+    bindPaneSwitch(diagram, (k) => go({ kind: 'capability', cap: page, act: sel.actor || undefined,
+                                        sec: k === panels[0].key ? undefined : k }));
+    bindStickyStrip(diagram.querySelector('.usecases-wrap'));
+    bindProductLead();
+    bindFeaturePage(diagram);
+    bindElementCards(diagram, null);
+    return;
+  }
+  const index = tabIndexHtml(secs);
   diagram.innerHTML = `<div class="usecases-wrap">${head}${board}${index}`
-    + (sections || (board ? '' : '<p class="empty">No use cases recorded.</p>'))
-    + (extra ? extra.html : '') + '</div>';
+    + (sections || (board ? '' : '<p class="empty">No use cases recorded.</p>')) + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
   bindProductLead();
-  if (page) bindFeaturePage(diagram);
   bindElementCards(diagram, null);
 }
 
@@ -11142,6 +11327,22 @@ function itemSectionHtml(secs, key, title, count, note, body, glyph, titleHtml) 
 // door to it — the Rules board, whose every section is a feature with a page of its own. The plain
 // `title` is still what the chip bar and the strip index carry, so a door cannot rename a section.
 function itemSectionHeadHtml(title, count, note, glyph, titleHtml) {
+  // A HEAD WITH NO TITLE IS A CAPTION. On a page whose SWITCH already names the panel, a title here
+  // is the same picture saying it twice: measured, the lit segment reads "Components 18" and the
+  // strip repeated "Components 18" 27px below it. Such a panel passes no title and no count, and
+  // gets the mark and the sentence alone.
+  //
+  // NO EMPTY <h2>. Blanking the title inside the heading would leave a heading a screen reader
+  // announces as nothing, and would still be a heading in the page's outline.
+  //
+  // This is NOT for a page whose index SCROLLS. There several sections stack and each heading is
+  // the only thing naming its section as it passes, so those keep their titles — see `.pane-page`.
+  // NO MARK EITHER. It was there to sit where a title's mark sits, but with no title beside it a
+  // mark in front of one sentence is decoration: the panel it heads is already named by the lit
+  // segment above, which carries no mark, so the two did not even agree.
+  if (!title && !titleHtml) {
+    return note ? `<p class="item-sec-note item-sec-caption">${esc(note)}</p>` : '';
+  }
   // A LIST OF COUNTS, for a head that measures its page in more than one unit: the Rules board holds
   // decision areas AND the rules inside them, and one number could only ever answer half of that.
   const counts = (Array.isArray(count) ? count : [count]).filter((c) => c !== '' && c != null);
@@ -11189,15 +11390,32 @@ function bindTabIndex(wrap) {
     let active = 0;
     sections.forEach((sec, i) => { if (sec && sec.getBoundingClientRect().top <= line) active = i; });
     chips.forEach((c, i) => c.classList.toggle('active', i === active));
-    // ATTACHED, or sitting in the flow. A sticky element has no CSS state of its own, so the one
-    // reading that can answer it is geometric: the bar is attached exactly when it has reached its
-    // own `top: 0` and stopped moving with the page. Half a pixel of tolerance, because a fractional
-    // scroll position leaves the two edges a hair apart at the moment they meet.
-    nav.classList.toggle('tab-index-stuck',
-                         navRect.top - wrap.getBoundingClientRect().top < 0.5);
+    markStuck(nav, wrap);
   };
   wrap.addEventListener('scroll', spy, { passive: true });
   spy();
+}
+// ATTACHED, or sitting in the flow. A sticky element has no CSS state of its own, so the one reading
+// that can answer it is geometric: the bar is attached exactly when it has reached its own `top: 0`
+// and stopped moving with the page. Half a pixel of tolerance, because a fractional scroll position
+// leaves the two edges a hair apart at the moment they meet.
+//
+// LIFTED OUT OF THE SPY because two strips need it and only one of them has sections to spy on: a
+// feature's strip SWITCHES panels, so there is nothing below it to track, but it is just as sticky
+// and needs the same edge. Copying five lines is how the two would come to disagree about what
+// "attached" means.
+function markStuck(nav, wrap) {
+  nav.classList.toggle('tab-index-stuck',
+                       nav.getBoundingClientRect().top - wrap.getBoundingClientRect().top < 0.5);
+}
+// A strip that switches rather than scrolls: no spy, no sections, the same attached edge.
+function bindStickyStrip(wrap) {
+  if (!wrap) return;
+  const nav = wrap.querySelector('.tab-index');
+  if (!nav) return;
+  const mark = () => markStuck(nav, wrap);
+  wrap.addEventListener('scroll', mark, { passive: true });
+  mark();
 }
 
 // One titled reference table's BODY on the System tab: a `.glossary`-styled table. `cols` = [{head, get}];
@@ -12087,12 +12305,34 @@ function ifaceDirectionWord(i) {
 // so `elementCardListHtml` renders nothing for an `Rn` and this is the one card builder that can
 // draw one. Same three parts as every other card: the name, a pill saying what it is, one sentence.
 // The card is a door to that actor's own page, which is where the type pill would have gone anyway.
-function ifaceActorCardHtml(rid) {
+// WHAT THIS PERSON COMES HERE FOR. The card's other three lines — the name, the kind pill and the
+// wants sentence — are the same on every interface this actor appears at, so nothing on it said what
+// they do at THIS door. Their features do, and they are the fact this panel exists to give.
+//
+// FEATURES, NOT USE CASES. Measured on mcpolis: as use cases, Team admin on the Dashboard is 25
+// pills and would need an overflow control; as features it is 6, and 14 of the 17 actor rows across
+// the map are a single pill. The use cases say more, and the wall is what they cost.
+function ifaceActorCardHtml(rid, ucs) {
   const r = ROLE_BY_ID[rid] || {};
+  const feats = [];
+  for (const uc of (ucs || [])) {
+    const cap = CAP_OF_UC[uc];
+    if (cap && feats.indexOf(cap.id) < 0) feats.push(cap.id);
+  }
+  const foot = feats.length
+    ? `<p class="ecard-extra"><span class="ecard-lbl">Comes here for</span> `
+      + feats.map((f) => featurePillHtml(f)).join(' ') + '</p>'
+    : '';
+  // THE ACTOR'S OWN MARK, which this card never drew. `plainCardHtml` has had the slot since it was
+  // written — its comment even names this case, "an actor's card, which IS a person, passes `k`" —
+  // and no caller ever passed one. So every person on this panel arrived as a nameplate while the
+  // same person wore their figure on every chip, box and card elsewhere in the viewer.
   return plainCardHtml({
+    k: r.kind || 'human',
     key: rid, name: r.name || rid,
     desc: wantsSentence(r.wants || ''),
     pill: cardPillsHtml(actorSidePills(r.kind, r.audience)),
+    foot,
   });
 }
 // ── the PICTURE ──────────────────────────────────────────────────────────────────────────────────
@@ -12339,74 +12579,6 @@ const CROSSING_DIR_VERB = { in: 'receives', out: 'sends' };
 // earlier removal was reverted because a step could not say WHICH WAY data went; the step says it
 // now, and the other two objections were closed rather than argued away (every interface owes a use
 // case, and its record list held 2 real independent records out of 68 references).
-//
-// `role` narrows to ONE PERSON'S steps, for the actor's page. THE FALLBACK IS TO THE UNATTRIBUTED
-// STEPS ONLY, never to every step: an actor reaches a surface three ways and only a door names the
-// role on the step, so a person with no door still has plenty to show — but falling back to ALL of
-// them put another named person's steps on this one's page, and argus told a reader that the
-// software "Assistant" picks a Google account and approves (a step belonging to the human Visitor).
-function stepGroupsOf(i, role) {
-  const groups = (i.steps || []);
-  if (!role) return groups;
-  const mine = groups.map((g) => ({ uc: g.uc, steps: (g.steps || []).filter((st) => st.role === role) }))
-                     .filter((g) => g.steps.length);
-  if (mine.length) return mine;
-  return groups.map((g) => ({ uc: g.uc, steps: (g.steps || []).filter((st) => !st.role) }))
-               .filter((g) => g.steps.length);
-}
-// WHICH STEP SAYS IT, at the end of its own line, and it is a door: it selects that step in that
-// walk's picture, so a reader who doubts a sentence lands on the arrow that makes the claim.
-//
-// THE NUMBER IS THE POSITION IN THE WALK, not the authored `n`, and the two differ: a sub-flow's
-// steps are spliced into every walk that runs it keeping their own numbering, so one walk runs
-// 1..24 over authored ns like [1,2,3,1,2,3,4,…]. Every other screen counts positions, so a chip
-// saying "step 6" that landed on "Step 18 / 24" would promise a number the picture never shows.
-// This is why the model carries the CONTAINER beside the number: `(container, n)` is the only
-// unique step identity once a sub-flow is spliced in.
-// A CHIP NAMES WHERE IT GOES. The step number is counted in the walk that AUTHORED the step, and the
-// click opens that walk — so when the step was written inside a shared sub-use case, naming only the use case
-// promised one screen and delivered another, with a number that belongs to neither.
-function stepFromHtml(st, uc, withName) {
-  const container = st.container || uc;
-  const i = flowStepIndex(uc, container, st.n);
-  const shared = container !== uc && !!SUBFLOW_BY_ID[container];
-  const parts = [];
-  if (withName) parts.push(flowName(uc));
-  if (shared) parts.push('\u27e8' + flowName(container) + '\u27e9');
-  const nm = parts.length ? parts.join(' \u00b7 ') + (i >= 0 ? ' \u00b7 ' : '') : '';
-  return `<button type="button" class="ifd-what-from" data-uc="${esc(container)}" `
-    + `data-i="${esc(String(i))}" title="Open this walk at the step that says it">`
-    + `${esc(nm)}${i >= 0 ? esc(`step ${i + 1}`) : ''}</button>`;
-}
-function bindStepFroms(root) {
-  root.querySelectorAll('.ifd-what-from[data-uc]').forEach((b) => {
-    b.addEventListener('click', (ev) => {
-      ev.stopPropagation();   // the step's door is not the card's pin, nor the stage's unpin
-      const uc = b.getAttribute('data-uc');
-      const i = Number(b.getAttribute('data-i'));
-      if (i >= 0) selectFlowStep(uc, i, true);
-      else go({ kind: 'usecase', uc });
-    });
-  });
-}
-// One walk step as a line: what happens, then which step said it. Shared by the surface's own page
-// and an actor's page, so the two cannot disagree about how a step reads.
-function stepLineHtml(st, uc, withName, hidden) {
-  // WHICH WAY THIS ONE WENT. Authored on the step, and the successor to the removed `carries[]`
-  // rows — so a reader asking what crosses a surface reads the story AND the direction in one line,
-  // where before the two sat in different blocks and could disagree.
-  const dir = st.direction
-    ? `<span class="ifs-dirtag ifs-dir-${esc(st.direction)}">`
-      + `${esc(stepDirWord(st.direction))}</span>` : '';
-  return `<li class="ifs-step${hidden ? ' more-hidden' : ''}">${dir}${esc(String(st.phrase).trim())}`
-    + `<span class="ifd-what-from-line">${stepFromHtml(st, uc, withName)}</span></li>`;
-}
-// The step's direction as a WORD, the PRODUCT as the subject. `both` says so plainly: one exchange
-// really does run each way, and the alternative was splitting such a step in two.
-function stepDirWord(dir) {
-  if (dir === 'both') return 'both ways';
-  return CROSSING_DIR_VERB[dir] || dir;
-}
 function bindIfaceDiagram(root) {
   // THE PEOPLE ON EACH DOOR'S BOX are item pills, and each opens that person's own page. Bound before
   // the stage check, because the pills are on the boxes whether or not the wires drew.
@@ -12971,61 +13143,53 @@ function renderInterface(s) {
         + 'field — this shape of interface is one a person goes to.'
       : 'Nobody. The product itself reaches this interface; no person goes there.';
   const farSide =
-    (actorIds.length ? `<div class="ecard-list">${actorIds.map(ifaceActorCardHtml).join('')}</div>`
+    (actorIds.length
+      ? `<div class="ecard-list">${actorIds.map((a) =>
+          ifaceActorCardHtml(a, (i.actorUseCases || {})[a])).join('')}</div>`
                      : `<p class="feat-empty">${esc(noActors)}</p>`)
     // The dependency is the PIPE, never the far side — the rule the whole section is built on. It
     // gets its own heading rather than sitting in the same list as the people.
     + (depIds.length
         ? '<h3 class="card-group-head">Reached through</h3>' + elementCardListHtml(depIds) : '');
-  // WHAT CROSSES — the whole answer, now that the authored table is gone with `carries[]`. Every
-  // line is a step someone drew at a real call site, carrying its own direction, so the claim and
-  // the evidence are the same sentence rather than two blocks that could disagree.
-  //
-  // GROUPED BY STORY, because a step means little without the story it sits in — mcpolis's
-  // dashboard draws 141 of them from 31 different walks, and read as one list they are noise.
-  //
-  // CAPPED PER STORY, WITH THE REST ONE CLICK AWAY IN PLACE. This is the page the rest lives on, so
-  // the tail cannot be a door to somewhere else the way it is on a diagram label.
-  const IFACE_PAGE_STEP_CAP = 5;
-  const storyBlocks = (i.steps || []).map((g) => {
-    const nm = (GRAPH.nodes[g.uc] || {}).name || g.uc;
-    return `<div class="ifs-dir"><h4 class="ifs-dir-head">`
-      + `<button type="button" class="ifs-story" data-uc="${esc(g.uc)}">${esc(nm)}</button></h4>`
-      + `<ul class="ifs-steps">`
-      + g.steps.map((st, n) => stepLineHtml(st, g.uc, false, n >= IFACE_PAGE_STEP_CAP)).join('')
-      + '</ul>'
-      + moreTailHtml(g.steps.length - IFACE_PAGE_STEP_CAP, '',
-                     'Show every step this story draws here', true)
-      + '</div>';
-  }).join('');
   const feats = i.featuresUnknown
     ? '<p class="feat-empty">Not stated. No walk in this map comes through this interface, so nothing here can say which features use it.</p>'
     : (i.features || []).length ? elementCardListHtml(i.features)
                                 : '<p class="feat-empty">No feature reaches this interface.</p>';
-  // The same framed sections with a strip head every item page draws, each led by the mark of what
-  // it holds. The counts are the cards' own: people on the far side, walks that cross, features.
-  const secs = [];
-  const crossCount = (i.steps || []).reduce((n, g) => n + g.steps.length, 0);
-  diagram.innerHTML = '<div class="usecases-wrap">'
+  // THE SAME SHAPE THE FEATURE PAGE TAKES: a strip of panels and one panel under it. Stacked, this
+  // page measured 15678px on the Dashboard interface — `What crosses` alone was 11348px of it, and
+  // `Who is on the far side`, which is the question a reader opens an interface to answer, was a
+  // screenful at the top of a scroll eleven thousand pixels long.
+  const panels = [
+    // FAR SIDE, never "in front of": which is in front depends on where the reader is standing, and
+    // nothing on the page says. `far side` is the map's own settled word and is defined against the
+    // PRODUCT, so it reads the same from either seat.
+    featPanel('far', 'Actors', actorIds.length, storyGlyphSvg('human'),
+      'Actors on this interface\u2019s far side.', farSide),
+    featPanel('feats', 'Features', i.featuresUnknown ? '' : (i.features || []).length,
+      storyFeatureGlyphSvg(), 'Features that use this interface.', feats),
+  ];
+  // The code panel only where there is code to show, as before: an interface the map grounds on a
+  // dependency alone has none, and a chip offering an empty panel is a control that wastes a click.
+  if ((i.components || []).length) {
+    // GROUPED BY CONTAINER, the same builder the feature page's Components panel uses — so a part
+    // of the code is met under its subsystem wherever the reader finds it, and the two pages cannot
+    // draw the same list two ways.
+    panels.push(featPanel('code', 'Components', i.components.length,
+      itemGlyphSvg('component'), 'Components that sit behind this interface.',
+      featComponentGroupsHtml(i.components)));
+  }
+  const now = panePicked(panels, s.sec);
+  diagram.innerHTML = '<div class="usecases-wrap pane-page">'
     // The interface's own mark in the figure column — the one its cards and chips wear, by its kind.
     + pageHeroHtml({ glyph: itemGlyphSvg('interface', i.kind), name: i.name, type: elementLabel('interface'), pills,
                      desc: i.what ? mdInline(i.what) : '',
                      noDesc: 'No description recorded for this interface.' })
-    + itemSectionHtml(secs, 'far', 'Who is on the far side', actorIds.length, '', farSide, storyGlyphSvg('human'))
-    + itemSectionHtml(secs, 'cross', 'What crosses', crossCount, '',
-        storyBlocks ? `<div class="ifs-cross">${storyBlocks}</div>`
-                    : '<p class="feat-empty">No step of any walk in this map is drawn at this '
-                      + 'interface, so the map cannot say what crosses it or when. Every interface '
-                      + 'owes a use case, including one an operator reaches, so this is a gap in '
-                      + 'the stories rather than a missing field.</p>',
-        itemGlyphSvg('usecase'))
-    + itemSectionHtml(secs, 'feats', 'Features through it', i.featuresUnknown ? '' : (i.features || []).length, '',
-        feats, storyFeatureGlyphSvg())
-    + ((i.components || []).length
-        ? itemSectionHtml(secs, 'code', 'The code behind it', i.components.length, '',
-            elementCardListHtml(i.components), itemGlyphSvg('component'))
-        : '')
+    + paneStripHtml(panels, now, 'Parts of this interface')
+    + panels.find((x) => x.key === now).html
     + '</div>';
+  bindPaneSwitch(diagram, (k) => go({ kind: 'interfaces', iface: s.iface,
+                                      sec: k === panels[0].key ? undefined : k }));
+  bindStickyStrip(diagram.querySelector('.usecases-wrap'));
   bindElementCards(diagram);
   // The actor cards are the only `data-key` cards on this page, and their door is the actor's page.
   bindPlainCards(diagram, (rid) => go({ kind: 'actor', act: roleName(rid) }));
@@ -13033,11 +13197,6 @@ function renderInterface(s) {
   diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) => {
     btn.addEventListener('click', () => selectFromTree(btn.getAttribute('data-id')));
   });
-  bindStepFroms(diagram);
-  bindMoreTails(diagram);   // the "+n more" under a story, in its open-in-place mode
-  // A STORY HEADING IS A DOOR to that story, the same treatment its steps get one line down.
-  diagram.querySelectorAll('.ifs-story[data-uc]').forEach((b) =>
-    b.addEventListener('click', () => go({ kind: 'usecase', uc: b.getAttribute('data-uc') })));
 }
 function renderRules(s) {
   const groups = ruleBlockGroups();
@@ -13280,7 +13439,7 @@ async function renderView(sArg, transient, seq) {
   // One feature's use cases — the drill out of those cards ('*' = all of them). The feature's own name
   // and purpose head the list itself; the view's question is one level up, on the view's own screen.
   if (s.kind === 'capability') {
-    renderUseCases({ cap: s.cap, actor: s.act });
+    renderUseCases({ cap: s.cap, actor: s.act, sec: s.sec });
     mainScene = null;
     renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }

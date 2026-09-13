@@ -527,8 +527,12 @@ def test_the_scroll_spy_clears_the_sections_scroll_margin() -> None:
     assert "scroll-margin-top: calc(var(--tab-index-h) + 8px)" in css      # 8 < 12
     # ATTACHED, in the same pass. A sticky element has no CSS state of its own, so the reading is
     # geometric: the bar is attached when it has reached its own top and stopped moving with the page.
-    assert "nav.classList.toggle('tab-index-stuck'," in spy
-    assert "navRect.top - wrap.getBoundingClientRect().top < 0.5" in spy
+    # The spy CALLS the attached reading, it no longer holds it: two strips are sticky and only one
+    # has sections to spy on, so the edge moved into `markStuck` where both read it the same way.
+    assert "markStuck(nav, wrap);" in spy
+    assert "nav.classList.toggle('tab-index-stuck'," in js[js.index("function markStuck(nav, wrap) {"):]
+    assert "nav.getBoundingClientRect().top - wrap.getBoundingClientRect().top < 0.5" in \
+        js[js.index("function markStuck(nav, wrap) {"):]
     assert ".usecases-wrap .tab-index-stuck { box-shadow:" in css
     assert "transition: box-shadow" in css
 
@@ -631,7 +635,7 @@ def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();" in js
     assert "function renderUseCases(sel) {" in js
-    assert ("renderUseCases({ cap: s.cap, actor: s.act });"
+    assert ("renderUseCases({ cap: s.cap, actor: s.act, sec: s.sec });"
             in js), "one feature's list and the flat catalog are the same renderer scoped differently"
     # In diff mode a card carries its members' change, or dropping the use cases one level down would
     # hide every "changed" badge behind a click.
@@ -2407,7 +2411,7 @@ def test_the_system_tab_is_cards_over_one_builder() -> None:
     # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
     assert "const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
     assert "return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;" in js
-    assert "'gid', 'sys', 'epk', 'iface', 'id'];" in js                 # …and its keys survive a right-pane navigation
+    assert "'gid', 'sys', 'epk', 'iface', 'id', 'sec'];" in js                 # …and its keys survive a right-pane navigation
 
 
 def test_the_only_pinned_lines_are_the_ones_that_still_say_something() -> None:
@@ -2455,7 +2459,7 @@ def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
     assert "kinds.push({ key: k, count: byKind[k].length" in js
     assert "if (found.kinds && !epk) {" in js
     assert "bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: sysId, epk: key }));" in js
-    assert "'gid', 'sys', 'epk', 'iface', 'id'];" in js
+    assert "'gid', 'sys', 'epk', 'iface', 'id', 'sec'];" in js
 
 
 def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> None:
@@ -2559,20 +2563,36 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     # A feature's page and a decision area's page are the same shape, so they are the same function.
     assert "function pageHeroHtml(o) {" in js
     assert "pageHeroHtml({" in js[js.index("function renderRules(s) {"):]
-    secs = js[js.index("function featureSectionsHtml(capId) {"):
-              js.index("\nfunction ", js.index("function featureSectionsHtml(capId) {") + 10)]
-    order = re.findall(r"featSection\(secs, '(\w+)', '([^']+)'", secs)
-    assert [t for _, t in order] == ["How you reach it", "What it reaches out to", "What it decides",
-                                     "What it knows", "What it runs on"], order
+    secs = js[js.index("function featurePanels(capId) {"):
+              js.index("\nfunction ", js.index("function featurePanels(capId) {") + 10)]
+    # A RETURNED LIST now, not a run of section calls: the strip SWITCHES between the panels instead
+    # of scrolling to them, so each is a screen of its own that the address can name.
+    order = re.findall(r"featPanel\('(\w+)', '([^']+)'", secs)
+    # TWO SECTIONS WENT, and the page is stronger for it. "How you reach it" listed authored
+    # addresses nothing checks (measured: 6 rows across mcpolis claim an address their own flow never
+    # reaches) and cannot be derived instead (the tightest line test keeps 35 of 121 rows). "What it
+    # reaches out to" was a SUBSET of the interface pills the use cases above already carry, on all
+    # 15 features of the two live maps — the box-does-not-repeat-its-picture rule.
+    # THE TITLES SAY WHAT THE LINK IS, and no more. "Rules it uses" and "Components that implement
+    # it" were both tried and rejected on the map's own numbers: a rule is specified UNDER a feature
+    # (authored, and the field's comment records that deriving it failed), and 15 of CAP1's 19
+    # components are shared with other features, one of them with seven.
+    # NAMED FOR THEIR TABS. A panel shows the same kind of thing its tab does, filtered to one
+    # feature, so it wears the same word; what makes it this feature's is said in the sentence
+    # under the title, where there is room to be accurate about it.
+    assert [t for _, t in order] == ["Rules", "Data", "Components"], order
     # The use cases are emitted by the one list renderer, not by a second copy. On a feature's PAGE
     # they are the BOARD, drawn bare above the chip bar; the title below is the fallback for a list
     # that has no board (the "not assigned to a feature" one).
     assert "const title = page ? 'What you can do'" in js
-    assert "secs.concat(extra.secs)" in js, "the pinned index is built from the sections themselves"
-    # Only the CODE folds. It is the lowest-priority thing on the page and its count is on its chip;
-    # every other section is open, because a count you must click to see cannot be scanned.
+    # The strip is built from the PANELS themselves, so it and the page cannot disagree about what
+    # this feature has or how much of it.
+    assert "panels.map((x) =>" in js, "the strip is built from the panels themselves"
+    # NOTHING FOLDS ANY MORE. The code section folded because it was the last of five stacked
+    # sections and the page was long; each is a panel of its own now, so there is nothing below it
+    # to push down and a reader who picked that panel has already said they want the parts.
     region = js[js.index("// \u2500\u2500 the feature page"): js.index("function bindFeaturePage(root) {")]
-    assert region.count("<details") == 1 and "feat-fold" in region
+    assert region.count("<details") == 0 and "feat-fold" not in js
 
 
 def test_the_section_chips_carry_the_counts_and_the_headings_do_not() -> None:
@@ -2825,10 +2845,10 @@ def test_a_long_list_on_the_feature_page_is_grouped_not_dumped() -> None:
     subdomain, because both ride the same `parent` pointer. One group is not a grouping — a single
     heading repeating the section heading above it is drawn plain instead."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    grp = js[js.index("function featChipGroupsHtml(ids) {"):
-             js.index("\nfunction ", js.index("function featChipGroupsHtml(ids) {") + 10)]
+    grp = js[js.index("function featComponentGroupsHtml(ids) {"):
+             js.index("\nfunction ", js.index("function featComponentGroupsHtml(ids) {") + 10)]
     assert "(GRAPH.nodes[id] || {}).parent" in grp
-    assert "if (groups.length < 2) return chips(ids);" in grp
+    assert "if (order.length < 2) return chips(ids);" in grp
     # A feature's rules are cut by DECISION AREA, the same cut the Rules tab makes — one grouping,
     # shared with the component pane, because two of them would disagree about where a rule sits.
     assert "function rulesByBlock(ids) {" in js
@@ -2848,18 +2868,17 @@ def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
                js.index("\nfunction ", js.index("function featRuleNotes() {") + 10)]
     assert "FEAT_COVERAGE.rulesUnjoined" in notes and "no use-case walk passes" in notes
     assert "FEATURES.ruleJoinUsesExtents === false" in notes and "floor" in notes
-    rules = js[js.index("function featRulesHtml(ids) {"):
-               js.index("\nfunction ", js.index("function featRulesHtml(ids) {") + 10)]
-    assert "featRuleNotes()" not in rules, "a product page carries no coyodex statistic"
-    assert "if (!ids.length) return notes + featEmpty(" in rules, "a feature deciding nothing still says so"
+    secs = js[js.index("function featurePanels(capId) {"):
+              js.index("\nfunction ", js.index("function featurePanels(capId) {") + 10)]
+    assert "featRuleNotes()" not in secs, "a product page carries no coyodex statistic"
+    # A feature deciding nothing still says so. The section draws DECISION AREAS now, so the silence
+    # it must name is the area-level one: an area carries the authored list of features it is
+    # specified under, and on coyodex's own map 0 of 11 areas carry one at all.
+    assert "featEmpty('Not recorded: no decision area says it is specified under this feature.')" in secs
     # The notes still exist — on the System tab, with every other fact about coyodex's own analysis.
     cov = js[js.index("function unreachedHtml() {"):
              js.index("\nfunction ", js.index("function unreachedHtml() {") + 10)]
     assert "featRuleNotes()" in cov and "coverageLineHtml()" in cov
-    # A map whose use cases name no way in (measured: 0 of 664 on one live map) must SAY so.
-    eps = js[js.index("function featEntryPointsHtml(ids) {"):
-             js.index("\nfunction ", js.index("function featEntryPointsHtml(ids) {") + 10)]
-    assert "Not recorded:" in eps, "an empty ways-in section must name the silence, not go blank"
 
 
 def test_the_feature_page_reads_the_python_join_and_never_redoes_it() -> None:
@@ -2868,10 +2887,10 @@ def test_the_feature_page_reads_the_python_join_and_never_redoes_it() -> None:
     second join written in JS would drift from both. The page therefore reads the shipped lists and
     counts nothing itself."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    secs = js[js.index("function featureSectionsHtml(capId) {"):
-              js.index("\nfunction ", js.index("function featureSectionsHtml(capId) {") + 10)]
+    secs = js[js.index("function featurePanels(capId) {"):
+              js.index("\nfunction ", js.index("function featurePanels(capId) {") + 10)]
     assert "FEAT_BY_ID[capId]" in secs
-    for field in ("f.entryPoints", "f.rules", "f.entities", "f.components"):
+    for field in ("f.rules", "f.entities", "f.components"):
         assert field in secs, field
     assert "USES_BY_NODE" not in secs, "the component join lives in Python only"
     assert "FEATURES = b.features || {};" in js, "the derivation is shipped, not recomputed"
@@ -2959,7 +2978,7 @@ def test_a_grouped_card_list_is_one_component_used_by_its_screens() -> None:
     # says nothing.
     assert "filter((g) => g.ids && g.ids.length)" in body
     assert "if (live.length === 1) return body(live[0].ids, live[0].per);" in body
-    for caller in ("function featRulesHtml(ids) {", "function unreachedHtml() {"):
+    for caller in ("function ruleAnalysisGapsHtml() {", "function unreachedHtml() {"):
         fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
@@ -3354,7 +3373,9 @@ def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
     # ONE SWITCH, and every caller of it is a list whose cards are all one kind with the page saying
     # which: the Rules board (every card a decision area) and one area's own page (every card a rule,
     # in a section called Rules). A third list claiming it is a design question, not an edit.
-    assert js.count("o.noType") == 1 and js.count("noType: true") == 3, \
+    # TWO askers, named in the comment above, since the feature page's own rule list went: it draws
+    # the Rules board's area cards now, through the board's own builder, so it adds no third ask.
+    assert js.count("o.noType") == 1 and js.count("noType: true") == 2, \
         "the switch has one definition and only same-kind lists may ask for it"
     assert "noType: true" in js[js.index("function ruleAreaCardHtml(g, others) {"):
                                 js.index("\n}", js.index("function ruleAreaCardHtml(g, others) {"))]

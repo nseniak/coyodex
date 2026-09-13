@@ -78,6 +78,12 @@ class FeatureFacts:
     roles: list[str] = field(default_factory=list)           # who drives its use cases
     use_cases: list[str] = field(default_factory=list)
     entry_points: list[str] = field(default_factory=list)    # how you reach it
+    #: WHICH WAY THE DATA MOVES on this feature's steps that touch a record: `in` it reads, `out` it
+    #: stores, both when it does each somewhere. Read off `FlowStep.direction`, which the map already
+    #: carries; derived here rather than in the browser so the page states it without a second
+    #: reader. The feature page's data sentence is worded from it — a fixed "stores and reads"
+    #: overstated 1 of the two live maps' 13 features (mcpolis's Audit trail only ever reads).
+    data_directions: list[str] = field(default_factory=list)
     rules: list[str] = field(default_factory=list)           # what it decides (specified_under)
     entities: list[str] = field(default_factory=list)        # what it knows about
     components: list[str] = field(default_factory=list)      # what implements it
@@ -434,6 +440,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     feat_eps: dict[str, set[str]] = {c: set() for c in caps}
     feat_ents: dict[str, set[str]] = {c: set() for c in caps}
     feat_comps: dict[str, set[str]] = {c: set() for c in caps}
+    feat_dirs: dict[str, set[str]] = {c: set() for c in caps}
     role_feat: dict[str, dict[str, int]] = {}
 
     for u in m.use_cases:
@@ -461,6 +468,8 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                         feat_comps[cap].add(side)
                 elif side in ent_ids and cap:
                     feat_ents[cap].add(side)
+                    if st.direction:
+                        feat_dirs[cap].add(st.direction)
 
     # The rule join, through `rule_steps` — the SAME reader the Rules view uses, so the two screens
     # cannot disagree about what one rule governs. A rule reaches a feature when one of its sites
@@ -620,6 +629,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             entry_points=sorted_ids(feat_eps[c.id]),
             rules=sorted_ids(feat_rules[c.id]),
             entities=sorted_ids(feat_ents[c.id]),
+            data_directions=sorted(feat_dirs[c.id]),
             components=sorted_ids(feat_comps[c.id]),
             areas=feat_areas.get(c.id, []),
             reached_through=sorted_ids(feat_in[c.id]),
@@ -676,6 +686,7 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
              "audience": f.audience,
              "roles": f.roles, "useCases": f.use_cases, "entryPoints": f.entry_points,
              "rules": f.rules, "entities": f.entities, "components": f.components,
+             "dataDirections": f.data_directions,
              "areas": f.areas,
              "reachedThrough": f.reached_through, "reachesOut": f.reaches_out}
             for f in ix.features],

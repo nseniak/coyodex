@@ -1174,10 +1174,14 @@ def test_the_pinned_section_bar_casts_a_shadow_only_once_it_is_attached() -> Non
     The TRANSITION is suppressed for the measurement. It is 150ms of real animation, and a headless
     run reads a frame partway through it — the shadow then computes as a transparent zero and the
     test fails on timing rather than on the rule."""
-    with _served() as url, _page(url + "#v=capability&cap=CAP2") as page:
+    # THE LONGEST PANEL, because the strip only pins on a page that scrolls. The feature page draws
+    # ONE panel now — the strip switches between them rather than stacking them — so the use-case
+    # panel it used to open on is no longer tall enough to push the strip to its own top at any
+    # window this test can set. Components is the long one (measured: 1262px for 28 parts in 11
+    # containers), and it is where a reader most wants to switch away without scrolling back.
+    with _served() as url, _page(url + "#v=capability&cap=CAP2&sec=comps") as page:
         # A SHORT WINDOW, so the page is taller than the pane and the bar can pin at all. The default
-        # is tall enough to hold this feature's whole page, and a bar that never reaches its own top
-        # tests nothing.
+        # is tall enough to hold this panel, and a bar that never reaches its own top tests nothing.
         page.set_viewport_size({"width": 1280, "height": 520})
         _settle(page)
         out = page.evaluate("""() => {
@@ -1428,50 +1432,6 @@ def test_a_surface_no_use_case_reaches_is_drawn_quiet_and_sorted_last() -> None:
         assert got["quiet"] == [False, True], got
         # …and NONE draws no pill at all: a label for an absence is one more thing to read
         assert got["pills"] == ["1 use case", None], got
-        assert not page.js_errors, page.js_errors
-
-
-def test_a_surfaces_own_page_tags_each_step_with_the_way_that_one_went() -> None:
-    """The authored crossing table is gone with `interfaces[].carries[]`; each STEP now says which
-    way it went, so the direction sits on the line that shows what happened rather than in a second
-    block that could disagree with it.
-
-    Same two verbs the table used, and the subject is still left out: a surface's own page is about
-    one surface, so naming it on every line would repeat the page's own title. `both` says so
-    plainly, because one exchange really does run each way."""
-    def mutate(m: dict) -> None:
-        m["interfaces"] = [
-            {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
-             "facing": "user", "kind": "screen"
-             },
-        ]
-        for f in m["flows"]:
-            if f["uc"] == "UC1":
-                f["steps"] = [
-                    # A DOOR, so no direction: a role at a surface is a human action with no
-                    # product end, and `validate` blocks one that carries a direction. An earlier
-                    # version of this fixture put `in` here, pinning a shape the product rejects.
-                    {"n": 1, "src": "R1", "dst": "I1",
-                     "phrase": "types what they want", "note": "", "where": None,
-                     "no_call_site": False, "subflow": None},
-                    {"n": 4, "src": "I1", "dst": "C1", "direction": "in",
-                     "phrase": "carries what they typed inward", "note": "",
-                     "where": "backend/src/mcpolis/entrypoints/app.py:2",
-                     "no_call_site": False, "subflow": None},
-                    {"n": 2, "src": "C1", "dst": "I1", "direction": "out",
-                     "phrase": "shows them the answer", "note": "",
-                     "where": "backend/src/mcpolis/entrypoints/app.py:4",
-                     "no_call_site": False, "subflow": None},
-                    {"n": 3, "src": "C1", "dst": "I1", "direction": "both",
-                     "phrase": "trades the code for the verified email", "note": "",
-                     "where": "backend/src/mcpolis/entrypoints/app.py:9",
-                     "no_call_site": False, "subflow": None},
-                ]
-    with _served_map(mutate) as url, _page(url + "#v=interfaces&iface=I1") as page:
-        _settle(page)
-        got = page.evaluate(
-            "() => [...document.querySelectorAll('.ifs-dirtag')].map(e => e.textContent)")
-        assert got == ["receives", "sends", "both ways"], got
         assert not page.js_errors, page.js_errors
 
 

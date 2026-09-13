@@ -890,47 +890,92 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .item-sec-door { font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
                  background: none; border: 0; padding: 0; cursor: pointer; }
 .item-sec-door:hover { color: #4f46e5; text-decoration: underline; }
-/* WHAT CROSSES — the walk steps drawn at this surface, and the whole answer now that
-   `interfaces[].carries[]` and its `.if-table` are gone. Cut into one block per story, because a
-   step means little without the story it sits in: mcpolis's dashboard draws 89 steps from 20
-   different walks, and read as one list they are noise. */
-.ifs-cross { display: flex; flex-direction: column; gap: 16px; }
-/* The story's name heads its own block and is a door to it, the same treatment its steps get one
-   line down. A button, not a heading with a link inside it, so the whole name is the target. */
-.ifs-dir-head { margin: 0 0 6px; }
-.ifs-story { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .04em;
-             text-transform: uppercase; color: #6b7280; background: none; border: 0; padding: 0;
-             cursor: pointer; text-align: left; }
-.ifs-story:hover { color: #4338ca; text-decoration: underline; }
-.ifs-story:focus-visible { outline: 2px solid #4f46e5; outline-offset: 2px; border-radius: 3px; }
-.ifs-steps { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.ifs-step { padding: 7px 0; border-bottom: 1px solid #eceef2; }
-.ifs-step:last-child { border-bottom: 0; }
-/* WHICH WAY THIS STEP WENT, in the same small-caps treatment the removed crossing table's own
-   column used, so the fact did not change how it looks when it changed where it lives. It LEADS
-   the line rather than sitting in a column of its own: a step is one sentence, and a fixed column
-   beside a wrapping sentence is what made the old table need a width at all. Inline-block so the
-   phrase wraps beside it and never under it. */
-.ifs-dirtag { display: inline-block; margin-right: 7px; color: #6b7280; font-variant: small-caps;
-              letter-spacing: .03em; white-space: nowrap; font-size: 12px; }
-.ifs-dir-both { color: #4f46e5; }
 /* The rest of a long block, revealed in place by its own "+n more". `display: none` rather than a
    height, so a hidden row costs nothing to lay out. The class is shared with the tail that reveals
    it (`moreTailHtml`'s open-in-place mode), so renderer and binder agree by one name. */
 .more-hidden { display: none; }
 .more-tail-open { display: inline-block; margin-top: 8px; font-size: 12.5px; }
-/* A chip list, optionally under the name of the group its members live in — a component under its
-   subsystem, an entity under its subdomain. Thirty-one loose chips is a wall; the same thirty-one
-   under six subsystem names say which parts of the machine the feature lives in. */
+/* A CAPTION HEAD: the sentence alone, on a page whose switch already names the panel. It is the
+   panel's one line of prose, not a footnote to it, so it takes the reading size and ink the cards
+   below it use rather than the smaller grey a note under a TITLE is set in — there is no title
+   above it for it to be quieter than. */
+.item-sec-caption { margin: 0; font-size: 13px; color: #374151; }
+/* ── A PANEL PAGE DRAWS ONE BOX MEANING, NOT TWO ────────────────────────────────────────────────
+   Two different nestings were drawn as the same object. The section frame is PAGE FURNITURE — "this
+   block is a group of content" — and the box inside it is a CLAIM ABOUT THE PRODUCT — "these parts
+   are inside that part". Measured, the two were 1px #cbd5e1 at radius 12 and 1px #e5e7eb at radius
+   10, both white: they differed by two pixels of corner and a grey nobody can name, so the eye had
+   to work out which nesting meant something.
+   THE FRAME ALSO LOST ITS JOB. It existed to separate four stacked sections; these pages draw ONE
+   panel now, so it grouped the page's content against nothing. Taking it away removes a level
+   rather than restyling one, and leaves a rule a reader can hold: ON THESE PAGES A BOX IS A THING
+   IN THE PRODUCT. The strip stays, as the panel's own header rather than as a lid on a frame.
+   Only `.pane-page` — the feature page and the interface page. Every other screen still stacks real
+   sections, where the frame is what says where one ends and the next begins. */
+.pane-page > .item-sec > .item-sec-frame { border: 0; background: none; border-radius: 0;
+    /* AND NO SHADOW. Clearing the border and the fill left the frame's soft drop shadow behind, so
+       the content still sat in a box — a box whose edge you could see but not name, which is worse
+       than a drawn one. Nothing about this page is a container any more. */
+    box-shadow: none; }
+/* The strip is a caption band now, not a lid: no rule under it, because there is no frame below for
+   it to be joined to, and a line across the page under one sentence reads as a divider between two
+   things when there is only one. */
+/* FLUSH LEFT WITH THE CONTENT. The strip kept the 16px inset it needs inside a frame, but the body
+   below it lost its own when the frame went — so the sentence started 16px right of everything it
+   describes. Nothing indents it now. */
+.pane-page > .item-sec > .item-sec-frame > .item-sec-strip { border-radius: 11px; border-bottom: 0;
+    padding-left: 0; padding-right: 0; }
+.pane-page > .item-sec > .item-sec-frame > .item-sec-body { padding-left: 0; padding-right: 0; }
+/* ── THE FEATURE PAGE'S PANEL SWITCH ─────────────────────────────────────────────────────────────
+   A SEGMENTED CONTROL, because a row of pills was the wrong signal. The switch changes the whole
+   page; an element pill opens one element. Measured, the two were the same object: 22px tall, 12px
+   type, one filled and one outlined. Joining the parts into a single track is what says "these are
+   alternatives, pick one", and nothing else in this viewer draws that shape.
+   THE BAR AND THE CONTROL ARE SEPARATE. `.feat-panebar` keeps the `tab-index` class, so it is the
+   sticky full-width strip the shadow logic finds and marks when the page runs under it; the capsule
+   sits inside it and is only as wide as its segments. */
+.usecases-wrap .feat-panebar { display: block; }
+.feat-panes { display: inline-flex; gap: 0; max-width: 100%; overflow-x: auto;
+              background: #eef2f7; border: 1px solid #e2e8f0; border-radius: 10px; padding: 3px; }
+/* The segments. They override the chip rule above rather than replacing it, so a chip stays one
+   definition and this is the one place that says how a SWITCH's chip differs from an index's. */
+.usecases-wrap .feat-panes .tab-index-chip { background: none; border: 0; border-radius: 7px;
+    padding: 5px 13px; font-size: 12.5px; font-weight: 600; color: #64748b; white-space: nowrap; }
+.usecases-wrap .feat-panes .tab-index-chip:hover { background: rgba(255, 255, 255, .55); color: #475569; }
+/* THE CHOSEN SEGMENT IS LIFTED OUT OF THE TRACK: white on the grey, with a shadow a hair deep. A
+   colour change alone read as "this one is tinted"; sitting proud of the track reads as a switch. */
+.usecases-wrap .feat-panes .tab-index-chip.active { background: #fff; color: #312e81;
+    border-color: transparent; box-shadow: 0 1px 2px rgba(15, 23, 42, .14); }
+.usecases-wrap .feat-panes .tab-index-n { margin-left: 6px; padding: 0; background: none;
+    color: #9ca3af; font-weight: 700; font-size: 11px; }
+.usecases-wrap .feat-panes .tab-index-chip.active .tab-index-n { color: #6366f1; }
+/* A CONTAINER AND ITS PARTS. A container is a real element with a page, a mark and a sentence of its
+   own, so it is drawn as one rather than as an uppercase label: its mark, its name as a door, how
+   many of this feature's parts live in it, its purpose, then the parts as pills.
+   PILLS, not cards, inside. Measured on mcpolis's Upstream MCPs — 28 parts in 11 containers — cards
+   would be 39 of them at 126px, about 4900px against 1160px as pills, and at 2.5 parts per container
+   most of that height is frame around two names. */
 .feat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.feat-chipgroup + .feat-chipgroup { margin-top: 12px; }
-.feat-chipgroup-name { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                       letter-spacing: .05em; color: #6b7280; margin: 0 0 6px; }
-/* The code section folds. It is the lowest priority thing on a feature page, and its heading already
-   states the count, which is the fact worth scanning. */
-.feat-fold > summary { cursor: pointer; color: #4338ca; font-size: 13px; }
-.feat-fold > summary:hover { text-decoration: underline; }
-.feat-fold[open] > summary { margin-bottom: 10px; }
+.feat-cgroups { display: flex; flex-direction: column; gap: 10px; }
+.feat-cgroup { padding: 11px 13px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
+.feat-cgroup-head { display: flex; align-items: center; gap: 7px; }
+/* The mark sits on the name row at the card's own size, so a container here and a container card
+   elsewhere read as the same kind of thing. */
+.feat-cgroup-gly { display: inline-flex; flex: 0 0 auto; }
+.feat-cgroup-gly svg { width: 19px; height: 19px; display: block; }
+/* THE NAME IS THE DOOR, and it carries the weight a card's title carries — it is the thing the
+   reader is choosing between, not a label over the pills. */
+.feat-cgroup-name { font: inherit; font-size: 14px; font-weight: 650; color: #111827; padding: 0;
+                    border: 0; background: none; cursor: pointer; text-align: left; }
+.feat-cgroup-name:hover { color: #4338ca; text-decoration: underline; }
+.feat-cgroup-name:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; border-radius: 3px; }
+/* How many of THIS FEATURE's parts are in the container — never how many it holds in all. Quiet,
+   after the name, because it qualifies the name rather than competing with it. */
+.feat-cgroup-n { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+.feat-cgroup-what { margin: 5px 0 9px; font-size: 13px; line-height: 1.5; color: #4b5563; }
+.feat-cgroup-what:empty { display: none; }
+.feat-cgroup > .feat-chips { margin-top: 9px; }
+.feat-cgroup-what + .feat-chips { margin-top: 0; }
 .feat-eps { display: flex; flex-direction: column; gap: 10px; }
 .feat-ep-kind { display: grid; grid-template-columns: 88px 1fr; gap: 8px; align-items: baseline; }
 .feat-ep-kindname { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
@@ -2842,9 +2887,11 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                      border-left: 2px dashed #8b93d9;
                      transform-origin: top left; transform: rotate(var(--lead-rot, 0deg)); }
 /* THE "+n more" TAIL, as its own block. It is all that is left of a run of rules that dressed the
-   authored crossing sentences when an actor's page drew them: that page draws WALK STEPS now
-   (`.ifs-step`), and the Interfaces picture's labels list use cases, so the sentence rules and
-   their `.ifd-elabel` variants were removed rather than left aiming at nothing. */
+   authored crossing sentences when an actor's page drew them. That page stopped drawing them, the
+   walk steps that replaced them have gone too with the interface page's crossings panel, and the
+   Interfaces picture's labels list use cases — so the sentence rules and their `.ifd-elabel`
+   variants were removed rather than left aiming at nothing. This tail still has a reader: the
+   picture's own card, and the Data view. */
 .ifd-what-more { display: block; }
 /* ONE USE CASE the reader can open. Text that happens to be a door, the same treatment a record on
    this box already had — a row of buttons here would be chrome in a box that is meant to be read. */
@@ -2870,18 +2917,6 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    and both arrive on hover. */
 button.more-tail { cursor: pointer; }
 button.more-tail:hover { opacity: 1; color: #4338ca; text-decoration: underline; }
-/* WHICH STEP SAYS IT, on its own line under the phrase — the walk and the step number, as a door.
-   It took the place of the record chips that used to end these lines: those named the records an
-   authored crossing lists, and the surface's own page still shows those in its table above, drawn
-   through `mdRefs` as `sys-ref` buttons. Same shape as the chips had (a quieter second line, run on
-   under the sentence), because the reader's move is the same: the line ends in something to open. */
-.ifd-what-from-line { display: block; margin-top: 3px; color: #5a6072; font-size: .92em; }
-.ifd-what-from { font: inherit; color: inherit; background: none; border: 0; padding: 0;
-                 cursor: pointer; text-decoration: underline;
-                 text-decoration-color: rgba(30,34,53,.35); text-underline-offset: 2px; }
-.ifd-what-from:hover { text-decoration-color: #1e2235; color: #1e2235; }
-.ifd-what-from:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px; border-radius: 3px; }
-
 .ifd-none { font-size: 12px; color: #6b7280; margin: 0; padding: 8px 0; }
 
 /* ── an ACTOR's picture of the outside edge ───────────────────────────────────────────────────────

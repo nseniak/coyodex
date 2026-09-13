@@ -130,7 +130,10 @@
             <!-- UNDER THE HOOD — how the code is arranged, what it pulls in, how well it is tested,
                  and what actually runs. Code and Operations used to be two groups; they answer the same
                  second question, and keeping them apart cost a top-row tab for no reading gain. -->
-            <button data-view="container" data-group="hood">Subsystems</button>
+            <button data-view="container" data-group="hood">Components</button>  <!-- internal kind stays `container`; the tab is named for what the reader is looking FOR
+                 (the parts of the code) rather than for the boxes it draws them in. A SUBSYSTEM is
+                 still a subsystem — it is the word for a set of components, on its boxes, in its
+                 breadcrumbs and on every card — and only the tab changed. -->
             <button data-view="data" data-group="hood">Storage</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores). Where the data physically lives is a fact about the machine, so it sits under the hood after Subsystems. Internal kind stays `data`. -->
             <button data-view="context" data-group="hood">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
             <button data-view="tests" data-group="hood">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
