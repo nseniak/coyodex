@@ -25,6 +25,21 @@ from typing import Union, get_args, get_origin, get_type_hints
 from coyomap import grammar
 
 FORMAT = "coyomap-map"
+#: What every map built before 2026-09-13 says, when the tool was called coyodex. Refused, with the
+#: two edits named: the map folder and this field are the only things the rename changed for a user.
+OLD_FORMAT = "coyodex-map"
+OLD_MAP_FOLDER = ".coyodex"
+RENAME_HINT = ("coyodex is now coyomap (renamed 2026-09-13): rename the map folder .coyodex/ to "
+               ".coyomap/ and set \"format\": \"coyomap-map\" in project-map.json")
+
+
+def old_map_folder_hint(folder: "Path | str") -> str | None:
+    """The rename hint when `folder` still holds the old `.coyodex/` map and no `.coyomap/` one, else
+    None. One text for the CLI's default-map lookup and the viewer's project intake."""
+    root = Path(folder)
+    if (root / OLD_MAP_FOLDER).is_dir() and not (root / ".coyomap" / "project-map.json").exists():
+        return f"found {OLD_MAP_FOLDER}/ but no .coyomap/project-map.json: {RENAME_HINT}"
+    return None
 
 # Each element array's required id prefix — structural (a `Cn` in `deps` is a shape error, caught at
 # load), while uniqueness/resolution stay semantic (validate_model).
@@ -1409,7 +1424,8 @@ def load_model(text: str) -> ProjectModel:
         raise ModelError("top level: expected an object")
     fmt = data.get("format")
     if fmt != FORMAT:
-        raise ModelError(f"format: expected '{FORMAT}', got {fmt!r}")
+        hint = f": {RENAME_HINT}" if fmt == OLD_FORMAT else ""
+        raise ModelError(f"format: expected '{FORMAT}', got {fmt!r}{hint}")
     _normalize_variants(data)
     _normalize_subflow_title(data)
     _reject_legacy_store(data)

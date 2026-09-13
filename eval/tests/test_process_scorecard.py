@@ -2882,6 +2882,11 @@ def test_35_still_catches_the_real_thing_after_all_that():
     assert _cd_case("cd /Users/x/Projects/coyomap") == (0, 1)
 
 
+def test_35_reads_the_clone_by_its_old_name_in_a_transcript_from_before_the_rename():
+    """The clone was `Projects/coyodex` until 2026-09-13, and a transcript is history."""
+    assert _cd_case("cd /Users/x/Projects/coyodex") == (0, 1)
+
+
 def test_38_does_not_count_a_filename_named_in_a_DOCUMENT_heredoc():
     """`cat > report.md <<'EOF' … v.json … EOF` is a markdown file being WRITTEN that happens to
     name the path. Counting it credits the run for the very thing this assertion measures."""

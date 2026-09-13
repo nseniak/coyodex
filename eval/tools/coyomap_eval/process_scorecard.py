@@ -2898,7 +2898,8 @@ def _tokens(text: str) -> set[str]:
 #: `/coyomap` must sit on a PATH BOUNDARY. Without it, `cd /repo/argus-coyomap` — the mapped
 #: project, whose own name merely ends in the word — read as entering the clone, and every relative
 #: read after it was scored as reading the tool's map.
-_CD_INTO_CLONE = re.compile(r"(?:cd|pushd)\s+\S*(?:^|/)coyomap/?\s*(?:&&|;|\n|$)")
+#: `coyodex` too: the clone's folder name in every transcript written before the 2026-09-13 rename.
+_CD_INTO_CLONE = re.compile(r"(?:cd|pushd)\s+\S*(?:^|/)coyo(?:map|dex)/?\s*(?:&&|;|\n|$)")
 #: Any `cd`/`pushd` re-anchors the shell, so what follows it is no longer where it was. `popd` and a
 #: BARE `cd` (which goes home) both leave the clone without naming a target, and both used to be
 #: invisible here — the flag stayed set for the rest of the transcript.

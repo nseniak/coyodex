@@ -276,6 +276,16 @@ def test_load_rejects_suffixed_id():
         assert "S12a" in str(e)
 
 
+def test_a_map_from_before_the_rename_is_refused_with_the_two_edits_named():
+    """Every map built before 2026-09-13 says `coyodex-map`. The refusal must say what to do, not
+    only what was expected: the folder to rename and the field to set."""
+    try:
+        load_model(json.dumps({"format": "coyodex-map", "title": "T"}))
+        raise AssertionError("expected ModelError")
+    except ModelError as e:
+        assert ".coyodex/" in str(e) and ".coyomap/" in str(e) and '"coyomap-map"' in str(e)
+
+
 def test_absent_optional_fields_take_defaults():
     minimal = {"format": "coyomap-map", "title": "T",
                "components": [{"id": "C1", "name": "Only"}]}

@@ -578,3 +578,12 @@ def test_a_command_name_tag_that_already_carries_its_slash_is_not_doubled():
     for tag in ("/coyomap", "coyomap"):
         body = (f"<command-name>{tag}</command-name>\n<command-args>build</command-args>")
         assert transcript.operator_text(body) == "/coyomap build"
+
+
+def test_a_transcript_from_before_the_rename_still_counts_its_calls():
+    """A build transcript written before 2026-09-13 calls the tool `coyodex`; it is history and
+    cannot be renamed, so the scan reads both spellings and books them to the same tables."""
+    assert _subs("coyodex audit m.json") == ["audit"]
+    assert _subs("coyodex-eval score a b") == _subs("coyomap-eval score a b")
+    assert (_subs("CX=/p/.venv/bin/coyodex-eval; $CX score a b")
+            == _subs("CX=/p/.venv/bin/coyomap-eval; $CX score a b"))

@@ -46,6 +46,7 @@ from coyomap.impact_git import WORKTREE as IMPACT_WORKTREE
 from coyomap.impact_git import PREINDEX_JSON, compute_impact, load_map_extents
 from coyomap.impact_git import resolve_ref as impact_resolve_ref
 from coyomap.impact_ripple import RippleOptions, build_impact_result
+from coyomap.model import old_map_folder_hint
 from coyomap.model import ModelError, load_model
 from coyomap.viewer.diffmap import DiffRow, parse_unified_diff
 from coyomap.viewer.filetree import FileTreeNode, build_tree, node_path_index, resolved_path_index
@@ -732,7 +733,9 @@ class Handler(BaseHTTPRequestHandler):
         if not p.is_dir():
             return self._send(400, "text/plain; charset=utf-8", b"no such folder on this machine")
         if not _has_coyomap(p):  # a .coyomap/ dir is enough — the map inside may not be valid/built yet
-            return self._send(400, "text/plain; charset=utf-8", b"that folder has no .coyomap/ folder")
+            hint = old_map_folder_hint(p)
+            return self._send(400, "text/plain; charset=utf-8",
+                              (hint or "that folder has no .coyomap/ folder").encode("utf-8"))
         with _STATE_LOCK:
             self.store.add(str(p))
             Handler.projects = build_projects(self.store.list())
@@ -944,7 +947,9 @@ def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool
         if _has_coyomap(folder):  # a .coyomap/ dir is enough; an unbuilt map just shows as "No valid map yet"
             store.add(str(folder))
         else:
-            print(f"coyomap serve: skipping {folder} — no .coyomap/ folder", file=sys.stderr)
+            hint = old_map_folder_hint(folder)
+            print(f"coyomap serve: skipping {folder} — no .coyomap/ folder" + (f" ({hint})" if hint else ""),
+                  file=sys.stderr)
     Handler.store = store
     Handler.projects = build_projects(store.list())
     Handler.dev = dev

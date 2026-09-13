@@ -538,7 +538,7 @@ _COYOMAP_SUBVERBS = frozenset({
 #: silently stopped naming the subcommands it truncates — the very regression that annotation was
 #: added to prevent. Two tests caught it; a name cannot shift.
 _COYOMAP_CMD = re.compile(
-    r"""(?:(?P<bin>coyomap(?:-eval)?)|["']?(?P<alias>\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)["']?)"""
+    r"""(?:(?P<bin>coyo(?:map|dex)(?:-eval)?)|["']?(?P<alias>\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)["']?)"""
     r"[ \t]+(?!-)(?P<sub>[a-z][a-z0-9-]*)(?:[ \t]+(?P<verb>[a-z][a-z0-9-]*))?")
 
 
@@ -567,7 +567,7 @@ _HELP_ONLY = re.compile(r"(?:^|\s)(?:--help|-h)(?:\s|$)")
 #: used as `$COYOMAP_HOME/method.md`, with no space between the variable and what follows, so it
 #: never satisfies `_COYOMAP_CMD`.
 _ALIAS_ASSIGN = re.compile(
-    r"""\b([A-Za-z_][A-Za-z0-9_]*)=["']?\S*?/(coyomap(?:-eval)?)["']?(?=[\s;&|)]|$)""")
+    r"""\b([A-Za-z_][A-Za-z0-9_]*)=["']?\S*?/(coyo(?:map|dex)(?:-eval)?)["']?(?=[\s;&|)]|$)""")
 
 
 def _mask(text: str) -> list[bool]:
@@ -752,17 +752,25 @@ def _segments(text: str) -> list[tuple[str, list[bool]]]:
 _QUOTED_SPAN = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
 
 
+#: A transcript is history. One written before 2026-09-13 calls the tool `coyodex`, its name at the
+#: time, and nothing can rename it. So the scan reads both spellings and books both to the `coyomap`
+#: tables; without this every pre-rename build transcript scored 0/0 on every process assertion.
+def _canonical_binary(name: str) -> str:
+    """`coyodex` / `coyodex-eval`, as an old transcript reads, as the CLI is called now."""
+    return "coyomap" + name[len("coyodex"):] if name.startswith("coyodex") else name
+
+
 def _alias_binaries(cmd: str) -> dict[str, str]:
     """`{VAR: "coyomap" | "coyomap-eval"}` for every alias assigned in this command."""
-    return {m.group(1): m.group(2) for m in _ALIAS_ASSIGN.finditer(cmd)}
+    return {m.group(1): _canonical_binary(m.group(2)) for m in _ALIAS_ASSIGN.finditer(cmd)}
 
 
 def _binary_of(token: str, aliases: Mapping[str, str]) -> str:
     """Which CLI `token` invokes — the literal name, the resolved alias, or the `coyomap` fallback."""
     bare = token.strip("\"'")
-    if bare.endswith("coyomap-eval"):
+    if bare.endswith(("coyomap-eval", "coyodex-eval")):
         return "coyomap-eval"
-    if bare.endswith("coyomap"):
+    if bare.endswith(("coyomap", "coyodex")):
         return "coyomap"
     var = bare.lstrip("$").strip("{}")
     return aliases.get(var, "coyomap")

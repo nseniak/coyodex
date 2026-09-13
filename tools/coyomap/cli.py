@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import io
 import sys
+from pathlib import Path
 
 from coyomap import __version__
-from coyomap.model import WrongMapError
+from coyomap.model import WrongMapError, old_map_folder_hint
 
 USAGE = """usage: coyomap <command> [args...]
 
@@ -105,8 +106,9 @@ Global:
 Run `coyomap <command> --help` for command-specific options."""
 
 
-def _default_map(argv: list[str]) -> list[str]:
-    """When no positional map is given, default to `.coyomap/project-map.json`."""
+def _default_map(argv: list[str], cwd: "Path | None" = None) -> list[str]:
+    """When no positional map is given, default to `.coyomap/project-map.json`. A folder that still
+    holds the old `.coyodex/` map and no new one is told what changed and what to do."""
     flags_with_value = {"--repo"}
     expect_value = False
     for a in argv:
@@ -116,6 +118,9 @@ def _default_map(argv: list[str]) -> list[str]:
             expect_value = True
         elif not a.startswith("-"):
             return argv  # an explicit map was given
+    hint = old_map_folder_hint(cwd or Path.cwd())
+    if hint:
+        print(f"WARNING: {hint}", file=sys.stderr)
     return argv + [".coyomap/project-map.json"]
 
 
