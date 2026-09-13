@@ -1,10 +1,10 @@
 <div align="center">
 
-# coyomap
-
 <img src="assets/running-off-the-cliff.png" alt="Wile E. Coyote running off the cliff, drawn as ASCII art: teal characters on black, the cliff edge in orange on the left" width="640">
 
-### Agentic coding without running off the cliff — a map of your project, from features down to the code
+# coyomap: agentic coding without running off the cliff
+
+A map of your project, from features down to the code
 
 </div>
 
@@ -24,7 +24,9 @@ linked to the underlying architecture and code. Use it to understand what your p
 how it is implemented, top-down, without reading all the code. Drill into the code only where and
 when you actually need to.
 
-It is also a shared picture of the project for your non-developer teammates.
+It is also a shared picture of the project for your non-developer teammates. Hand it to them as a
+link: coyomap writes the map out as a plain website you can host anywhere, and a reader needs no
+repo and nothing installed.
 
 ## What coyomap shows
 
@@ -112,6 +114,27 @@ It opens a landing page at `http://127.0.0.1:8765/`. Pick your project's folder 
 server remembers it and shows it as a card from then on. Leave the server running. A map's address
 starts with `/coyomap/`, and `.venv/bin/coyomap url <ID> --repo <repo>` prints the address of one
 element, already selected — ask your agent to "show me X in the map" and it ends with that link.
+
+**3. Share it.** To show the map to someone who has neither your repo nor coyomap, export it as an
+ordinary website:
+
+```
+.venv/bin/coyomap export <your project> --out ./site
+```
+
+That writes a folder of plain files: the viewer, the map, and your code at the commit the map is
+pinned to. Nothing runs on the server. Put the folder on GitHub Pages, Netlify, a cloud bucket or an
+internal web server, and send the link.
+
+Who may open it is your host's business, so a private project's map can live somewhere private.
+
+Everything a reader can do on your own screen works on the shared copy: every view, the drill-downs,
+the source code, the search, and links that open on one exact screen. The one exception is the
+change-impact explorer, which needs git behind it.
+
+The folder is a website, so it has to be served rather than opened as a file — the page says so, and
+tells the reader how, if they try. It is also a snapshot pinned to one commit, so export again after
+the map changes.
 
 ### Asking for map changes
 

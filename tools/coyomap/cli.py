@@ -36,6 +36,10 @@ Commands:
   serve      Serve the interactive viewer + file browser + code viewer over a local
              HTTP server, building each map's diagram on demand from its model (files
              read from git at the map's commit). One server covers every project.
+  export     Write a map as a STATIC SITE — a folder of plain files (the viewer, the map's
+             data, and the code at its commit). Host it anywhere and share the link: a
+             reader needs no repo and no coyomap. Everything works but the change-impact
+             explorer, which needs git behind it.
   url        The address that opens the served map on ONE element, already selected:
              `coyomap url UC12` prints http://127.0.0.1:<port>/coyomap/<slug>/#v=usecase&uc=UC12
              with the running server's port, or the path alone when no server runs.
@@ -170,6 +174,9 @@ def _dispatch(cmd: str, rest: list[str]) -> int:
     if cmd == "serve":
         from coyomap.viewer import serve  # stdlib-only (http.server + git subprocess)
         return serve.main(rest)
+    if cmd == "export":
+        from coyomap.viewer import export  # stdlib-only (git subprocess + json)
+        return export.main(rest)
     if cmd == "url":
         from coyomap.viewer import url  # stdlib-only; asks the running server, writes nothing
         return url.main(rest)

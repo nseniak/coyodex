@@ -1,6 +1,6 @@
-"""M3 server half — `api/src?at=`, worktree-read safety, impactcommits, impactsrcdiff.
+"""M3 server half — `api/src/<path>?at=`, worktree-read safety, impactcommits, impactsrcdiff.
 
-The worktree-read guards are the security-sensitive piece (review finding W6/V8): `_safe_rel` alone
+The worktree-read guards are the security-sensitive piece (review finding W6/V8): `safe_rel` alone
 is not a disk-I/O guard, so these tests prove the three additional gates — realpath containment
 (a tracked symlink must not escape the repo), `.git/` exclusion, and the tracked-or-untracked-
 not-ignored rule (a gitignored `.env` never leaves the machine through the viewer).
@@ -73,7 +73,7 @@ def test_worktree_read_refuses_ignored_git_and_escape() -> None:
         (root / ".env").write_text("SECRET=1\n", encoding="utf-8")
         assert worktree_read(root, ".env") is None                          # gitignored secret
         assert worktree_read(root, ".git/config") is None                   # git internals
-        assert worktree_read(root, "../outside.txt") is None                # _safe_rel
+        assert worktree_read(root, "../outside.txt") is None                # safe_rel
         outside = Path(td).parent / "outside-coyomap-test.txt"
         outside.write_text("out\n", encoding="utf-8")
         try:
@@ -93,15 +93,15 @@ def test_src_at_worktree_and_sha_frames() -> None:
         (root / "svc/guild.py").write_text("worktree-version\n", encoding="utf-8")
         httpd, slug, port = make_server(root)
         try:
-            st, body = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py")
+            st, body = get(port, f"/coyomap/{slug}/api/src/svc/guild.py")
             assert st == 200 and b"return 1" in body                        # default: the pin
-            st, body = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py&at={v2}")
+            st, body = get(port, f"/coyomap/{slug}/api/src/svc/guild.py?at={v2}")
             assert st == 200 and b"return 2" in body                        # another commit
-            st, body = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py&at=WORKTREE")
+            st, body = get(port, f"/coyomap/{slug}/api/src/svc/guild.py?at=WORKTREE")
             assert st == 200 and body == b"worktree-version\n"              # the dirty tree
-            st, _ = get(port, f"/coyomap/{slug}/api/src?path=.env&at=WORKTREE")
+            st, _ = get(port, f"/coyomap/{slug}/api/src/.env?at=WORKTREE")
             assert st == 404                                                # guard holds over HTTP
-            st, _ = get(port, f"/coyomap/{slug}/api/src?path=svc/guild.py&at=--flag")
+            st, _ = get(port, f"/coyomap/{slug}/api/src/svc/guild.py?at=--flag")
             assert st == 400                                                # never reaches git argv
         finally:
             httpd.shutdown()

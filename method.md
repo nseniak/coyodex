@@ -2972,7 +2972,9 @@ written by `coyomap assemble` together with its generated markdown view, `.coyom
 when the build produced one: the viewer's symbol search reads it, pinned to the map's commit, so it
 must ship with the map (it is generated at that commit, so its `file:line` anchors match). The
 interactive C4 diagram is not a committed file: it is served live by `coyomap serve` (built on
-demand from the model). Record the commit the map was built
+demand from the model), and `coyomap export` writes that same viewer out as a folder of plain files
+for anyone to host — how a map is shared with people who have neither the repo nor coyomap. Record
+the commit the map was built
 at in the model's `commit`/`committed`/`built` fields (the baseline pin — see the pin gate below).
 
 **Baseline pin — require committed code, or record it dirty.** The pin must mean "the map describes

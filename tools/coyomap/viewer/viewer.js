@@ -51,6 +51,11 @@ let DEPLOY_ENVS;           // declared deployment environments (variant names), 
 let DEPLOY_ENV = null;     // the selected environment (null = All); persists across the session
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let REPO_STATE = 'ok';    // 'ok' | 'no-repo' | 'no-commit' — whether the server can read this map's code
+// True when this map is a STATIC EXPORT — a folder of files on a web host, with no coyomap server
+// behind it. Everything the page reads is still there (its data, the file tree, the code at the map's
+// commit, the symbols), so the map itself is whole; what is gone is everything that needs git to
+// answer a question the export could not have written down in advance. Set from the bundle at boot.
+let EXPORTED = false;
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
 let SUBFLOW_BY_ID = {};   // SFn -> the shared sub-use case itself, for its name and its own screen
 let SUBFLOW_CHIPS = {};   // SFn -> the people, doors and records inside it, for its collapsed box
@@ -126,6 +131,7 @@ function applyBundle(b) {
   HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
   HAS_HP = b.hasHp; HAS_DIFF = b.hasDiff; META = b.meta; DIFF_STATE = b.diffState;
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
+  EXPORTED = !!b.exported;
   REPO_STATE = b.repoState || 'ok';   // the notice is painted at boot (below), not here:
                                       // applyBundle runs under top-level await, before the
                                       // code-pane elements are bound.
@@ -162,6 +168,12 @@ function applyBundle(b) {
   HAS_RULES = !!b.hasBusinessRules;
   HAS_INTERFACES = !!b.hasInterfaces;
 }
+
+// The boot guard in the shell (a plain inline script) shows a "could not start" panel unless this
+// is set — it is the only signal that the module really ran. Set FIRST, before the top-level await
+// below, so a slow or failed data fetch does not read as a dead page: that case has its own,
+// better message in bootError.
+window.__coyomapBooted = true;
 
 function bootError(msg) {
   const d = document.getElementById('diagram');
@@ -14319,7 +14331,7 @@ async function initServerMode() {
   // real control, so it takes a button's role, a keyboard tab stop and Enter/Space, which a clickable
   // span otherwise silently withholds.
   const brand = document.querySelector('header .brand');
-  if (brand) {
+  if (brand && !EXPORTED) {
     brand.classList.add('home-link');
     brand.title = 'Back to all maps';
     brand.setAttribute('role', 'link');
@@ -14857,6 +14869,17 @@ let cvDiffKey = null;   // the range (base+target) the current inline diff was r
 // set is DIFF_FILE_STATUS (built once per (un)load by recomputeDiffPaths) — no per-call rebuild.
 function wantDiffFor(path) { return !!LIVE_DIFF && DIFF_FILE_STATUS[path] != null; }
 function diffKeyFor(asDiff) { return asDiff && LIVE_DIFF ? (LIVE_DIFF.base + '\x00' + LIVE_DIFF.target) : null; }
+// A repo path as URL SEGMENTS for `api/src/<path>.txt` — each part encoded on its own, so the
+// slashes stay real slashes. Two things are deliberate here.
+// THE PATH IS IN THE ADDRESS, never a query: a static export answers this request with a file on
+// disk, and no file host can read a `?path=`.
+// THE `.txt` IS A SAFETY SUFFIX, not decoration. A served map hands every source file back as
+// text/plain, so nothing in it can run; an export hands the host raw bytes and the host guesses
+// from the file ending. A repo with an `.html` file in it then publishes that file as LIVE SCRIPT
+// on the map's own address — and on GitHub Pages every one of a person's sites shares one origin.
+// A name ending `.txt` is served as text by every host, so the exported copy behaves like the
+// served one. The suffix rides on the FETCH only; the path the reader sees is the repo's own.
+function srcPathSegs(path) { return String(path).split('/').map(encodeURIComponent).join('/') + '.txt'; }
 function diffRangeQS() {  // the active range as query params for api/srcdiff (mirrors the loaded diff)
   if (!LIVE_DIFF) return '';
   return '&base=' + encodeURIComponent(LIVE_DIFF.base || '') + '&target=' + encodeURIComponent(LIVE_DIFF.target || '');
@@ -14976,7 +14999,7 @@ async function loadCode(path, line) {
   const url = asDiff
     ? (API_BASE + (LIVE_DIFF && LIVE_DIFF.impact ? 'impactsrcdiff' : 'srcdiff')
        + '?path=' + encodeURIComponent(path) + diffRangeQS())
-    : (API_BASE + 'src?path=' + encodeURIComponent(path));
+    : (API_BASE + 'src/' + srcPathSegs(path));
   let r = null;
   try {
     r = await fetch(url, { cache: 'no-store' });
@@ -14984,9 +15007,14 @@ async function loadCode(path, line) {
     if (!r.ok) {
       // A 404 with a healthy repo means this ONE file is not in the commit; with a broken one it means
       // the map has no readable code at all, which is a different sentence (see noCodeMessage).
+      // ON AN EXPORT IT MEANS NEITHER. The file browser lists what the map's commit holds, so every
+      // name in it IS tracked; a copy that cannot answer for one left it out — too big to carry.
+      // "Not tracked in this commit" was a flat contradiction of the row the reader just clicked.
       cvscroll.innerHTML = r.status !== 404 ? '<p class="cverr">Could not load this file.</p>'
         : (REPO_STATE !== 'ok' ? '<p class="cvempty">' + noCodeMessage() + '</p>'
-                               : '<p class="cverr">Not tracked in this commit.</p>');
+           : EXPORTED ? '<p class="cvempty">This file was left out of this shared copy — it is too '
+                      + 'big to carry. It is in the project at this commit.</p>'
+                      : '<p class="cverr">Not tracked in this commit.</p>');
       cvPath = null; cvPinned = null; clearPendingScroll(path); return;  // nothing shown -> drop any pin + pending scroll
     }
   } catch (_) {
@@ -15255,7 +15283,11 @@ const lsSet = (k, v) => { try { localStorage.setItem(nsKey(k), v); } catch (_) {
 const srcRoot = () => (lsGet(LS.root) || REPO_ROOT_DEFAULT || '').replace(/\/+$/, '');
 // Default target: GitHub when the map has a remote+commit (zero setup, works for everyone), else the
 // '— choose —' placeholder. A saved choice always wins.
-const openTargetId = () => lsGet(LS.editor) || (GH_BAKED ? 'github' : 'native');
+// An EXPORT never offers an editor target. Those open `<root>/<file>` on the machine the reader is
+// sitting at, and the only root the page knows is the publisher's — so every one of them aimed at a
+// folder path on somebody else's disk. GitHub stays: it is an address, not a local path.
+const openTargetId = () => (EXPORTED ? (GH_BAKED ? 'github' : 'native')
+                                     : (lsGet(LS.editor) || (GH_BAKED ? 'github' : 'native')));
 const needsRoot = (id) => id !== 'native' && id !== 'github';  // only editor/custom targets need a local root
 const customUri = () => lsGet(LS.custom) || '';
 // `file` keeps its source anchor as parsed from the map link (e.g. 'src/app.py#L42', 'src/app.py:42',
@@ -15385,6 +15417,7 @@ const modalIntro = document.getElementById('modalIntro');
 const modalTitle = document.getElementById('modalTitle');
 OPEN_TARGETS.forEach((t) => {
   if (t.id === 'github' && !GH_BAKED) return;  // GitHub target only when the map has a remote + commit
+  if (EXPORTED && t.id !== 'github' && t.id !== 'native') return;  // see openTargetId
   const o = document.createElement('option');
   o.value = t.id; o.textContent = t.label; setEditor.appendChild(o);
 });
@@ -16251,7 +16284,10 @@ async function loadImpactCommits() {
   host.querySelectorAll('.diffcommit').forEach((b) =>
     b.addEventListener('click', () => { document.getElementById('impBase').value = b.getAttribute('data-sha'); }));
 }
-if (impactbtn) {
+// The impact explorer needs git on a server to answer at all, so an export never offers it. It is
+// hidden in the shell today for its own reasons; this is the gate that survives un-hiding it.
+if (EXPORTED && impactctl) impactctl.hidden = true;
+if (impactbtn && !EXPORTED) {
   impactbtn.addEventListener('click', (e) => { e.stopPropagation(); impactpop.hidden ? openImpactPop() : closeImpactPop(); });
   document.addEventListener('click', (e) => { if (!impactpop.hidden && !impactctl.contains(e.target)) closeImpactPop(); });
   document.getElementById('impSinceMap').addEventListener('click', () => loadImpact('', DIFF_WORKTREE));

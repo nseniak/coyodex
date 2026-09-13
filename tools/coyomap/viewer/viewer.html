@@ -8,8 +8,9 @@
      stops the browser's default /favicon.ico request 404ing. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
 <!-- The generic frontend: shipped once by `coyomap serve`, shared by every project. Its CSS + JS are
-     served from /static/; the per-project data arrives at runtime from /coyomap/<slug>/api/view. -->
-<link rel="stylesheet" href="/static/viewer.css">
+     asked for RELATIVELY, so the same shell works served (from /coyomap/<slug>/) and exported (from
+     whatever folder a file host puts it in); the per-project data arrives at runtime from ./api/view. -->
+<link rel="stylesheet" href="viewer.css">
 <!-- CDN libs pinned to exact versions + Subresource-Integrity (browser rejects a tampered file).
      Mermaid uses its self-contained UMD bundle (exposes window.mermaid) so SRI covers the whole
      library — the ESM build splits into runtime chunks that SRI on the entry would not cover. -->
@@ -345,6 +346,181 @@
     </div>
   </div>
 </div>
-<script type="module" src="/static/viewer.js"></script>
+<!-- BOOT GUARD. `viewer.js` is a MODULE, and a browser refuses to load one over `file://`: a page
+     opened straight off the disk has an opaque origin, module loading always goes through the
+     cross-origin check, and an opaque origin can never pass it. So the script never runs and cannot
+     report anything. A reader who double-clicks `index.html` therefore gets this shell with its tabs
+     and no content and no explanation, which is exactly what happened to the first person who tried.
+     THIS script is a plain inline one, which `file://` does allow, so it is the only thing that can
+     speak there. It also catches the other way a static copy fails to start: a host that serves
+     `.js` under a content type the browser will not execute. Same symptom, same answer. -->
+<script>
+(function () {
+  var CSS = ''
+    + '.cybg{position:fixed;inset:0;z-index:99999;overflow:auto;background:#fff;color:#111827;'
+    + 'font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;padding:2.2rem 1.5rem 2.6rem}'
+    + '.cybox{max-width:640px;margin:0 auto}'
+    + '.cybox h1{font-size:1.3rem;margin:0 0 1rem}'
+    + '.cybox p{margin:0 0 1rem}'
+    + '.cycmd{position:relative;margin:0 0 1.25rem}'
+    + '.cycmd pre{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;'
+    + 'padding:.7rem 5.5rem .7rem 1rem;overflow-x:auto;margin:0;'
+    + 'font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}'
+    + '.cycopy{position:absolute;top:50%;transform:translateY(-50%);right:.55rem;'
+    + 'font:600 11px/1 system-ui;letter-spacing:.05em;text-transform:uppercase;color:#4f46e5;'
+    + 'background:#fff;border:1px solid #c7d2fe;border-radius:5px;padding:.42rem .65rem;cursor:pointer}'
+    + '.cycopy.done{color:#047857;border-color:#a7f3d0;background:#ecfdf5}'
+    + '.cygroup{margin-bottom:1.25rem}'
+    + '.cygroup .cycmd{margin-bottom:.45rem}'
+    + '.cyor{display:flex;align-items:center;gap:.7rem;margin:.45rem 0;color:#9ca3af;'
+    + 'font-size:12px;letter-spacing:.06em;text-transform:uppercase}'
+    + '.cyor::before,.cyor::after{content:"";flex:1;height:1px;background:#eceef1}'
+    + '.cylink{border:1px solid #e5e7eb;border-left:4px solid #4f46e5;border-radius:6px;'
+    + 'padding:1rem 1.15rem;margin:0 0 1.25rem;display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}'
+    + '.cylink span{color:#6b7280;font-size:14px}'
+    + '.cylink a{color:#4f46e5;font:15px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;'
+    + 'text-decoration:none;border-bottom:1px solid #c7d2fe}';
+
+  // THE FOLDER THIS PAGE IS SITTING IN, as a shell-safe argument. The page knows it from its own
+  // address — nothing is written in at export time, so a folder the reader moved or renamed still
+  // prints correctly. Single quotes because a path may hold spaces; the '\'' dance is how a single
+  // quote survives inside single quotes, and a folder called "Nitsan's maps" is not exotic.
+  function folderArg() {
+    try {
+      var dir = decodeURIComponent(location.pathname).replace(/\/[^\/]*$/, '');
+      if (/^\/[A-Za-z]:/.test(dir)) dir = dir.slice(1);   // Windows: /C:/Users/... -> C:/Users/...
+      return dir ? "'" + dir.replace(/'/g, "'\\''") + "'" : null;
+    } catch (e) { return null; }
+  }
+
+  function para(text) {
+    var p = document.createElement('p');
+    p.textContent = text;
+    return p;
+  }
+
+  // One command, its own block, its own Copy — because you run ONE of the servers below, and three
+  // lines in a single block invite copying all three.
+  function command(text) {
+    var wrap = document.createElement('div');
+    wrap.className = 'cycmd';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cycopy';
+    btn.textContent = 'Copy';
+    btn.onclick = function () {
+      copy(text);
+      btn.textContent = 'Copied';
+      btn.className = 'cycopy done';
+      setTimeout(function () { btn.textContent = 'Copy'; btn.className = 'cycopy'; }, 2000);
+    };
+    var pre = document.createElement('pre');
+    pre.textContent = text;
+    wrap.appendChild(btn);
+    wrap.appendChild(pre);
+    return wrap;
+  }
+
+  function copy(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch (e) { /* fall through to the old way */ }
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('style', 'position:fixed;opacity:0');
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* nothing more to try */ }
+    document.body.removeChild(ta);
+  }
+
+  function orRule() {
+    var d = document.createElement('div');
+    d.className = 'cyor';
+    d.appendChild(document.createTextNode('or'));
+    return d;
+  }
+
+  function linkTo(url, lead) {
+    var d = document.createElement('div');
+    d.className = 'cylink';
+    var s = document.createElement('span');
+    s.textContent = lead;
+    var a = document.createElement('a');
+    a.href = url;
+    a.textContent = url;
+    d.appendChild(s);
+    d.appendChild(a);
+    return d;
+  }
+
+  function panel(head, nodes) {
+    var style = document.createElement('style');
+    style.textContent = CSS;
+    document.head.appendChild(style);
+    // HIDE THE DEAD SHELL rather than cover it. Not one control in it does anything without the
+    // script, and a tab bar you can click that answers nothing is worse than no tab bar. Covering
+    // was tried and leaked: the source rail is `position:fixed` under a static parent, so it
+    // escapes to the viewport and competes with the overlay however high the overlay is stacked.
+    // An INLINE display:none, because the stylesheet's own `display` rules outrank `[hidden]`.
+    var kids = [].slice.call(document.body.children);
+    for (var k = 0; k < kids.length; k++) kids[k].style.display = 'none';
+    var bg = document.createElement('div');
+    bg.className = 'cybg';
+    var box = document.createElement('div');
+    box.className = 'cybox';
+    var h = document.createElement('h1');
+    h.textContent = head;
+    box.appendChild(h);
+    for (var i = 0; i < nodes.length; i++) box.appendChild(nodes[i]);
+    bg.appendChild(box);
+    document.body.appendChild(bg);
+  }
+
+  if (location.protocol === 'file:') {
+    var nodes = [
+      para('Browsers never run a page\u2019s script when the page comes straight off the disk. So '
+         + 'this one cannot load. The files are fine \u2014 they need a web address rather than a '
+         + 'folder path.'),
+    ];
+    var folder = folderArg();
+    if (folder) {
+      nodes.push(para('Open a terminal and go to this map\u2019s folder:'));
+      nodes.push(command('cd ' + folder));
+      nodes.push(para('Then start a web server there. Whichever your machine has:'));
+    } else {
+      nodes.push(para('Open a terminal in this map\u2019s folder and start a web server. Whichever '
+                    + 'your machine has:'));
+    }
+    var group = document.createElement('div');
+    group.className = 'cygroup';
+    var cmds = ['python3 -m http.server 8000', 'ruby -run -e httpd . -p 8000', 'npx serve -l 8000'];
+    for (var j = 0; j < cmds.length; j++) {
+      if (j) group.appendChild(orRule());
+      group.appendChild(command(cmds[j]));
+    }
+    nodes.push(group);
+    nodes.push(linkTo('http://localhost:8000/', 'Then open'));
+    nodes.push(para('Putting the folder on a web host works the same way.'));
+    panel('This map has to be served, not opened as a file', nodes);
+    return;
+  }
+
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (window.__coyomapBooted) return;
+      panel('This map could not start', [
+        para('The page loaded but its script never ran. That usually means the web server here is '
+           + 'handing back viewer.js as something the browser will not execute, so the server needs '
+           + 'to send it as JavaScript.'),
+      ]);
+    }, 15000);
+  });
+})();
+</script>
+<script type="module" src="viewer.js"></script>
 </body>
 </html>
