@@ -822,6 +822,11 @@ class Handler(BaseHTTPRequestHandler):
             # Each segment arrives already percent-decoded (see do_GET); `safe_rel` on the rejoined
             # path is what stops `..`/absolute escapes, decoded ones included.
             path = "/".join(rest[1:])
+            # The viewer appends `.txt` so a static host cannot serve a repo's own `.html` as a
+            # live page (see `srcPathSegs` in viewer.js). Strip it here so both copies answer the
+            # same address; a repo file genuinely called `x.txt` is asked for as `x.txt.txt`.
+            if path.endswith(".txt"):
+                path = path[:-4]
             if not safe_rel(path):
                 return self._send(400, "text/plain; charset=utf-8", b"bad path")
             # `at=` (impact explorer): read the file at another commit, or from the working tree.

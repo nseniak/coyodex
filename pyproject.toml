@@ -29,6 +29,13 @@ dev = [
     # or the browser binary is missing, the same bargain test_viewer_js.py makes with node. The browser
     # itself is a separate download — `.venv/bin/python -m playwright install chromium`.
     "playwright>=1.40",
+    # Runs the suite across processes (`-n`). The gates are 80% browser tests, and those were
+    # serial on a many-core machine: 126 of them took 302s of a 412s run. Measured on 2026-09-13,
+    # splitting just that file — 1 process 302s, 4 processes 80s, 8 processes 46s. Nothing in the
+    # suite shares state across processes (every server binds port 0, every fixture writes to its
+    # own temp dir, and `Handler.projects` is a class attribute per interpreter), which is what
+    # makes the split safe rather than merely fast.
+    "pytest-xdist>=3.5",
 ]
 
 [project.scripts]

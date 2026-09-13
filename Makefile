@@ -52,8 +52,13 @@ dev: venv
 # clean run while skipping every other tier — so the bare command is the only one that means "the
 # gates passed", and it cannot drift from `testpaths` again. Type errors are reported after the
 # tests rather than short-circuiting, so one run tells you everything that is wrong.
+# `-n auto` runs the suite across every core. It is not a tuning knob: 80% of the run was the 126
+# browser tests, serial on a 14-core machine. Measured 2026-09-13 on the whole suite — 1 process
+# 412s, 8 processes 131s, `auto` 57s, all 3412 passing at every width. Nothing shares state across
+# processes (every server binds port 0, every test writes to its own temp dir), which is what makes
+# the split safe rather than merely fast. Drop to `-n0` to read an interleaved failure in order.
 gates:
-	@$(PY) -m pytest -q; t=$$?; \
+	@$(PY) -m pytest -q -n auto; t=$$?; \
 	echo ""; \
 	$(PY) -m pyright tools/coyodex; p=$$?; \
 	echo ""; \
