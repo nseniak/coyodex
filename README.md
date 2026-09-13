@@ -8,54 +8,48 @@
 
 </div>
 
-## What is coyodex?
-
-coyodex analyzes your project and builds an interactive map of its features, in plain language,
-linked to the underlying architecture and code. Use it to understand what your product does and
-how it is implemented, top-down, without reading all the code. Drill into the code only where and
-when you actually need to.
-
 ## Why coyodex?
 
 When coding agents generate most of your code, you can lose track of your project's features
-and implementation. Everything runs fine until the day you look down and see there is nothing
-under your feet. This is the Coyote Effect.
+and implementation. Everything runs fine until the day you look down and see there is nothing under
+your feet. This is the Coyote Effect.
 
-coyodex helps you recover from this situation and oversee your agent's work moving forward.
+coyodex helps you recover from this situation.
 
-The map is also a shared picture: a product manager reads what is in the project on the same map
-the developer works from.
+## What is coyodex?
+
+coyodex analyzes your project and builds an interactive map of its features, in plain language,
+linked to the underlying architecture and code. Use it to understand what your project does and
+how it is implemented, top-down, without reading all the code. Drill into the code only where and
+when you actually need to.
+
+The map is also a shared picture of the project, for teammates and colleagues who never open the
+code, product managers included.
 
 ## What coyodex shows
 
-The viewer shows a map in two groups.
+The viewer shows your project in two views: *Product* and *Under the hood*.
 
-**Product** — the product's functionality: its features and use cases, the happy path, the rules it
-enforces, and what it knows about.
+**Product** shows the project's functionality: who uses it, its features and use cases, the happy
+path, the rules it enforces, and the data it keeps.
 
 <img src="assets/viewer-product.png" alt="The coyodex viewer on a project's Features page: the people who use the product on the left, its features in happy-path order in the middle, and the data each feature owns on the right. No code on screen." width="100%">
 
-*The Product group, on the Features page: who uses the product, what it does, and the data behind each
-feature.*
-
-**Under the hood** — how it is built and run: its components and their dependencies, where data is
-stored, how it is deployed.
+**Under the hood** shows how the project is built and run: its components and their dependencies,
+where data is stored, how it is deployed.
 
 <img src="assets/viewer-hood.png" alt="The coyodex viewer on a project's Components page: the map of one subsystem with one component selected and explained in a sentence, and that component's source code open on the right at the line the map points to." width="100%">
 
-*Under the hood, on the Components page: one subsystem's map, the selected component explained in one
-sentence, and its code beside it at the line the map points to.*
-
-Start from a feature and drill down: the interfaces and data it touches, the components that do the
+You can start from a feature and drill down: the interfaces and data it touches, the components that do the
 work, and the code behind each.
 
 ## Why not just ask my agent to explain the code?
 
-Sure, you can ask your agent to analyze the code and draw diagrams. But coyodex differs in
-two ways:
+You can ask your agent to analyze the code, generate summaries and draw diagrams. However, coyodex
+differs in two ways:
 
 - coyodex builds an explorable, hierarchical map: every box has a plain-language note, links to
-  related boxes, and links into the architecture and code. The map is saved with the project, so
+  related elements, and links into the architecture and code. The map is saved with the project, so
   everyone sees the same one.
 - An AI agent can miss things or make things up. So coyodex reads the code with the help of an
   index, makes every claim point at a real file and line, checks the map for gaps and
@@ -105,6 +99,9 @@ verification pass. Commit the folder with your code. The interactive viewer isn'
 it's served live from the map (below). With a map already there, `/coyodex` tells you whether the
 map still matches the code; it never rebuilds on its own.
 
+The initial build is the agent's biggest job: up to an hour and a good number of tokens, once per project.
+After that, the map is kept with the code, and asking for changes is cheap.
+
 **2. View the map.** A small local server renders the viewer. Start it once, from the coyodex clone:
 
 ```
@@ -148,26 +145,8 @@ unnoticed.
 
 ## Status
 
-**Work in progress, in daily use.** As of September 2026, coyodex has built 35 maps of three real
-projects. Before a map is written, fresh agents challenge its claims against the code, and their
-verdicts are stored next to the map. The version number lives in the [`VERSION`](VERSION) file at
-the repo root.
-
-**What works today**
-
-- Build a map of a repo and render it as an interactive, drillable viewer.
-- Ask for map changes in plain language — move, split, rename, or drill deeper into any part.
-- Open a component's or entity's source straight from the viewer, in your editor (VS Code, Cursor,
-  IntelliJ, …) or on GitHub.
-
-**Known gaps / rough edges**
-
-- The stored map format still moves: a newer coyodex may not read an older map. A rebuild is the
-  fix, and it is cheap, so treat a map as replaceable.
-- Two builds of the same commit agree on the code, not on the wording: names and sentences can
-  differ between rebuilds.
-- Exercised on repos of 400 to 1,000 tracked files; larger codebases are unexplored.
-- Map quality depends on the coding agent and model: read it, and correct it. If you do not read
-  code, the code link is what you hand to someone who does.
+coyodex is **work in progress**, in daily use. The stored map format still moves: a newer coyodex
+may not read an older map, and a rebuild is the fix, so treat a map as replaceable. Map quality
+depends on the coding agent and model: read it, and correct it.
 
 Feedback and bug reports are welcome, please [open an issue](../../issues).
