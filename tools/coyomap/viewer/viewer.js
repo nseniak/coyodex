@@ -7126,9 +7126,16 @@ function paneSync() {
   // Three places hid the card and only one of them told the line. They all come through here now.
   if (!has) { hideCallout(); return; }
   stampPanelBar();
-  // THE HAND IS FROZEN HERE, for as long as this card is up. See `handAt`: read live, it made the card
-  // chase the pointer on every later re-place.
-  handAt = pointerAt ? { ...pointerAt } : null;
+  // THE HAND IS FROZEN ONCE PER SUBJECT, not once per call. `paneSync` is the one rule for whether a
+  // card is on screen, so it runs for things that are not a new card at all — most sharply the card's
+  // OWN `mouseleave`, which puts the selection's card back when a hover preview ends. Re-freezing there
+  // set the hand to wherever the pointer was LEAVING the card, and the next placement dodged that: the
+  // card moved as the cursor left it, which is exactly when a reader is not asking for anything.
+  //
+  // The subject is what a new hand means: a different thing to describe is a new act by the reader, and
+  // their hand is wherever they just clicked. The same thing described again is the same card.
+  const subject = soleSelectedEl();
+  if (subject !== handFor) { handFor = subject; handAt = pointerAt ? { ...pointerAt } : null; }
   placeCard();   // …placed, moved out of its element's way, and joined to it
 }
 // The bar carries the ×, so the panel can be put away without hunting for a piece of empty canvas.
@@ -7825,6 +7832,7 @@ let lastCardPlace = null;
 // Frozen at `paneSync`, which is the one place a card is put up for a new selection, so the hand the
 // card dodges is the hand that opened it and nothing else.
 let handAt = null;
+let handFor;                 // the subject `handAt` was taken for; `undefined` = no card has been up yet
 // THE TWO BOXES AN ARROW JOINS, found from the arrow's own ends rather than from its id. Mermaid names
 // an edge `L_<from>_<to>_<n>` and a node id may itself hold an underscore, so the name cannot be split
 // back into two ids without guessing. The drawn ends can: each sits on the border of the box it leaves.
