@@ -596,6 +596,13 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 .ed-pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 /* A PAIR'S STEPS, inside the card of the use case they belong to. One line each: which step it is,
    what it does, and where the code is — the three things the step popup shows, minus the popup. */
+/* THE TWO ENDS on a step's hero: who acts, and on what. On the board the arrow itself said this; on a
+   page there is no board, so the pills carry it and the arrow between them is the only glyph. */
+.lp-ends { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lp-arrow { color: #9ca3af; font-size: 13px; }
+/* The other steps at the same pair, offered as a line rather than as the page: it is a real second
+   question on 27 of this map's 131 pairs, and never the first one. */
+.lp-more { font-size: 13px; }
 .lp-steps { list-style: none; margin: 4px 0 0; padding: 0; }
 .lp-step { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; margin-top: 4px;
            font-size: 13px; line-height: 1.45; color: #374151; }

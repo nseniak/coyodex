@@ -2906,6 +2906,73 @@ function nodeDetailBodyHtml(id, noExplain) {
     + triggeredByHtml(id)
     + impactSectionHtml(id);
 }
+// ONE STEP OF ONE USE CASE, as a page. The popup over the board shows this same step and is the right
+// size for it; the page is where a reader lands from the popup's title, and where a shared link points.
+//
+// IT IS THE STEP, NOT THE PAIR. A page about the PAIR was written first and was the wrong answer to the
+// question a reader asks at a flow arrow: they clicked one step of one story, and a page about every
+// story that touches those two boxes answers a question they did not ask. The pair still has its page —
+// `renderLeafPair`, linked from the foot below when there IS more than one step — because on 27 pairs
+// of this map's 131 that IS a real second question, just not the first one.
+// The words a rendered fragment reads as, for the one slot that takes a NAME rather than prose.
+function textOf(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent || '';
+}
+function renderFlowStepPage(uc, sn) {
+  // `flowStepIndex` is the ONE lookup from a step's number to its place, shared with the chips that
+  // label and act on a step — so the number in the address and the step it lands on cannot disagree.
+  // It compares numbers, and a number out of an address is a string.
+  const i = flowStepIndex(uc, uc, Number(sn));
+  const st = i >= 0 ? FLOWS_NARR[uc][i] : null;
+  if (!st) { diagram.innerHTML = '<p class="empty">This step is not in the map.</p>'; return; }
+  const all = FLOWS_NARR[uc] || [];
+  // THE ENDS, as the pills that name them — who acts, and on what. They are the first thing a reader
+  // wants at a step and the popup already carries them nowhere, because the board around it drew them.
+  // On a page there is no board.
+  const ends = (st.srcId && GRAPH.nodes[st.srcId] ? itemPillHtml(st.srcId) : esc(st.src || ''))
+    + '<span class="lp-arrow" aria-hidden="true">\u2192</span>'
+    + (st.dstId && GRAPH.nodes[st.dstId] ? itemPillHtml(st.dstId) : esc(st.dst || ''));
+  const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+  const hero = pageHeroHtml({
+    glyph: itemGlyphSvg('usecase'), type: 'Step ' + esc(String(st.n)) + ' of ' + all.length,
+    // THE ACTION, as plain words. `pageHeroHtml` escapes the name (it is a name, not prose), so the
+    // markdown the phrase may carry is stripped rather than rendered — `mdInline` here would print the
+    // asterisks. The popup renders it, because there the phrase is the card's own prose line.
+    name: st.verb ? capFirst(textOf(mdInline(st.verb))) : 'Step ' + st.n,
+    desc: st.note ? mdInline(st.note) : '', noDesc: false,
+    meta: '<span class="page-hero-meta-line lp-ends">' + ends + '</span>' });
+  const secs = [];
+  // WHERE THE CODE IS. The step's own call site, which is THE location — an arrow's `where` is only an
+  // example site, and this is why a step's card never shows the arrow's.
+  if (st.where) {
+    secs.push(detailSec('src', 'Where the code is', '',
+                        '<div class="dv-panerow">' + srcCell(st.where) + '</div>'));
+  }
+  // THE RULES THIS STEP DECIDES, the same pills the popup carries.
+  // ONE builder for "which rules does this step decide", shared with the popup — two of them would
+  // eventually disagree about which step a rule sits on, and that join is fiddly (see stepRulesHtml).
+  const rules = stepRulesHtml(uc, st);
+  if (rules) secs.push(detailSec('rules', 'What it decides', '', rules));
+  // THE USE CASE IT BELONGS TO — its card, so the reader can read what the whole story is for and open
+  // it in one click.
+  secs.push(detailSec('uc', 'It belongs to', '',
+                      '<div class="ecard-list">' + elementCardHtml(uc, {}) + '</div>'));
+  // …AND THE OTHER STEPS AT THE SAME PAIR, where there are any. This is the pair page's question, and
+  // it is a SECOND question: offered as a line, not as the page.
+  const pair = (st.srcId && st.dstId && isLeafPair(st.srcId, st.dstId))
+    ? leafPairSteps(st.srcId, st.dstId) : [];
+  if (pair.length > 1) {
+    secs.push(detailSec('pair', 'Also between these two', countLabel(pair.length - 1, 'other step'),
+      '<button type="button" class="pane-title-link lp-more" data-drill=\''
+      + esc(JSON.stringify({ kind: 'edge', a: st.srcId, b: st.dstId })) + '\'>'
+      + esc(elName(st.srcId) + ' \u2192 ' + elName(st.dstId)) + '</button>'));
+  }
+  diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">' + hero
+    + '<div class="edetail">' + secs.join('') + '</div></div>';
+  bindElementCards(diagram);
+}
 // A PAIR OF LEAF ELEMENTS, as a page: everything the map records running between these two things.
 //
 // WHY IT IS A LIST AND NOT A DRAWING. A container pair gets a baked diagram — both subsystems, the
@@ -3805,26 +3872,24 @@ function flowStepInfoHtml(uc, i) {
   // mark it a password") and reads as a sentence here, at the head of its own card. Done to the TEXT,
   // not with `text-transform: capitalize`, which would raise every word.
   const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
-  // THE TITLE IS A DOOR TO THE PAIR'S PAGE — the two things this step runs between, and every step in
-  // the map that runs between them. The popup deliberately shows only THIS step (one pair appears in
-  // several steps meaning different things, so the arrow's shared text was taken off this card and
-  // stays off); the pair's page is where the other meanings live, and this is the way to it.
+  // THE TITLE IS A DOOR TO THIS STEP'S OWN PAGE. The popup is the right size for one step and the
+  // page is where a shared link points; the words are the same words, so the click goes where the
+  // reader is already looking.
   //
-  // A LINK IS NOT A DESCRIPTION. The words stay the STEP's own action; only the click goes to the pair.
+  // IT WAS THE PAIR'S PAGE FIRST, and that was the wrong answer to the question asked at a flow arrow:
+  // a reader clicked one step of one story, and a page about every story touching those two boxes
+  // answers a question they did not ask. The pair is a real second question on 27 of this map's 131
+  // pairs, and the step page offers it at the foot where it applies.
   //
   // `data-drill` is delegated from PANEL_HOST, so there is nothing to bind. A step that runs a shared
   // sub-flow keeps ITS door, which is the more specific answer.
-  const pair = !runsShared && st.srcId && st.dstId
-    && GRAPH.nodes[st.srcId] && GRAPH.nodes[st.dstId]
-    ? { kind: 'edge', a: st.srcId, b: st.dstId } : null;
   const action = st.verb ? mdInline(capFirst(st.verb)) : 'Step';
+  const mine = { kind: 'step', uc, sn: st.n };
   const title = runsShared
     ? '<button type="button" class="pane-title-link" data-gosf="' + esc(st.sf) + '"'
       + ' title="Open the shared sub-use case">' + esc(capFirst(st.sfName || st.sf)) + '</button>'
-    : (pair
-      ? '<button type="button" class="pane-title-link" data-drill=\'' + esc(JSON.stringify(pair)) + '\''
-        + ' title="Open ' + esc(st.src) + ' \u2192 ' + esc(st.dst) + '">' + action + '</button>'
-      : action);
+    : '<button type="button" class="pane-title-link" data-drill=\'' + esc(JSON.stringify(mine)) + '\''
+      + ' title="Open this step\u2019s page">' + action + '</button>';
   const facts = [];
   if (st.note) facts.push(['Note', mdInline(st.note), true]);
   // The call site wears the SAME pill every other code link in the product wears (`srcCell`: name +
@@ -5037,7 +5102,12 @@ const tabLast = {};
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
 const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sf', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
-                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'iface', 'id', 'sec'];
+                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'iface', 'id', 'sec',
+                      // `sn` is a step's own NUMBER, not its index — the number the reader sees on the
+                      // board and in the popup ("step 13"). Unique within a use case on all four live
+                      // maps, and looked up by scanning rather than by position, so a flow whose numbers
+                      // ever stop matching their order still resolves.
+                      'sn'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sf ? ':' + s.sf : '')
@@ -5055,9 +5125,10 @@ function stateKey(s) {
     + (s.iface ? ':' + s.iface : '')  // …and one SURFACE inside the Interfaces list
     + (s.sys ? ':' + s.sys : '')   // one System collection, the drill out of its cards
     + (s.id ? ':' + s.id : '')     // …and one element's own details page
-    + (s.sec ? ':' + s.sec : '');  // …and WHICH PART of a feature's page: its use cases, or one of
+    + (s.sec ? ':' + s.sec : '')   // …and WHICH PART of a feature's page: its use cases, or one of
                                    // the three lists beside them. The parts SWITCH, so each is a
                                    // screen of its own and has to be one the address can name.
+    + (s.sn ? ':' + s.sn : '');    // …and WHICH STEP of a use case, on a step's own page
 }
 // --- the URL says which screen you are on ---------------------------------------
 // The part of the URL after `#` carries the screen: its kind, every field `stateKey` distinguishes
@@ -6770,7 +6841,8 @@ function topLevelView(s) {
 // sibling states under the same tab are pages. The colour key that used to hang off this same question
 // kept a SECOND list, keyed by view, and that distinction is exactly what it got wrong.
 const TEXT_PAGES = new Set(['overview', 'usecases', 'capability', 'actor', 'hp',
-  'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge']);
+  'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge',
+  'step', 'edge-leaf']);
 // A CARD BELONGS TO THE PAGE THAT IS ON SCREEN. Every navigation therefore starts with no card, and the
 // page then puts one back only if it has one to show: its own subject (a drilled subsystem, a use case's
 // flow, one arrow's pair) or whatever the reader had selected and history is restoring.
@@ -7991,7 +8063,8 @@ function topView(kind, id) {  // which top-level button a state lives under (con
   // the page is the drill out of that card. The Actors tab it used to live under is gone — the cast
   // column already showed every actor with more context, so the tab was the same answer twice.
   if (kind === 'actor') return 'usecases';
-  if (kind === 'usecases' || kind === 'capability' || kind === 'usecase' || kind === 'subflow') return 'usecases';
+  if (kind === 'usecases' || kind === 'capability' || kind === 'usecase' || kind === 'subflow'
+      || kind === 'step') return 'usecases';   // a step lives under the use case that runs it
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
   if (kind === 'interfaces' || kind === 'interface') return 'interfaces';  // one surface's page is the drill out of the Interfaces list
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup' || kind === 'depedge') return 'deployment';  // a process/container card, and one arrow's page, live under the Deployment tab
@@ -8115,6 +8188,9 @@ function stateTitle(s) {
   if (s.kind === 'domedge') return elName(s.a) + ' → ' + elName(s.b);
   if (s.kind === 'bridge') return elName(s.sid) + ' → ' + elName(s.sd);
   if (s.kind === 'hp') return 'Happy Path';
+  // A STEP'S OWN CRUMB is its number, not its phrase: the phrase is the page's heading a line below,
+  // and a trail carrying a whole sentence stops being a path.
+  if (s.kind === 'step') return 'Step ' + s.sn;
   if (s.kind === 'usecase') return elName(s.uc);
   if (s.kind === 'subflow') return subflowName(s.sf);
   if (s.kind === 'libs') return 'Libraries';
@@ -8171,6 +8247,11 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   // came through an actor put a card they never opened in the trail, and clicking it landed them on a
   // screen they had never seen. A use case in no feature still gets its crumb — the "not assigned"
   // card is a real level, and without it that one drill was the only one no breadcrumb could undo.
+  // ONE STEP sits under the use case it belongs to, which is the only place it exists. Its own crumb
+  // is last, so the trail reads Features > the feature > the use case > the step.
+  if (s.kind === 'step') {
+    return [...ancestors({ kind: 'usecase', uc: s.uc, act: s.act }), { kind: 'step', uc: s.uc, sn: s.sn }];
+  }
   if (s.kind === 'usecase') {
     // A use case has TWO homes and the reader's own path picks one. `s.act` is set when it was
     // opened from an actor's page, and then the trail runs through that page (under Features);
@@ -13716,6 +13797,10 @@ async function renderView(sArg, transient, seq) {
   if (s.kind === 'element') {
     renderElementDetails(s.id); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
+  // ONE STEP OF ONE USE CASE, the page a flow arrow's popup opens.
+  if (s.kind === 'step') {
+    renderFlowStepPage(s.uc, s.sn); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+  }
   // A PAIR WITH NO BAKED DIAGRAM is a pair of LEAVES — the cards are minted for container pairs only.
   // It rendered "This view could not be rendered." on an address the breadcrumb answered perfectly
   // well, which is how it went unnoticed: the trail printed "Map assembly → Project map" over an empty
@@ -15376,7 +15461,10 @@ document.addEventListener('keydown', (e) => {
 // An arrow card's title, and its "Show all N connections" (the card was cut to three rows, and this is
 // the way to the rest): both carry `data-drill`. Delegated, like the source links above, so a panel
 // writer cannot forget to wire it.
-PANEL_HOST.addEventListener('click', (ev) => {
+// ONE handler for `data-drill`, wherever the attribute is drawn. It was written on the card alone, and
+// the first page to carry a drill button (a step's "Also between these two") looked live and went
+// nowhere — the card's listener never sees a click inside #diagram. Both hosts delegate to this.
+function drillFrom(ev) {
   const more = ev.target && ev.target.closest && ev.target.closest('[data-drill]');
   if (!more) return;
   ev.stopPropagation();
@@ -15398,7 +15486,9 @@ PANEL_HOST.addEventListener('click', (ev) => {
   }
   if (center) pendingCenter = center;
   go(to);
-});
+}
+PANEL_HOST.addEventListener('click', drillFrom);
+diagram.addEventListener('click', drillFrom);
 // --- dragging the card by its bar, and resizing it from its corner -----------------
 // The bar is the only grab handle: dragging on the card's own text would fight selecting that text, and
 // a reader who wants to copy a call site should be able to. Pointer events (not mouse) so a trackpad and

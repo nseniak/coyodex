@@ -2364,6 +2364,31 @@ def test_a_page_and_its_title_share_one_left_edge() -> None:
         assert block in css, block
     assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
 
+def test_a_flow_arrow_opens_the_step_it_names_not_the_pair_it_crosses() -> None:
+    """The popup over a flow arrow shows ONE step, and its title opens that step's own page. The page
+    was the PAIR's first, and that was the wrong answer to the question asked at a flow arrow: a reader
+    clicked one step of one story, and a page about every story touching those two boxes is a different
+    question. The pair keeps its page and is offered at the foot of the step's, where it belongs.
+
+    THE ADDRESS NAMES THE STEP BY ITS NUMBER — the number on the board and in the popup, not an index —
+    and resolves it through `flowStepIndex`, the one lookup the step chips already use, so the number a
+    reader clicks and the step they land on cannot disagree."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    step = js[js.index("function flowStepInfoHtml(uc, i) {"):
+              js.index("\nfunction ", js.index("function flowStepInfoHtml(uc, i) {") + 10)]
+    assert "const mine = { kind: 'step', uc, sn: st.n };" in step
+    assert "{ kind: 'edge', a: st.srcId, b: st.dstId }" not in step, "the pair was the first, wrong, door"
+    assert "data-gosf" in step, "a step that runs a shared sub-flow keeps its own, more specific door"
+    assert "'sn'];" in js, "the address can name a step"
+    assert "if (s.kind === 'step') {" in js
+    assert "flowStepIndex(uc, uc, Number(sn))" in js, "one lookup, and an address carries strings"
+    assert "if (s.kind === 'step') return 'Step ' + s.sn;" in js, "the crumb is the number, not the phrase"
+    # ONE `data-drill` HANDLER, for the card AND the page. It was written on the card alone, and the
+    # first page to draw a drill button looked live and went nowhere.
+    assert "PANEL_HOST.addEventListener('click', drillFrom);" in js
+    assert "diagram.addEventListener('click', drillFrom);" in js
+
+
 def test_a_pair_of_leaves_is_a_page_of_steps_not_an_empty_drawing() -> None:
     """`#v=edge&a=..&b=..` rendered "This view could not be rendered." for every pair of LEAF elements —
     a component and a record, two components — because the baked pair diagrams are minted for CONTAINER
@@ -2395,12 +2420,14 @@ def test_a_pair_of_leaves_is_a_page_of_steps_not_an_empty_drawing() -> None:
     assert ("if (s.kind === 'edge' && !MERMAID_EDGE_CARD[s.a + '>' + s.b] && isLeafPair(s.a, s.b)) {"
             in js)
     assert "PAIR_LEAF_KINDS = new Set(['component', 'entity', 'interface', 'dep'])" in js
-    # THE STEP POPUP'S TITLE OPENS IT. The words stay the step's own action; only the click goes to the
-    # pair. `data-drill` is delegated from PANEL_HOST, so there is nothing to bind.
-    step = js[js.index("function flowStepInfoHtml(uc, i) {"):
-              js.index("\nfunction ", js.index("function flowStepInfoHtml(uc, i) {") + 10)]
-    assert "{ kind: 'edge', a: st.srcId, b: st.dstId }" in step
-    assert "!runsShared && st.srcId && st.dstId" in step, "a shared sub-flow keeps its own, better door"
+    # IT IS REACHED FROM A STEP'S PAGE, not from the popup. The popup's title opens THE STEP — a reader
+    # at a flow arrow clicked one step of one story, and a page about every story touching those two
+    # boxes answers a question they did not ask. The pair is offered at the foot of the step's page,
+    # where it is a real second question (27 of this map's 131 pairs carry more than one step).
+    stepfn = js[js.index("function renderFlowStepPage(uc, sn) {"):
+                js.index("\n}", js.index("function renderFlowStepPage(uc, sn) {"))]
+    assert "detailSec('pair', 'Also between these two'" in stepfn
+    assert "pair.length > 1" in stepfn, "no line where this step is the only one between the two"
 
 
 def test_the_zoom_control_is_absent_on_a_page_with_no_diagram() -> None:
@@ -2489,7 +2516,7 @@ def test_the_system_tab_is_cards_over_one_builder() -> None:
     # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
     assert "const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
     assert "return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;" in js
-    assert "'gid', 'sys', 'epk', 'iface', 'id', 'sec'];" in js                 # …and its keys survive a right-pane navigation
+    assert "'gid', 'sys', 'epk', 'iface', 'id', 'sec'," in js                 # …and its keys survive a right-pane navigation
 
 
 def test_the_only_pinned_lines_are_the_ones_that_still_say_something() -> None:
@@ -2537,7 +2564,7 @@ def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
     assert "kinds.push({ key: k, count: byKind[k].length" in js
     assert "if (found.kinds && !epk) {" in js
     assert "bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: sysId, epk: key }));" in js
-    assert "'gid', 'sys', 'epk', 'iface', 'id', 'sec'];" in js
+    assert "'gid', 'sys', 'epk', 'iface', 'id', 'sec'," in js
 
 
 def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> None:
@@ -5507,9 +5534,12 @@ def test_the_subsystems_pictures_take_the_data_pictures_gestures() -> None:
     assert "sel: 'node:' + member" not in js
     assert "efocus" not in js, "the field that promised a focus nothing read is gone"
     assert "containerEdgeDrill" not in js and "domainEdgeDrill" not in js   # the twins are gone
-    # …and the card's click handler turns the centre hint into the one-shot pendingCenter, off the state.
-    handler = js[js.index("PANEL_HOST.addEventListener('click', (ev) => {"):
-                 js.index("\n});", js.index("PANEL_HOST.addEventListener('click', (ev) => {"))]
+    # …and the drill handler turns the centre hint into the one-shot pendingCenter, off the state.
+    # ONE handler, delegated from the card AND the page: it was written on the card alone, and the first
+    # page to draw a drill button (a step's "Also between these two") looked live and went nowhere.
+    handler = js[js.index("function drillFrom(ev) {"): js.index("\n}", js.index("function drillFrom(ev) {"))]
+    assert "PANEL_HOST.addEventListener('click', drillFrom);" in js
+    assert "diagram.addEventListener('click', drillFrom);" in js
     assert "const center = to.center; delete to.center;" in handler
     assert "if (center) pendingCenter = center;" in handler
     assert "selClear(mainScene); mainScene.selectors[to.sel]();" in handler   # already on the page: select in place
