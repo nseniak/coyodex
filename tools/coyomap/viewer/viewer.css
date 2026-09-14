@@ -594,6 +594,17 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    record, the use cases a component serves, the rules it enforces. They were comma-separated blue
    links, the last of those left in the viewer. */
 .ed-pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* A PAIR'S STEPS, inside the card of the use case they belong to. One line each: which step it is,
+   what it does, and where the code is — the three things the step popup shows, minus the popup. */
+.lp-steps { list-style: none; margin: 4px 0 0; padding: 0; }
+.lp-step { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; margin-top: 4px;
+           font-size: 13px; line-height: 1.45; color: #374151; }
+.lp-step:first-child { margin-top: 0; }
+/* The number is the step's place in its own use case, so it is set small and quiet: it orders the
+   line, it is not what the line is about. Fixed width so the phrases start on one column. */
+.lp-n { flex: 0 0 auto; min-width: 52px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em; color: #9ca3af; }
+.lp-what { flex: 1 1 12ch; min-width: 0; }
 /* The use cases under a FEATURE heading are that feature's, so they are set in from it. As an indented
    <ul> the nesting was the bullet's job; a row of pills has no bullet, and without the indent the
    feature and its use cases read as one flat run of pills that happen to wear different marks. */

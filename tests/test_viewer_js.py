@@ -2364,6 +2364,45 @@ def test_a_page_and_its_title_share_one_left_edge() -> None:
         assert block in css, block
     assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
 
+def test_a_pair_of_leaves_is_a_page_of_steps_not_an_empty_drawing() -> None:
+    """`#v=edge&a=..&b=..` rendered "This view could not be rendered." for every pair of LEAF elements —
+    a component and a record, two components — because the baked pair diagrams are minted for CONTAINER
+    pairs only. The breadcrumb answered perfectly well over the empty stage ("Map assembly → Project
+    map"), which is how it went unseen.
+
+    IT IS A LIST, NOT A DRAWING. A container pair's diagram shows both subsystems, the components inside
+    each and the arrows crossing, and that IS the answer there. Two leaves have nothing inside to draw,
+    so the picture would be two boxes and a line — less than the breadcrumb above it.
+
+    WHAT RUNS BETWEEN THEM is the answer instead. Measured on this repo's own map: 131 pairs are named
+    by a flow step and only 33 have an authored arrow behind them, so for 97 the steps are the only
+    record that anything passes; and 27 pairs carry more than one step. That last set is why the page
+    exists — one pair appears in several steps meaning different things, which is exactly why the step
+    popup shows only its own step and cannot speak for the pair."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function renderLeafPair(a, b) {"):
+            js.index("\n}", js.index("function renderLeafPair(a, b) {"))]
+    assert "detailSec('runs', 'What runs between them'" in fn
+    # A CARD PER USE CASE holding its own steps — the shape a component's page uses for its features.
+    assert "elementCardHtml(g.uc, {" in fn and "lp-steps" in fn
+    # The authored arrow is a DIFFERENT fact, and 97 of 131 pairs do not have one, so it is drawn only
+    # where there is something to draw.
+    assert "detailSec('wired', 'The connection behind it'" in fn
+    assert "The map records nothing running between these two." in fn
+    # The branch that reaches it: no baked card, AND both ends are kinds a flow step can name. As
+    # narrow as the sentence it prints — `#v=edge` naming two SUBDOMAINS is a wrong-kind link, and a
+    # confident "Pair: A -> B" over one would be worse than the blank it replaced.
+    assert ("if (s.kind === 'edge' && !MERMAID_EDGE_CARD[s.a + '>' + s.b] && isLeafPair(s.a, s.b)) {"
+            in js)
+    assert "PAIR_LEAF_KINDS = new Set(['component', 'entity', 'interface', 'dep'])" in js
+    # THE STEP POPUP'S TITLE OPENS IT. The words stay the step's own action; only the click goes to the
+    # pair. `data-drill` is delegated from PANEL_HOST, so there is nothing to bind.
+    step = js[js.index("function flowStepInfoHtml(uc, i) {"):
+              js.index("\nfunction ", js.index("function flowStepInfoHtml(uc, i) {") + 10)]
+    assert "{ kind: 'edge', a: st.srcId, b: st.dstId }" in step
+    assert "!runsShared && st.srcId && st.dstId" in step, "a shared sub-flow keeps its own, better door"
+
+
 def test_the_zoom_control_is_absent_on_a_page_with_no_diagram() -> None:
     """The zoom control acts on the diagram's pan-zoom, which a page of HTML has none of. It used to sit
     in the title bar and go DIM there — chrome the whole app shares, carrying a control that did nothing

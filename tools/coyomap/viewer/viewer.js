@@ -2906,6 +2906,84 @@ function nodeDetailBodyHtml(id, noExplain) {
     + triggeredByHtml(id)
     + impactSectionHtml(id);
 }
+// A PAIR OF LEAF ELEMENTS, as a page: everything the map records running between these two things.
+//
+// WHY IT IS A LIST AND NOT A DRAWING. A container pair gets a baked diagram — both subsystems, the
+// components inside each, and the arrows crossing — and that drawing IS the answer there. A leaf pair
+// has no such diagram, because there is nothing inside a leaf to draw: the picture would be two boxes
+// and a line, which says less than the breadcrumb above it. The answer for a leaf pair is what RUNS
+// between them, so that is what the page holds.
+//
+// Measured on this repo's own map before the page was written: 130 pairs are named by a flow step, and
+// only 33 of them have an authored arrow behind them — so for 97 the steps are the ONLY record that
+// anything passes between the two, and a page copying the container one would be empty for three pairs
+// in four.
+//
+// 27 of the 130 carry MORE THAN ONE step, the busiest seven. That is the case this page exists for, and
+// the reason the step popup does not try: one pair appears in several steps meaning different things,
+// so no single card can speak for the pair. A page can list them.
+// THE ENDS A FLOW STEP CAN NAME, and the only kinds this page will speak for. As narrow as the
+// sentence it prints, the rule `PAIR_PAGE` already follows: `#v=edge` naming two SUBDOMAINS is a
+// wrong-kind link, and a page that answered it with a confident "Pair: A → B" would be worse than the
+// blank it replaced. A container pair has its own baked diagram and never reaches here.
+// Measured across this repo's own flows: 233 component ends, 116 interface ends, 24 record ends.
+const PAIR_LEAF_KINDS = new Set(['component', 'entity', 'interface', 'dep']);
+function isLeafPair(a, b) {
+  const na = GRAPH.nodes[a], nb = GRAPH.nodes[b];
+  return !!(na && nb && PAIR_LEAF_KINDS.has(na.kind) && PAIR_LEAF_KINDS.has(nb.kind));
+}
+function leafPairSteps(a, b) {
+  const out = [];
+  for (const uc in (FLOWS_NARR || {})) {
+    (FLOWS_NARR[uc] || []).forEach((st, i) => {
+      if (st && st.srcId === a && st.dstId === b) out.push({ uc, i, st });
+    });
+  }
+  return out;
+}
+function renderLeafPair(a, b) {
+  const na = GRAPH.nodes[a], nb = GRAPH.nodes[b];
+  if (!na || !nb) { diagram.innerHTML = '<p class="empty">This pair is not in the map.</p>'; return; }
+  const hero = pageHeroHtml({
+    glyph: elementHeroGlyph(na.kind), name: elName(a) + ' \u2192 ' + elName(b), type: 'Pair',
+    desc: '', noDesc: false,
+    meta: '<span class="page-hero-meta-line">' + itemPillHtml(a) + ' ' + itemPillHtml(b) + '</span>' });
+  // THE STEPS, grouped by the use case they belong to — a card per use case holding its own steps, the
+  // same shape a component's page uses for its features. A pair reached by six use cases is six cards,
+  // not one run of rows a reader has to re-sort in their head.
+  const rows = leafPairSteps(a, b);
+  const byUc = [];
+  for (const r of rows) {
+    const g = byUc.find((x) => x.uc === r.uc);
+    (g ? g.rows : (byUc[byUc.length] = { uc: r.uc, rows: [] }).rows).push(r);
+  }
+  const stepLine = (r) => '<li class="lp-step"><span class="lp-n">' + esc('step ' + (r.st.n || r.i + 1))
+    + '</span> <span class="lp-what">' + (r.st.verb ? mdInline(r.st.verb) : '<span class="muted">(no phrase)</span>')
+    + '</span>' + (r.st.where ? ' ' + srcCell(r.st.where) : '') + '</li>';
+  // NO COUNT OVER ONE ROW. The label earns its line when a use case reaches this pair several times;
+  // over a single step it says "1 step" above one step.
+  const cards = byUc.map((g) => elementCardHtml(g.uc, {
+    foot: (g.rows.length > 1
+            ? '<span class="ecard-lbl">' + esc(countLabel(g.rows.length, 'step')) + '</span>' : '')
+          + '<ul class="lp-steps">' + g.rows.map(stepLine).join('') + '</ul>' })).join('');
+  const steps = rows.length
+    ? detailSec('runs', 'What runs between them', countLabel(rows.length, 'step'),
+                '<div class="ecard-list">' + cards + '</div>')
+    : '';
+  // THE ARROW BEHIND IT, when the map authored one. It is a different fact from the steps — the steps
+  // say a story passes here, the arrow says the code is wired this way — and 97 of 130 pairs have only
+  // the first, so the block is drawn only where there is something to draw.
+  const edges = (GRAPH.edges || []).filter((e) => e.src === a && e.dst === b);
+  const wired = edges.length
+    ? detailSec('wired', 'The connection behind it', countLabel(edges.length, 'connection'),
+                '<ul class="xlist">' + edges.map((e) => edgeRowHtml(e, false)).join('') + '</ul>')
+    : '';
+  const empty = (!steps && !wired)
+    ? '<p class="empty">The map records nothing running between these two.</p>' : '';
+  diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">' + hero
+    + '<div class="edetail">' + steps + wired + empty + '</div></div>';
+  bindElementCards(diagram);
+}
 // Everything the map holds about one element, as a PAGE. The info pane shows the element's card and
 // nothing else (the spec: same card format, in the pane as in a list), so this is where the depth
 // went — one click away, on a page with the room for it, instead of a pane that stole a third of the
@@ -3727,10 +3805,26 @@ function flowStepInfoHtml(uc, i) {
   // mark it a password") and reads as a sentence here, at the head of its own card. Done to the TEXT,
   // not with `text-transform: capitalize`, which would raise every word.
   const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+  // THE TITLE IS A DOOR TO THE PAIR'S PAGE — the two things this step runs between, and every step in
+  // the map that runs between them. The popup deliberately shows only THIS step (one pair appears in
+  // several steps meaning different things, so the arrow's shared text was taken off this card and
+  // stays off); the pair's page is where the other meanings live, and this is the way to it.
+  //
+  // A LINK IS NOT A DESCRIPTION. The words stay the STEP's own action; only the click goes to the pair.
+  //
+  // `data-drill` is delegated from PANEL_HOST, so there is nothing to bind. A step that runs a shared
+  // sub-flow keeps ITS door, which is the more specific answer.
+  const pair = !runsShared && st.srcId && st.dstId
+    && GRAPH.nodes[st.srcId] && GRAPH.nodes[st.dstId]
+    ? { kind: 'edge', a: st.srcId, b: st.dstId } : null;
+  const action = st.verb ? mdInline(capFirst(st.verb)) : 'Step';
   const title = runsShared
     ? '<button type="button" class="pane-title-link" data-gosf="' + esc(st.sf) + '"'
       + ' title="Open the shared sub-use case">' + esc(capFirst(st.sfName || st.sf)) + '</button>'
-    : (st.verb ? mdInline(capFirst(st.verb)) : 'Step');
+    : (pair
+      ? '<button type="button" class="pane-title-link" data-drill=\'' + esc(JSON.stringify(pair)) + '\''
+        + ' title="Open ' + esc(st.src) + ' \u2192 ' + esc(st.dst) + '">' + action + '</button>'
+      : action);
   const facts = [];
   if (st.note) facts.push(['Note', mdInline(st.note), true]);
   // The call site wears the SAME pill every other code link in the product wears (`srcCell`: name +
@@ -13621,6 +13715,13 @@ async function renderView(sArg, transient, seq) {
   // The two views the product leads with: what it is for, and who drives it.
   if (s.kind === 'element') {
     renderElementDetails(s.id); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+  }
+  // A PAIR WITH NO BAKED DIAGRAM is a pair of LEAVES — the cards are minted for container pairs only.
+  // It rendered "This view could not be rendered." on an address the breadcrumb answered perfectly
+  // well, which is how it went unnoticed: the trail printed "Map assembly → Project map" over an empty
+  // stage. See renderLeafPair for what it holds instead of a drawing.
+  if (s.kind === 'edge' && !MERMAID_EDGE_CARD[s.a + '>' + s.b] && isLeafPair(s.a, s.b)) {
+    renderLeafPair(s.a, s.b); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // One feature's use cases — the drill out of those cards ('*' = all of them). The feature's own name
   // and purpose head the list itself; the view's question is one level up, on the view's own screen.
