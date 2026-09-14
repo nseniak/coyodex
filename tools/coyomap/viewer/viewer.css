@@ -24,22 +24,12 @@ header button { font: inherit; font-size: 12.5px; line-height: 1; width: 26px; h
                 display: inline-flex; align-items: center; justify-content: center; padding: 0;
                 border: 0; border-radius: 6px; background: transparent; color: #e0e7ff; cursor: pointer; }
 header button:hover { background: rgba(255,255,255,.12); color: #fff; }
-/* A title-bar control that acts on the diagram is dimmed on a page that has none (syncLegend). It used
-   to stay fully lit: on 7 of the 12 tabs clicking + moved nothing, and a control that looks live and
-   does nothing teaches the reader to distrust the ones that work. `disabled` also drops it from the
-   tab order, so keyboard reading of a card page no longer stops on three buttons that do nothing. */
-header button:disabled { opacity: .35; cursor: default; }
-header button:disabled:hover { background: transparent; color: #e0e7ff; }
 /* At a narrow column the bar wraps into two lines: who you are looking at, then what you can do to it.
    `flex-basis: 100%` on the identity forces the break rather than letting the controls squeeze. */
 @media (max-width: 480px) {
   header .brand { flex: 1 0 100%; }
   header .meta { flex: 1 0 100%; }
 }
-#zoomlevel { width: auto; padding: 0 7px; font-variant-numeric: tabular-nums; }
-#zoomctl { display: inline-flex; gap: 4px; flex: 0 0 auto; align-items: center; }
-#zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }
-#zoomctl #zoomlevel { min-width: 52px; font-size: 12px; font-variant-numeric: tabular-nums; }
 main { display: flex; flex: 1; min-height: 0; }
 
 /* --- search sidebar --------------------------------------------------------------------------------
@@ -309,6 +299,26 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #overlays { position: absolute; left: 12px; top: 12px; z-index: 5; display: flex; flex-direction: column;
             align-items: flex-start; gap: 8px; max-height: calc(100% - 24px); pointer-events: none; }
 #overlays > * { position: relative; pointer-events: auto; }
+/* ZOOM / FIT / the reading, floating over the drawing (it was a title-bar item; see viewer.html).
+   BOTTOM-RIGHT, in a corner of its own: the top-right belongs to the selection card and the left to
+   the #overlays column. Positioned against #diagwrap like every other floater, so "bottom" is the
+   bottom of the DRAWING and not of a column that also holds the tab rows.
+   The same card as #envpicker — white, a 1px rule, an 8px radius — because everything floating on the
+   drawing is one kind of thing. Its buttons therefore take the LIGHT look, not the navy bar's: they
+   used to inherit `header button`, which paints #e0e7ff on transparent and is invisible on white.
+   Its own z-index, on the rule the other floaters follow: a floater with none loses to the callout. */
+#zoomctl { position: absolute; right: 12px; bottom: 12px; z-index: 5;
+           display: inline-flex; align-items: center; gap: 2px; background: #fff;
+           border: 1px solid #e5e7eb; border-radius: 8px; padding: 3px 4px;
+           box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+#zoomctl[hidden] { display: none; }
+#zoomctl button { font: inherit; font-size: 13px; line-height: 1; padding: 4px 8px; border: 0;
+                  border-radius: 5px; background: transparent; color: #374151; cursor: pointer; }
+#zoomctl button:hover { background: #f3f4f6; color: #111827; }
+/* The reading is a number that changes on every wheel tick, so it holds its own width and sets its
+   digits on one pitch — otherwise the two buttons beside it slide as 9% becomes 100%. */
+#zoomctl #zoomlevel { min-width: 50px; font-size: 12px; font-variant-numeric: tabular-nums;
+                      color: #6b7280; }
 #envpicker { z-index: 5; background: #fff;
              border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 10px;
              box-shadow: 0 2px 10px rgba(0,0,0,.07); }
@@ -1245,7 +1255,11 @@ body.tree-browsing #codeview { display: none; }
    55% leaves the drawing the larger half whatever the window, with a floor so a short pane still shows
    a usable card; past it the card scrolls inside itself. */
 #panel { position: absolute; top: 12px; right: 12px; z-index: 4; width: 380px; max-width: calc(100% - 24px);
-         max-height: max(200px, 55%); min-width: 260px;
+/* …and never down onto the zoom control in the bottom-right corner. The 200px floor is a floor, so on
+   a drawing shorter than 253px the card reached the control and covered it (measured: a 900x420 window
+   leaves 203px of drawing, card bottom 191, control top 161). `min()` keeps the 55%/200px rule wherever
+   there is room and yields only in the sliver where the two would meet; the card already scrolls. */
+         max-height: min(max(200px, 55%), calc(100% - 73px)); min-width: 260px;
 /* NO `resize`. A corner grip sets a HEIGHT, and a height set on one card is empty white under the
    next one on every selection after it. The width is the one number above; the height is the content. */
          padding: 14px 16px; overflow: auto;
@@ -1558,14 +1572,10 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #flowcount { font-size: 12px; color: #374151; font-variant-numeric: tabular-nums; min-width: 46px;
              text-align: center; padding: 0 2px; }
 
-/* Source-link settings modal + first-run navigation guide (#coach). The [hidden] attr toggles from JS. */
-#modal, #coach { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+/* Source-link settings modal. The [hidden] attr toggles from JS. */
+#modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
          background: rgba(17,24,39,.45); }
-#modal[hidden], #coach[hidden] { display: none; }
-/* the navigation-guide body: one line per interaction */
-.coach-list { margin: 12px 0 0; padding-left: 20px; font-size: 13px; color: #374151; line-height: 1.5; }
-.coach-list li { margin-top: 8px; }
-.coach-list li:first-child { margin-top: 0; }
+#modal[hidden] { display: none; }
 .modal-card { width: 460px; max-width: 92vw; background: #fff; border-radius: 12px; padding: 20px 22px;
               box-shadow: 0 12px 44px rgba(0,0,0,.32); }
 .modal-card h2 { font-size: 16px; margin: 0 0 4px; }

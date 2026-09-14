@@ -33,13 +33,7 @@
        grey after a reload, when the app has no memory of your path, while the browser's still worked
        and the trail still offered the way up. Same call as the `</>` toggle that used to sit beside
        the source rail. -->
-  <span id="zoomctl">
-    <button id="zoomout" title="Zoom out">−</button>
-    <button id="zoomlevel" title="Fit to screen">100%</button>
-    <button id="zoomin" title="Zoom in">+</button>
-  </span>
   <button id="searchbtn" title="Search the map (press /)" aria-label="Search the map">&#128269;</button>
-  <button id="helpbtn" title="How to get around the map" aria-label="How to get around the map">?</button>
   <button id="setbtn" title="Source link settings (editor + repo root)" aria-label="Source link settings">&#9881;</button>
   <!-- Impact explorer (design: impact-and-update-design.md): project ANY diff — any base/target,
        including ranges that don't touch the map's commit — onto the map, with typed ripple.
@@ -215,6 +209,22 @@
         </div>
       </div>
       </div>
+      <!-- ZOOM, FIT AND THE READING, over the drawing they act on. They sat in the title bar, which is
+           chrome the whole app shares, and most of the app has no drawing: measured over the 13 view
+           tabs of coyomap's own map, four of them zoom, eight left the buttons dim, and Interfaces left
+           them lit over a card list where every press did nothing. A control that is absent more often
+           than it works does not belong in the bar that is always there.
+           BOTTOM-RIGHT, and its own corner rather than a place in the #overlays column: it is the only
+           free corner on the right. The top-right is the selection card's (#panel, 380px wide), which
+           appears the moment a reader clicks a box, so a control parked there would spend its life
+           under one. The left is #overlays, whose members change what the diagram SAYS — an environment
+           filter, a step player — while this one only moves the camera.
+           `hidden` toggles from JS (syncZoomControls), on whether a pan/zoom map exists at all. -->
+      <div id="zoomctl" hidden>
+        <button id="zoomout" title="Zoom out">−</button>
+        <button id="zoomlevel" title="Fit to screen">100%</button>
+        <button id="zoomin" title="Zoom in">+</button>
+      </div>
       <!-- WHAT YOU SELECTED, as a card floating over the drawing. It used to be a 300px band under the
            diagram, present whether or not anything was selected. Measured over 60 states on the three
            maps: with nothing selected it held 76px of content, and one selected shape held 67-184px, so
@@ -325,24 +335,6 @@
     <div class="modal-btns">
       <button id="setCancel" type="button">Cancel</button>
       <button id="setSave" type="button" class="primary">Save</button>
-    </div>
-  </div>
-</div>
-<!-- First-run navigation guide: shown once (localStorage), reopened from the canvas hint. -->
-<div id="coach" class="modal" hidden>
-  <div class="modal-card">
-    <h2>Getting around the map</h2>
-    <ul class="coach-list">
-      <li><b>Select a view</b> at the top of the graph pane</li>
-      <li><b>Pinch</b> to zoom, <b>scroll</b> or <b>drag</b> to move</li>
-      <li><b>Click</b> a box or arrow to see its details</li>
-      <li><b>&#8984;-click</b> (Cmd / Ctrl) another box or arrow &mdash; adds it to the selection</li>
-      <li><b>Double-click</b> or <b>&#8997;-click</b> (Option / Alt) a container to drill into it</li>
-      <li><b>Shift-click</b> a box or arrow to zoom in and center it</li>
-      <li><b>Press /</b> (or &#8984;K) to search every element, file and term in the map</li>
-    </ul>
-    <div class="modal-btns">
-      <button id="coachok" type="button" class="primary">Got it</button>
     </div>
   </div>
 </div>

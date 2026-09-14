@@ -2172,7 +2172,11 @@ def test_the_card_is_dragged_by_its_bar_and_sized_by_nothing() -> None:
     # NO min-height. It was 90px, which padded a short card with empty white; a card is as tall as
     # what is in it, and the ceiling is what stops a tall one covering the drawing.
     assert "min-height" not in pane
-    assert "max-height: max(200px, 55%);" in pane, "the drawing keeps the larger half"
+    assert "max(200px, 55%)" in pane, "the drawing keeps the larger half"
+    # …and the whole thing is capped again so the card never reaches the zoom control pinned to the
+    # bottom-right corner. Without it, a drawing under 253px tall (a 900x420 window) put the card's
+    # bottom at 191 and the control's top at 161, and the control drew straight over the card.
+    assert "max-height: min(max(200px, 55%), calc(100% - 73px));" in pane
     bar = css[css.index("#panelbar { position: sticky"): css.index("}", css.index("#panelbar { position: sticky"))]
     assert "position: sticky" in bar, "the handle and the close button stay reachable in a scrolled card"
 
@@ -2348,25 +2352,40 @@ def test_a_page_and_its_title_share_one_left_edge() -> None:
         assert block in css, block
     assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
 
-def test_a_diagram_control_is_dead_on_a_page_with_no_diagram() -> None:
-    """The three zoom controls act on the diagram's pan-zoom, which a page of HTML has none of. Measured
-    on Mio Coworker: on 7 of the 12 tabs clicking + moved nothing and the reading stayed at 100%. A
-    control that looks live and does nothing teaches the reader to distrust the ones that work, and
-    costs a keyboard stop.
+def test_the_zoom_control_is_absent_on_a_page_with_no_diagram() -> None:
+    """The zoom control acts on the diagram's pan-zoom, which a page of HTML has none of. It used to sit
+    in the title bar and go DIM there — chrome the whole app shares, carrying a control that did nothing
+    on 9 of the 13 view tabs. It floats over the drawing now and is simply absent everywhere else.
 
-    They were kept apart by a SECOND list of "which views are prose", keyed by top-level view, and it had
-    drifted both ways — it named `usecases`, so a use-case FLOW (boxes, cylinders and an actor figure,
-    under the Features tab) counted as prose, and it never learned about `actors` at all. One question
-    deserves one answer: everything now reads TEXT_PAGES, the same list the info pane and the source
-    column read."""
+    ASKED OF THE SCREEN, NOT OF A LIST. Two hand-kept lists answered this in turn and both drifted: the
+    first named `usecases`, so a use-case FLOW (boxes, cylinders and an actor figure) counted as prose;
+    TEXT_PAGES replaced it and never learned `interfaces`, so the Interfaces tab drew a card list with
+    three lit buttons over it and every press moved nothing. `mainPz` IS the pan/zoom map — destroyed at
+    the top of every renderView, rebuilt only by the branch that draws shapes — so there is no list left
+    to drift."""
     js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "TEXT_VIEWS" not in js, "the second list of text views is back"
-    fn = js[js.index("function syncZoomControls(s) {"):
-            js.index("\n\n", js.index("function syncZoomControls(s) {"))]
-    assert "TEXT_PAGES.has(s.kind)" in fn, "it must read the one list, keyed by state kind"
-    assert "for (const b of [zoomout, zoomlevel, zoomin]) if (b) b.disabled = text;" in fn
-    assert "header button:disabled { opacity: .35; cursor: default; }" in css
+    fn = js[js.index("function syncZoomControls() {"):
+            js.index("\n}", js.index("function syncZoomControls() {"))]
+    assert "zoomctl.hidden = !mainPz" in fn, "the screen answers, not a list of page kinds"
+    assert "TEXT_PAGES" not in fn, "a list of page kinds cannot answer what is drawn"
+    # It floats over the drawing, in the BOTTOM-RIGHT corner, and it is gone from the title bar — whose
+    # dimming rules went with it. Its own corner, not a place in the #overlays column on the left: that
+    # column's members change what the diagram SAYS (an environment filter, a step player) while this one
+    # only moves the camera. The top-right is the selection card's, which opens on any click on a box.
+    assert "#zoomctl { position: absolute; right: 12px; bottom: 12px;" in css
+    overlays = html[html.index('<div id="overlays">'): html.index('id="envpicker"')]
+    assert "zoomctl" not in overlays, "it has a corner of its own, not a slot in the left column"
+    header = html[html.index("<header>"): html.index("</header>")]
+    assert "zoomctl" not in header and "zoomin" not in header
+    assert "header button:disabled" not in css, "nothing in the title bar dims any more"
+    assert "#zoomctl[hidden] { display: none; }" in css
+    # The card above it yields rather than covering it: with only the 200px floor, a drawing under 253px
+    # tall (a 900x420 window) put the card's bottom at 191 and the control's top at 161.
+    pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
+    assert "calc(100% - 73px)" in pane, "the selection card must stop above the zoom control"
 
 def test_a_sentence_is_never_set_as_a_pill() -> None:
     """A collection's NOTE was rendered with `.dv-tag`, the pill class, which is `white-space: nowrap`
@@ -3574,20 +3593,28 @@ def test_the_path_starts_at_the_view_and_never_at_a_level_inside_it() -> None:
     assert 'class="brand"' in html
 
 def test_the_title_bar_holds_every_utility_and_wraps_before_it_clips() -> None:
-    """Six controls, all of them things you do to the map rather than places you go: the three zoom
-    controls, search, help and settings. Search used to sit in the group row, which made that row two
-    things at once. They are quiet icon buttons on the navy ground — filled chips would read as
-    destinations.
+    """Two controls, both of them things you do to the WHOLE map rather than places you go: search and
+    settings. Search used to sit in the group row, which made that row two things at once. They are
+    quiet icon buttons on the navy ground — filled chips would read as destinations.
 
-    Back and Forward are NOT here. The bar carried its own ◀ ▶ pair from before the URL named the
+    THREE THINGS LEFT THIS BAR, all for one reason: the title bar is chrome the whole app shares, so
+    what sits in it must work on every screen. A "?" opened a first-run overlay of the map's gestures —
+    both gone, the overlay because it interrupted the first screen a reader ever saw. The zoom control
+    went to the drawing it acts on: it did nothing on 9 of the 13 view tabs.
+
+    Back and Forward are NOT here either. The bar carried its own ◀ ▶ pair from before the URL named the
     screen; the browser's own buttons do that walk now, and a second pair could only disagree with them.
 
     At a narrow column the bar wraps into two lines, identity then controls, rather than squeezing."""
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     head = html[html.index("<header>"): html.index("</header>")]
-    for control in ("zoomout", "zoomlevel", "zoomin", "searchbtn", "helpbtn", "setbtn"):
+    for control in ("searchbtn", "setbtn"):
         assert f'id="{control}"' in head, control
+    for gone in ("zoomctl", "zoomin", "zoomout", "zoomlevel", "helpbtn"):
+        assert gone not in head, gone
+    for gone in ("helpbtn", "coachok", "coach-list"):
+        assert gone not in html and gone not in css, gone
     assert "stageheadutil" not in html and "stageheadutil" not in css
     btn = css[css.index("header button {"): css.index("}", css.index("header button {"))]
     assert "width: 26px" in btn and "height: 26px" in btn and "background: transparent" in btn

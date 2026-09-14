@@ -124,7 +124,7 @@ def plain_file_server(folder: Path) -> Iterator[str]:
 
 @contextmanager
 def _page(url: str) -> Iterator[Any]:
-    """A Chromium page on `url`, first-run overlay dismissed, JS errors collected on `js_errors`."""
+    """A Chromium page on `url`, with JS errors collected on `js_errors`."""
     # ONE browser per process, a fresh PAGE per test (see tests/browser_harness.py).
     page = new_page()
     page.goto(url)
@@ -134,7 +134,6 @@ def _page(url: str) -> Iterator[Any]:
         page.wait_for_timeout(1200)
     else:
         page.wait_for_selector("#crumb h1", state="attached")
-        page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
     try:
         yield page
     finally:

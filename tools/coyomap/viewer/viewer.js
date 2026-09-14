@@ -252,6 +252,7 @@ const tip = document.getElementById('tip');
 const zoomin = document.getElementById('zoomin');
 const zoomout = document.getElementById('zoomout');
 const zoomlevel = document.getElementById('zoomlevel');
+const zoomctl = document.getElementById('zoomctl');
 const flowplayer = document.getElementById('flowplayer');
 const flowprev = document.getElementById('flowprev');
 const flownext = document.getElementById('flownext');
@@ -1563,6 +1564,22 @@ function bindItemPills(root) {
       ev.stopPropagation();        // the pill's action is not the card's, where it sits on one
       const id = b.getAttribute('data-item');
       itemPillTarget(id)(id);
+    });
+  });
+}
+// A CONTAINER NAME over a group of parts, from featComponentGroupsHtml. `drillInto` is the one place
+// that answers "which view shows this id", so a subsystem opens its map and anything else opens
+// whatever its own home is.
+// Bound on the same rule as the item pills below, and for the same failure: the markup comes from one
+// shared builder with two callers, and the handler lived inside ONE caller's page binder. The other
+// caller is the interface page, where every container name was therefore a button that did nothing.
+function bindGoDrill(root) {
+  root.querySelectorAll('[data-godrill]').forEach((b) => {
+    if (b.dataset.drillBound) return;   // safe to call twice; see bindItemPills
+    b.dataset.drillBound = '1';
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      drillInto(b.getAttribute('data-godrill'));
     });
   });
 }
@@ -4112,19 +4129,22 @@ function viewIntroHtml(view) {
     + (notes.length ? `<div class="viewnotes">${notes.map((t) => `<span class="vnote">${esc(t)}</span>`).join('')}</div>` : '')
     + EMPTY_PANEL;
 }
-// The three zoom controls act on a DIAGRAM. A card list, a card grid or a details page draws no shapes,
-// so they have nothing to zoom. It reads TEXT_PAGES — the ONE list answering "is this page prose",
-// shared with the info pane (syncInfoPane) and the source column (syncCodePane).
+// The zoom control acts on a DIAGRAM, so it is drawn only where one is: it floats over the drawing
+// (#overlays) and simply leaves on a card list, a card grid or a details page. It used to sit in the
+// title bar and go dim instead, which meant the bar carried a control that did nothing on 9 of the 13
+// view tabs — chrome the whole app shares, for a thing most of the app does not have.
+//
+// THE QUESTION IS ASKED OF THE SCREEN, not of a list. It read TEXT_PAGES, a hand-kept set of "which
+// pages are prose", and that set had drifted: `interfaces` was never added, so the Interfaces tab drew
+// a card list with three lit buttons over it and every press moved nothing. `mainPz` IS the answer —
+// it is the pan/zoom map itself, destroyed at the top of every renderView and rebuilt only by the
+// branch that draws shapes — so the control can no longer disagree with what is on screen.
 //
 // A COLOUR KEY USED TO HANG OFF THIS SAME QUESTION. It floated over the drawing naming every shape the
 // map's vocabulary has, and it went: the shapes carry their meaning on the boxes themselves now, and a
 // panel a reader has to close before they can see what is under it costs more than it explains.
-function syncZoomControls(s) {
-  const text = !s || TEXT_PAGES.has(s.kind);
-  // Measured: on 7 of the 12 tabs clicking + moved nothing and the reading stayed at 100%, because
-  // mainPz is null on a page that renders HTML. A control that looks live and does nothing teaches the
-  // reader to distrust the ones that work, so it is dimmed and out of the tab order instead.
-  for (const b of [zoomout, zoomlevel, zoomin]) if (b) b.disabled = text;
+function syncZoomControls() {
+  if (zoomctl) zoomctl.hidden = !mainPz;
 }
 
 // --- diff overlay on the Subsystems views ---------------------------------------
@@ -8097,7 +8117,7 @@ function renderChrome(s) {
   // first item is the one answer to which view a page hangs under, however it was reached.
   const chain = ancestors(s);
   const tv = topView(chain[0].kind, chain[0].id);
-  syncZoomControls(s);
+  syncZoomControls();
   syncEnvPicker(s);
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
@@ -8893,12 +8913,6 @@ function bindFeaturePage(root) {
   // from the same binder, so an area reached from here and from there lands on one screen.
   bindElementCards(root, (id) => go({ kind: 'rules', blk: id }));
   bindPlainCards(root, (key) => go({ kind: 'rules', blk: key }));
-  // A container name over a group of parts. `drillInto` is the one place that answers "which view
-  // shows this id", so a subsystem opens its map and anything else opens whatever its own home is.
-  root.querySelectorAll('[data-godrill]').forEach((b) => b.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    drillInto(b.getAttribute('data-godrill'));
-  }));
 }
 
 // The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says
@@ -13532,6 +13546,9 @@ async function render(sArg, transient) {
     // call twice on one element: a screen that already bound its own is a second listener on a click
     // that stops propagating, and the second one moves nowhere new.
     try { bindItemPills(diagram); } catch (_) { /* the pills are the last thing that can fail */ }
+    // …and every container name, on the same rule and for the same reason: its markup comes from one
+    // builder that two different pages call, and only one of them used to wire it up.
+    try { bindGoDrill(diagram); } catch (_) { /* a dead name beats a screen that never renders */ }
   }
 }
 // `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely
@@ -13738,7 +13755,7 @@ async function renderView(sArg, transient, seq) {
   if (svgEl && window.svgPanZoom) {
     svgEl.removeAttribute('style');
     // No practical zoom cap: bounds are wide enough to act unbounded while still keeping the
-    // diagram recoverable. The header zoom control (zoomctl) replaces the old overlay icons.
+    // diagram recoverable. `controlIcons: false` because the map has its own control (zoomctl).
     // svg-pan-zoom measures THIS element at construction and divides by it, with no floor of its own —
     // see stageHasArea. A box with no height pins its base scale at 0, and NOTHING recovers from that:
     // a later resize()+fit() divides by the 0/0 = NaN it produced, and the library's own
@@ -15390,7 +15407,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyomap.editor', custom: 'coyomap.customUri', root: 'coyomap.srcRoot', ok: 'coyomap.rootOk', repo: 'coyomap.ghRepo', coach: 'coyomap.coachSeen', dimSeen: 'coyomap.dimSeen', leftW: 'coyomap.leftW', codeOpen: 'coyomap.codeOpen',
+const LS = { editor: 'coyomap.editor', custom: 'coyomap.customUri', root: 'coyomap.srcRoot', ok: 'coyomap.rootOk', repo: 'coyomap.ghRepo', dimSeen: 'coyomap.dimSeen', leftW: 'coyomap.leftW', codeOpen: 'coyomap.codeOpen',
   searchOpen: 'coyomap.searchOpen', searchW: 'coyomap.searchW',
   flowCode: 'coyomap.flowCode' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
@@ -15599,17 +15616,6 @@ setCancel.addEventListener('click', closeSettings);
 setSave.addEventListener('click', saveSettings);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeSettings(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeSettings(); });
-
-// --- navigation guide -----------------------------------------------------------
-// An overlay teaching the map's gestures. It auto-shows once on the first visit (remembered in
-// localStorage), and the header "?" button reopens it any time. Esc / backdrop / "Got it" dismiss it.
-const coach = document.getElementById('coach');
-const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
-document.getElementById('coachok').addEventListener('click', dismissCoach);
-document.getElementById('helpbtn').addEventListener('click', () => { coach.hidden = false; });
-coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
-if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once
 
 // --- resizable left column (diagram + info) -------------------------------------
 // The left column holds the tab rows and the diagram. #resizer sets the whole column's WIDTH (the file

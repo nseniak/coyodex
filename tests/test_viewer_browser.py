@@ -87,7 +87,7 @@ def _served() -> Iterator[str]:
 
 @contextmanager
 def _page(url: str, stylesheet: str | None = None) -> Iterator[Any]:
-    """A Chromium page on `url`, with the first-run overlay dismissed and JS errors collected.
+    """A Chromium page on `url`, with JS errors collected.
 
     Errors are attached as `page.js_errors`: a viewer that throws while rendering has failed, even
     when the assertion under test would otherwise pass.
@@ -100,7 +100,6 @@ def _page(url: str, stylesheet: str | None = None) -> Iterator[Any]:
     page = new_page(stylesheet)
     page.goto(url)
     page.wait_for_selector("#crumb h1", state="attached")
-    page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
     try:
         yield page
     finally:
@@ -1991,7 +1990,7 @@ def _stage_state(page: Any) -> dict:
             baseScaleIsReal: !!(sizes && sizes.realZoom > 0 && Number.isFinite(sizes.realZoom)),
             fittedHeight: sizes ? Math.round(sizes.height) : 0,
             zoomIsReal: Number.isFinite(zoom),
-            header: (document.getElementById('zoomlevel').textContent || '').trim(),
+            reading: (document.getElementById('zoomlevel').textContent || '').trim(),
             paneScrolls: stage.scrollHeight > stage.clientHeight + 1
         };
     }"""))
@@ -2000,8 +1999,8 @@ def _stage_state(page: Any) -> dict:
 def test_a_pane_too_short_for_its_header_still_draws_the_map() -> None:
     """A window short enough that the tabs, the trail and the feature's own heading fill the whole
     graph pane used to leave the drawing exactly 0 tall — and 0 is worse than small. The pan/zoom
-    machinery DIVIDES BY that height with no floor of its own, so the map went blank, the zoom in the
-    title bar read "NaN%", and it never came back: widening the window again fed the same NaN into
+    machinery DIVIDES BY that height with no floor of its own, so the map went blank, the zoom control
+    over the drawing read "NaN%", and it never came back: widening the window again fed the same NaN into
     every later move instead of re-fitting. Measured on this map at 529x265, the header alone was
     218px inside a 161px pane. The drawing now keeps a floor and the pane scrolls to reach it.
 
@@ -2014,7 +2013,7 @@ def test_a_pane_too_short_for_its_header_still_draws_the_map() -> None:
         assert short["drawingHeight"] >= 160, short      # the floor, not the 0 the header left
         assert short["baseScaleIsReal"], short
         assert short["zoomIsReal"], short
-        assert re.fullmatch(r"\d+%", short["header"]), short   # never "NaN%"
+        assert re.fullmatch(r"\d+%", short["reading"]), short   # never "NaN%"
         assert short["paneScrolls"], short               # …because the header no longer eats the map
 
         # The move that used to do the poisoning: a resize while the drawing has no room. Every
@@ -2067,7 +2066,7 @@ def test_a_drawing_squeezed_to_nothing_does_not_poison_the_map_for_good() -> Non
         squeezed = _stage_state(page)
         assert squeezed["drawingHeight"] == 0, squeezed        # the box really is gone…
         assert squeezed["zoomIsReal"], squeezed                # …and the map is still not poisoned
-        assert re.fullmatch(r"\d+%", squeezed["header"]), squeezed
+        assert re.fullmatch(r"\d+%", squeezed["reading"]), squeezed
 
         page.evaluate("() => { document.getElementById('diagwrap').style.minHeight = ''; }")
         page.set_viewport_size({"width": 1200, "height": 820})
@@ -2104,7 +2103,7 @@ def test_a_map_built_with_no_room_at_all_still_comes_back() -> None:
             blind = _stage_state(page)
             assert blind["drawingHeight"] == 0, blind          # built with nothing at all…
             assert blind["zoomIsReal"], blind                  # …and still not poisoned
-            assert re.fullmatch(r"\d+%", blind["header"]), blind
+            assert re.fullmatch(r"\d+%", blind["reading"]), blind
 
             # room back: the header stops being impossible, and the map must FIT, not stay broken
             page.evaluate("""() => {

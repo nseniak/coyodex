@@ -8,9 +8,9 @@ care, so there is no reason to have more than one.
 
 WHAT IS NOT SHARED: the page. `browser.new_page()` opens a fresh BrowserContext under the hood, so
 every test gets its own cookies, its own `localStorage` and its own routes. That matters here more
-than usual — the viewer remembers a reader's settings, which tab they were on and whether they have
-seen the first-run overlay, all in `localStorage`. A shared context would leak one test's remembered
-state into the next and the failure would look like a viewer bug.
+than usual — the viewer remembers a reader's settings and which tab they were on, all in
+`localStorage`. A shared context would leak one test's remembered state into the next and the failure
+would look like a viewer bug.
 
 WHY NOT A FIXTURE: the project's tests are plain top-level functions with `make_*` builders and no
 pytest fixtures, so this is a lazy module-level singleton behind a function, closed at exit.
