@@ -285,12 +285,19 @@ def test_node_use_cases_are_grouped_by_capability_without_a_serves_row() -> None
     assert "isAncestorOf(id, eid)" in trace
     assert "UC_NODES.filter((uc) => set.has(uc.id))" in trace
     assert "CAP_OF_UC[uc.id]" in trace
-    assert 'class="used-cap-group"' in trace
-    assert 'class="used-uc-list"' in trace
+    # ONE CARD PER FEATURE, holding that feature's use cases as pills. Two shapes came before it and
+    # both failed the same way: an indented <ul> of blue links, then a feature pill with a row of
+    # use-case pills beside it, where nothing on screen said the second lot belonged to the first.
+    assert "elementCardHtml(g.cap.id, {" in trace
+    assert "detailPills(g.ucs.map(link).join(''))" in trace
+    assert "itemPillHtml(uc.id, { kind: 'usecase'" in trace
+    assert "used-uc-list" not in trace and "used-cap-group" not in trace, "an older shape is back"
+    # A use case the map assigns to no feature gets a card that is NOT an element's: no mark, no type
+    # word, nothing to open — because it names no feature.
+    assert "plainCardHtml({ key: 'uc-loose'" in trace
     assert "No traced use case reaches it." in trace
     assert "servesHtml" not in js
-    assert "${usedInHtml(id)}" in detail
-    assert ".used-cap-name" in css
+    assert "usedInHtml(id)" in detail
     assert ".serves-chip" not in css
 
 
@@ -1700,7 +1707,11 @@ def test_the_card_comes_to_what_you_picked_and_stays_put_while_it_can() -> None:
     # THREE SETS, tried in order: nothing fits every rule on a crowded map, and the answer to that used
     # to be a bare corner with every rule dropped at once — which is how a card came to cover the very
     # box its step comes from. The BOXES are what survives to the last set.
-    assert "return [g([...own, rectOf(arrow), ...ends]), g([...own, ...ends]), g(ends)];" in keep
+    assert "[...g([...own, rectOf(arrow), ...ends]), ...fixed]" in keep
+    assert "[...g([...own, ...ends]), ...fixed]" in keep
+    assert "[...g(ends), ...fixed]" in keep
+    # `fixed` is the zoom control, in every one of the three: the sets give up shapes of the DRAWING as
+    # they widen, and a control over the drawing is not one of those.
     assert "for (let s = 0; s < sets.length; s++) {" in fn
     # The three steps happen in one order, from one function, so no caller can do them out of turn.
     card = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
@@ -2173,10 +2184,11 @@ def test_the_card_is_dragged_by_its_bar_and_sized_by_nothing() -> None:
     # what is in it, and the ceiling is what stops a tall one covering the drawing.
     assert "min-height" not in pane
     assert "max(200px, 55%)" in pane, "the drawing keeps the larger half"
-    # …and the whole thing is capped again so the card never reaches the zoom control pinned to the
-    # bottom-right corner. Without it, a drawing under 253px tall (a 900x420 window) put the card's
-    # bottom at 191 and the control's top at 161, and the control drew straight over the card.
-    assert "max-height: min(max(200px, 55%), calc(100% - 73px));" in pane
+    # …and the whole thing is capped, because the 200px floor IS a floor: on a drawing shorter than
+    # that (a 900x420 window leaves 203px) the card ran out through the bottom edge, which #diagwrap
+    # clips. The cap tightens again when the zoom control takes the top of this corner — see
+    # test_the_zoom_control_is_absent_on_a_page_with_no_diagram for the sibling rule that does it.
+    assert "max-height: min(max(200px, 55%), calc(100% - 24px));" in pane
     bar = css[css.index("#panelbar { position: sticky"): css.index("}", css.index("#panelbar { position: sticky"))]
     assert "position: sticky" in bar, "the handle and the close button stay reachable in a scrolled card"
 
@@ -2371,21 +2383,29 @@ def test_the_zoom_control_is_absent_on_a_page_with_no_diagram() -> None:
             js.index("\n}", js.index("function syncZoomControls() {"))]
     assert "zoomctl.hidden = !mainPz" in fn, "the screen answers, not a list of page kinds"
     assert "TEXT_PAGES" not in fn, "a list of page kinds cannot answer what is drawn"
-    # It floats over the drawing, in the BOTTOM-RIGHT corner, and it is gone from the title bar — whose
+    # It floats over the drawing, in the TOP-RIGHT corner, and it is gone from the title bar — whose
     # dimming rules went with it. Its own corner, not a place in the #overlays column on the left: that
     # column's members change what the diagram SAYS (an environment filter, a step player) while this one
-    # only moves the camera. The top-right is the selection card's, which opens on any click on a box.
-    assert "#zoomctl { position: absolute; right: 12px; bottom: 12px;" in css
+    # only moves the camera.
+    assert "#zoomctl { position: absolute; right: 12px; top: 12px;" in css
     overlays = html[html.index('<div id="overlays">'): html.index('id="envpicker"')]
     assert "zoomctl" not in overlays, "it has a corner of its own, not a slot in the left column"
     header = html[html.index("<header>"): html.index("</header>")]
     assert "zoomctl" not in header and "zoomin" not in header
     assert "header button:disabled" not in css, "nothing in the title bar dims any more"
     assert "#zoomctl[hidden] { display: none; }" in css
-    # The card above it yields rather than covering it: with only the 200px floor, a drawing under 253px
-    # tall (a 900x420 window) put the card's bottom at 191 and the control's top at 161.
+    # THE SELECTION CARD KEEPS OFF IT. They share this corner, and up-and-right is the card's own first
+    # choice (CARD_DIRS), so without this the card landed straight on the control: measured at 1440x900,
+    # card top 27 against a control at 12. It is a KEEP-CLEAR SHAPE in placeCardNear's own machinery,
+    # never a CSS offset — the stylesheet's `top` is overwritten by `put()` a moment later, which is
+    # exactly how the first attempt at this failed.
+    keep = js[js.index("function cardKeepSets(el) {"): js.index("\n}", js.index("function cardKeepSets(el) {"))]
+    assert "zoomctl && !zoomctl.hidden" in keep, "no shape at all on a page that has no control"
+    assert keep.count("...fixed") == 4, "in every set: a control is never the concession to make"
+    # Its ceiling keeps it inside the box #diagwrap clips; the placement, not the ceiling, is what
+    # keeps it off the control.
     pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
-    assert "calc(100% - 73px)" in pane, "the selection card must stop above the zoom control"
+    assert "calc(100% - 24px)" in pane, "the card must stay inside the drawing #diagwrap clips"
 
 def test_a_sentence_is_never_set_as_a_pill() -> None:
     """A collection's NOTE was rendered with `.dv-tag`, the pill class, which is `white-space: nowrap`
@@ -2868,12 +2888,28 @@ def test_a_long_list_on_the_feature_page_is_grouped_not_dumped() -> None:
              js.index("\nfunction ", js.index("function featComponentGroupsHtml(ids) {") + 10)]
     assert "(GRAPH.nodes[id] || {}).parent" in grp
     assert "if (order.length < 2) return chips(ids);" in grp
-    # A feature's rules are cut by DECISION AREA, the same cut the Rules tab makes — one grouping,
-    # shared with the component pane, because two of them would disagree about where a rule sits.
+    # A feature's rules are cut by DECISION AREA, the same cut the Rules tab makes.
+    # IT USED TO BE SHARED with a component's page, which listed the rules enforced in it under the
+    # same areas. That section is gone: the rules are a tab of their own, and each rule's own page
+    # names every component it is enforced in, so the component->rules direction was the third place
+    # one join was drawn. `rulesByBlock` is now the Features page's alone.
     assert "function rulesByBlock(ids) {" in js
-    decides = js[js.index("function decidesHtml(id) {"):
-                 js.index("\nfunction ", js.index("function decidesHtml(id) {") + 10)]
-    assert "rulesByBlock(ids)" in decides
+    assert "function decidesHtml(" not in js, "the component's copy of this list is back"
+
+
+def test_a_record_page_says_who_owns_it_only_when_the_map_does() -> None:
+    """The field's day-one consumer, so an authored owner cannot sit in the map unread. It reads the
+    EFFECTIVE owner the server derived from the authored field (the record's own, else its area's) —
+    a record absent from that table is one nobody decided for, and the row is not drawn."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function ownedByHtml(id) {"):js.index("\nfunction persistedInHtml(id) {")]
+    assert "ENTITY_OWNERS[id]" in fn
+    assert "if (!own.length) return '';" in fn, "no decision, no row"
+    assert "own.map((c) => itemPillHtml(c))" in fn, "each owner is a door, in the shared pill"
+    assert "ENTITY_OWNERS = FEATURES.entityOwners || {};" in js
+    assert "runByHtml(id) + ownedByHtml(id) + persistedInHtml(id)" in js
+    assert "detailSec('owner', 'Owned by'" in fn, "one framed section, like every other row"
+
 
 
 def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
@@ -3533,8 +3569,12 @@ def test_a_component_says_how_many_features_it_serves() -> None:
     used = js[js.index("function usedInHtml(id) {"):
               js.index("\nfunction ", js.index("function usedInHtml(id) {") + 10)]
     assert "featureCountHtml(id)" in used
-    assert "itemPillHtml(g.cap.id, { kind: 'capability', name: g.cap.name })" in used, \
-        "a feature heading is the shared pill, and it opens that feature's page"
+    # THE FEATURE IS A CARD, holding its own use cases as pills. It was a pill with the use cases in a
+    # row beside it, and the two read as one flat run of tags that happened to wear different marks —
+    # nothing on screen said the second lot belonged to the first. The card is still a door to the
+    # feature's page, which the pill was.
+    assert "elementCardHtml(g.cap.id, {" in used, "a feature heading is the shared card"
+    assert "<span class=\"ecard-lbl\">Use cases</span>" in used
     assert "selectFromTree(b.getAttribute('data-id'))" in js[js.index("function bindNodeDetailHandlers(root) {"):]
 
 
@@ -3840,12 +3880,20 @@ def test_an_entry_point_row_says_what_it_is_and_where_it_lives() -> None:
     The rows also carried no call site at all, on the reasoning that selecting one reveals the source.
     Nothing on screen said so, and the very same fact is already a pill in the Deployment card's
     "Threads / loops" table. On one map that is 188 entry points, all 188 holding an anchor and none
-    showing it. Each row now ends with the shared pill, and selecting the row still works."""
+    showing it. Each row now carries the shared pill, and selecting the row still works.
+
+    THREE COLUMNS, one per question every row answers: which kind of way in, what starts it, where the
+    code is. As spans on one line the three never lined up — a long trigger sentence pushed its code
+    link to the right edge while the next row's sat mid-line — so only the kind word could be scanned
+    down the list. `Kind of way in`, never a bare `Kind`: four different things in this viewer carry a
+    kind and the vocabularies do not overlap."""
     css = (VIEWER_DIR / "viewer.css").read_text()
     js = (VIEWER_DIR / "viewer.js").read_text()
-    for rule in (".tb-list {", ".tb-ep {", ".tb-ep:hover {", ".tb-ep.sel {", ".tb-kind {"):
+    for rule in (".tb-list {", ".tb-ep {", ".tb-ep:hover td {", ".tb-ep.sel td {", ".tb-kind {"):
         assert rule in css, f"{rule} must exist unscoped, so the page gets it too"
         assert "#panel " + rule not in css, f"{rule} may not be scoped to the info pane"
+    assert "<th>Kind of way in</th><th>What starts it</th><th>Code</th>" in js
+    assert ".tb-c-kind, .tb-c-src { white-space: nowrap;" in css, "only the trigger column wraps"
     # The crossings page hand-copied one of those rules; one rule, one home.
     assert ".xlist-page .tb-kind" not in css
     tb = js[js.index("function triggeredByHtml(id) {"):
@@ -4354,8 +4402,8 @@ def test_a_claim_no_step_reaches_is_marked_whether_or_not_the_map_records_why() 
         "the DRAWN height is capped; the sentence stays in the DOM"
     # A RECORD'S OWN PAGE says the same thing, through the same sentence and the same derivation:
     # 85 of the 237 "Owned by" rows across the four live maps sit in an area no owner's step reaches,
-    # and the row used to state the claim flatly. A record carrying `owners` of its own is left
-    # alone — the area's gap says nothing about an answer that record overrode.
+    # and it used to state the claim flatly. A record carrying `owners` of its own is left alone —
+    # the area's gap says nothing about an answer that record overrode.
     owned = _story_fn(js, "ownedByHtml")
     assert "storyAreaOfRecord(id)" in owned and "storyAreaOwner(area)" in owned
     assert "storyGapSentence(o, own.length > 1)" in owned
@@ -4514,19 +4562,6 @@ def test_a_feature_s_colour_is_for_reading_not_for_naming() -> None:
     assert "background: #fff" not in css[css.index(".story-col-spine > .story-card"):
                                          css.index(".story-col-spine > .story-card") + 200], \
         "the pillar must not paint over a card's own colour"
-
-
-def test_a_record_page_says_who_owns_it_only_when_the_map_does() -> None:
-    """The field's day-one consumer, so an authored owner cannot sit in the map unread. It reads the
-    EFFECTIVE owner the server derived from the authored field (the record's own, else its area's) —
-    a record absent from that table is one nobody decided for, and the row is not drawn."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    fn = js[js.index("function ownedByHtml(id) {"):js.index("\nfunction persistedInHtml(id) {")]
-    assert "ENTITY_OWNERS[id]" in fn
-    assert "if (!own.length) return '';" in fn, "no decision, no row"
-    assert "own.map((c) => itemPillHtml(c))" in fn, "each owner is a door, in the shared pill"
-    assert "ENTITY_OWNERS = FEATURES.entityOwners || {};" in js
-    assert "${runByHtml(id)}${ownedByHtml(id)}${persistedInHtml(id)}" in js
 
 
 def test_a_card_name_is_the_door_that_does_not_steal_the_pin() -> None:
@@ -5617,7 +5652,11 @@ def test_the_in_a_box_pill_is_one_component_that_no_page_restyles() -> None:
         ".journey-ifs .item-pill .ibox-gly",
         "#diagram .ibox-band .item-pill .ibox-gly, #diagram .journey-ifs .item-pill .ibox-gly, "
         "#diagram .ifd-elabel-dir .ibox-gly",
-        "#panel .used-cap-group > .item-pill",            # the one line it takes on a component's pane
+        # The one line it takes as a feature heading — in the selection card AND on an element's own
+        # page, which draws the same groups. ONE rule for both, not a second rule for the page: this
+        # test's whole point is that a page may not re-style the tag, and sharing the rule is how the
+        # page gets the same tag rather than its own.
+        "#panel .used-cap-group > .item-pill, .edetail .used-cap-group > .item-pill",
     ]), sels
     # THE NAME WRAPS AND THE MARK CENTRES ON THE WHOLE TAG, stated on the component so no box has to say
     # it. Inside a box the tag is clamped to the box's width, and without wrapping the name ran straight

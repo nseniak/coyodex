@@ -300,14 +300,15 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
             align-items: flex-start; gap: 8px; max-height: calc(100% - 24px); pointer-events: none; }
 #overlays > * { position: relative; pointer-events: auto; }
 /* ZOOM / FIT / the reading, floating over the drawing (it was a title-bar item; see viewer.html).
-   BOTTOM-RIGHT, in a corner of its own: the top-right belongs to the selection card and the left to
-   the #overlays column. Positioned against #diagwrap like every other floater, so "bottom" is the
-   bottom of the DRAWING and not of a column that also holds the tab rows.
+   TOP-RIGHT, in a corner of its own: the left belongs to the #overlays column, whose members change
+   what the diagram says. Positioned against #diagwrap like every other floater, so "top" is the top of
+   the DRAWING and not of a column that also holds the tab rows. The selection card shares the corner
+   and starts below it — see the sibling rule under #panel.
    The same card as #envpicker — white, a 1px rule, an 8px radius — because everything floating on the
    drawing is one kind of thing. Its buttons therefore take the LIGHT look, not the navy bar's: they
    used to inherit `header button`, which paints #e0e7ff on transparent and is invisible on white.
    Its own z-index, on the rule the other floaters follow: a floater with none loses to the callout. */
-#zoomctl { position: absolute; right: 12px; bottom: 12px; z-index: 5;
+#zoomctl { position: absolute; right: 12px; top: 12px; z-index: 5;
            display: inline-flex; align-items: center; gap: 2px; background: #fff;
            border: 1px solid #e5e7eb; border-radius: 8px; padding: 3px 4px;
            box-shadow: 0 2px 10px rgba(0,0,0,.07); }
@@ -577,11 +578,26 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    only thing there; now the card floats and a reader meets the SAME use case in a grid and over a
    drawing, so a 15px name against a 14px one is one of the six differences that made them read as two
    designs. The card is the card, at one size, everywhere. */
-/* An element's DETAILS page: the same field rows the pane used to hold, given a page to sit on. */
+/* AN ELEMENT'S PAGE — a component's, a record's, a dependency's. Every row of it is a framed section
+   now, the same block an interface's page and a rule's page draw, so these three are no longer the
+   only pages in the viewer with a different shape. What is left here is what goes INSIDE a section.
+   The sections stack with the page's own gap; nothing here sets their frame. */
+.edetail { display: flex; flex-direction: column; }
+/* The map's own authored fields, the one row still drawn as a labelled list: each is one label and one
+   sentence, not a set of things. First row loses its top gap — the section's frame already gives it. */
 .edetail dl { margin: 0; }
 .edetail dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
               color: #9ca3af; margin-top: 14px; }
+.edetail dt:first-child { margin-top: 0; }
 .edetail dd { margin: 3px 0 0; font-size: 13px; line-height: 1.55; color: #374151; }
+/* A ROW OF PILLS, which is what nearly every section on this page holds: the components that write a
+   record, the use cases a component serves, the rules it enforces. They were comma-separated blue
+   links, the last of those left in the viewer. */
+.ed-pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* The use cases under a FEATURE heading are that feature's, so they are set in from it. As an indented
+   <ul> the nesting was the bullet's job; a row of pills has no bullet, and without the indent the
+   feature and its use cases read as one flat run of pills that happen to wear different marks. */
+.edetail .used-cap-group > .ed-pills { padding-left: 15px; }
 /* "Show in context" on a card list: the card is scrolled to and briefly ringed. A page can hold
    forty cards, and "it is somewhere below" is not pointing at one. */
 @keyframes ecard-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
@@ -1042,20 +1058,22 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .sys-tile.sys-warn .sys-bar i { background: #f59e0b; }
 .sys-tile.sys-ok .sys-bar i { background: #10b981; }
 .sys-s { font-size: 11px; color: #6b7280; margin-top: 5px; line-height: 1.35; }
-/* Backward flow trace in a box pane: capability headings make the concrete use-case links scannable
-   without repeating the same information in a separate summary row. */
-#panel .used-by-cap { margin-top: 4px; }
-#panel .used-cap-group + .used-cap-group { margin-top: 9px; }
-#panel .used-cap-name { color: #4b5563; font-size: 11px; font-weight: 700; letter-spacing: 0; }
+/* Backward flow trace: capability headings make the concrete use cases scannable without repeating
+   the same information in a separate summary row. In the selection card AND on an element's own
+   page — the page used to reuse this markup with none of these rules reaching it, which is why its
+   groups came out as unstyled blue links. */
+#panel .used-by-cap, .edetail .used-by-cap { margin-top: 4px; }
+#panel .used-cap-group + .used-cap-group, .edetail .used-cap-group + .used-cap-group { margin-top: 9px; }
+#panel .used-cap-name, .edetail .used-cap-name { color: #4b5563; font-size: 11px; font-weight: 700; letter-spacing: 0; }
 /* The feature heading is the shared ITEM PILL now — the way back out of the code views into what the
    product does, drawn the way every other named element is drawn. It sits on its own line, because the
    use cases it heads are listed under it. */
-#panel .used-cap-group > .item-pill { margin-bottom: 3px; }
+#panel .used-cap-group > .item-pill, .edetail .used-cap-group > .item-pill { margin-bottom: 3px; }
 /* How many features this component serves, taken from the derived layer and never re-counted here. */
-#panel .used-cap-count { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #6b7280; }
+#panel .used-cap-count, .edetail .used-cap-count { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #6b7280; }
 #panel .used-uc-list { list-style: none; margin: 2px 0 0; padding: 0; }
 #panel .used-uc-list li { margin: 2px 0; line-height: 1.35; }
-#panel .used-none { color: #9ca3af; }
+#panel .used-none, .edetail .used-none { color: #9ca3af; }
 /* svg-pan-zoom sets pan/zoom via inline `style.transform` on its own `.svg-pan-zoom_viewport` group —
    this transition is toggled on JUST for centerOnSelection's programmatic move (viewer.js), never left
    on during a drag-pan (every mousemove frame would otherwise visibly lag behind the cursor). */
@@ -1255,11 +1273,10 @@ body.tree-browsing #codeview { display: none; }
    55% leaves the drawing the larger half whatever the window, with a floor so a short pane still shows
    a usable card; past it the card scrolls inside itself. */
 #panel { position: absolute; top: 12px; right: 12px; z-index: 4; width: 380px; max-width: calc(100% - 24px);
-/* …and never down onto the zoom control in the bottom-right corner. The 200px floor is a floor, so on
-   a drawing shorter than 253px the card reached the control and covered it (measured: a 900x420 window
-   leaves 203px of drawing, card bottom 191, control top 161). `min()` keeps the 55%/200px rule wherever
-   there is room and yields only in the sliver where the two would meet; the card already scrolls. */
-         max-height: min(max(200px, 55%), calc(100% - 73px)); min-width: 260px;
+/* …and never past the bottom of the drawing, which #diagwrap clips. The 200px floor is a floor, so a
+   short drawing (a 900x420 window leaves 203px) pushed the card out through the bottom edge. `min()`
+   keeps the 55%/200px rule wherever there is room and yields only in that sliver; the card scrolls. */
+         max-height: min(max(200px, 55%), calc(100% - 24px)); min-width: 260px;
 /* NO `resize`. A corner grip sets a HEIGHT, and a height set on one card is empty white under the
    next one on every selection after it. The width is the one number above; the height is the content. */
          padding: 14px 16px; overflow: auto;
@@ -1384,23 +1401,33 @@ body.panel-dragging { user-select: none; }
    (`http-routeDELETE /api/…`), the rows lost the pointer that says they can be clicked, and a selected
    row lit up nothing at all. On today's maps the page is in fact the ONLY place the block appears, so
    every one of these rules was dead where it was needed. */
-.tb-list { list-style: none; margin: 4px 0 0; padding: 0; }
-.tb-ep { line-height: 1.4; cursor: pointer; border-radius: 4px; padding: 3px 6px;
-         margin: 4px 0 0 -6px; transition: background .1s; }
-.tb-ep:first-child { margin-top: 0; }
-.tb-ep:hover { background: #f3f4f6; }
-.tb-ep.sel { background: #e0e7ff; box-shadow: inset 3px 0 0 #4f46e5; }
+/* THREE COLUMNS, one per question every row answers: which kind of way in, what starts it, where the
+   code is. As inline spans on one line the three never lined up — a long trigger sentence pushed its
+   code link to the right edge while the next row's sat mid-line — so only the kind word could be
+   scanned down the list. The row is still what selects. */
+.tb-list { width: 100%; border-collapse: collapse; margin: 0; table-layout: auto; }
+.tb-list th { text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase;
+              letter-spacing: .05em; color: #9ca3af; padding: 0 8px 6px 0;
+              border-bottom: 1px solid #eceef1; white-space: nowrap; }
+.tb-list td { padding: 6px 8px 6px 0; vertical-align: top; line-height: 1.45;
+              border-bottom: 1px solid #f5f6f8; }
+.tb-list tr:last-child td { border-bottom: 0; }
+.tb-ep { cursor: pointer; transition: background .1s; }
+.tb-ep:hover td { background: #f3f4f6; }
+.tb-ep.sel td { background: #e0e7ff; }
+.tb-ep.sel td:first-child { box-shadow: inset 3px 0 0 #4f46e5; }
+/* The kind is one word and the code link is one path: neither wraps, so the trigger sentence — the only
+   column with prose in it — takes whatever width is left. */
+.tb-c-kind, .tb-c-src { white-space: nowrap; width: 1%; }
+.tb-c-trig { width: auto; }
 .tb-kind { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
            letter-spacing: .03em; color: #0e7490; background: #ecfeff; border-radius: 8px;
-           padding: 0 6px; margin-right: 5px; vertical-align: 1px; }
-/* The call site, last on the row and set apart from the trigger, so a long HTTP route and the file it
-   lives in never read as one string. */
-.tb-src { margin-left: 8px; white-space: nowrap; }
+           padding: 0 6px; vertical-align: 1px; }
 /* Self-starting entry points (timer/loop/boot/signal/queue consumer) read in a warm amber, distinct from
    the cyan of externally-triggered ones; the left accent persists even when the row is unselected. */
 .tb-kind--self { color: #b45309; background: #fff7ed; }
-.tb-ep--self { box-shadow: inset 3px 0 0 #f59e0b; }
-.tb-ep--self.sel { box-shadow: inset 3px 0 0 #b45309; }
+.tb-ep--self td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+.tb-ep--self.sel td:first-child { box-shadow: inset 3px 0 0 #b45309; }
 #panel .xwhy { padding-left: 14px; margin-top: 2px; }
 /* A crossing row that carries a call site is selectable: click reveals its location in the code viewer.
    A hover tint + pointer signal the affordance; the selected row keeps an indigo tint + left accent.
@@ -1913,14 +1940,14 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .dv-grouprow h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }
 .dv-flash { animation: dvflash 1.4s ease; }
 @keyframes dvflash { from { background: #fef9c3; } to { background: transparent; } }
-/* Data-view rows inside the element info pane (Persisted in / Written by / Read by / dep Data link). */
-#panel .dv-panerow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-#panel .dv-seelink { color: #4f46e5; text-decoration: none; font-size: 12px; white-space: nowrap; }
-#panel .dv-seelink:hover { text-decoration: underline; }
-#panel .dv-coll { font-family: ui-monospace, monospace; font-size: 12px; color: #334155; }
+/* Data-view rows in the selection card and on an element's page (Persisted in / dep Data link). */
+#panel .dv-panerow, .edetail .dv-panerow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+#panel .dv-seelink, .edetail .dv-seelink { color: #4f46e5; text-decoration: none; font-size: 12px; white-space: nowrap; }
+#panel .dv-seelink:hover, .edetail .dv-seelink:hover { text-decoration: underline; }
+#panel .dv-coll, .edetail .dv-coll { font-family: ui-monospace, monospace; font-size: 12px; color: #334155; }
 /* Lifecycle transitions in the info pane: one per line, so each trigger reads on its own. */
-#panel .st-list { list-style: none; margin: 0; padding: 0; }
-#panel .st-list li { padding: 1px 0 1px 10px; text-indent: -10px; line-height: 1.45; }
+#panel .st-list, .edetail .st-list { list-style: none; margin: 0; padding: 0; }
+#panel .st-list li, .edetail .st-list li { padding: 1px 0 1px 10px; text-indent: -10px; line-height: 1.45; }
 /* Embedded entities: each row names the parent it rides in and the collection it lands in. */
 .dv-embtable { display: flex; flex-direction: column; gap: 3px; }
 .dv-embrow { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 3px 0;

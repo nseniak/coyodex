@@ -1396,7 +1396,12 @@ function elementCardHtml(id, opts) {
     nameCls: nm.length > 70 ? 'ecard-name-long' : '',
     what: desc,
     wordHtml: typeHtml,
-    extra: cardPillsHtml(c.pills) + (o.extra || ''),
+    // THE ELEMENT'S OWN PILLS ARE NOT ADDED HERE. `itemSpecOf` already puts `cardFacts(id).pills` on
+    // the spec, and the box draws them — so adding the same list again printed every one of them
+    // TWICE, in two different colours, side by side: a feature whose audience is `staff` read
+    // "feature · staff · staff". Invisible until now because it only shows on a card whose element
+    // HAS pills, and those are a feature's audience, an actor's nature and a dependency's kind.
+    extra: o.extra || '',
     foot: o.foot || '',
     bare: o.bare,
     cls: 'ecard',
@@ -1412,6 +1417,8 @@ function elementCardHtml(id, opts) {
 const COUNT_PLURALS = {
   entity: 'entities', 'stored entity': 'stored entities', dependency: 'dependencies',
   process: 'processes',
+  // The plural is on the FIRST word, so the default `+ 's'` produced "10 way ins".
+  'way in': 'ways in', 'use case': 'use cases',
 };
 function countNoun(n, noun) {
   return n === 1 ? noun : (COUNT_PLURALS[noun] || noun + 's');
@@ -2537,19 +2544,34 @@ function isMultiSelectClick(e) { return !!e && (e.metaKey || e.ctrlKey) && e.det
 // grounds it (or `inferred` when the tag cites none). Lives on the process box's pane, and on the dep
 // box standing in for an infrastructure unit. Empty `variants` = ungated (present in every
 // environment), which the env picker already shows by never filtering it out — so no row.
+// EVERY ROW OF AN ELEMENT'S PAGE IS A SECTION, the same framed block with a title and a count that
+// an interface's page, an actor's page and a rule's page draw — built by the same `itemSectionHtml`.
+// They were `<dt>`/`<dd>` pairs in a bare definition list: grey capitals on no frame, with the values
+// under them as blue underlined links. That was the info PANE's markup, kept when the pane's depth
+// moved onto a page of its own, and it left the three element pages (a component, a record, a
+// dependency) as the only pages in the viewer not drawn the way the rest are.
+// `[]` for the strip index, like featPanel: these sections stack and are read, they are not switched
+// between, so nothing indexes them.
+function detailSec(key, title, count, body) {
+  return itemSectionHtml([], 'ed-' + key, title, count, '', body);
+}
+// The pills of one row, in the one tag that names an element anywhere in the viewer.
+function detailPills(html) { return `<div class="ed-pills">${html}</div>`; }
 function variantsPaneHtml(id) {
   const n = GRAPH.nodes[id];
   const v = (n && n.variants) || [];
   if (!v.length) return '';
-  return '<dt>Environments</dt><dd>' + variantsCell(v) + '</dd>';
+  return detailSec('envs', 'Environments', countLabel(v.length, 'environment'), variantsCell(v));
 }
 function runByHtml(id) {
   const n = GRAPH.nodes[id];
   const units = (n && n.run_by) || [];
   if (!units.length) return '';
-  const links = units.map((u) =>
-    '<a href="#" class="procref" data-unit="' + esc(u) + '">' + esc(u) + '</a>').join(', ');
-  return '<dt>Runs in</dt><dd>' + links + '</dd>';
+  // The process node, when the map holds one, so the pill is a door like every other pill; a unit
+  // the map names without a process box of its own still gets the same pill, without the door.
+  const pills = units.map((u) =>
+    itemPillHtml(unitProcessNodeId(u) || u, { kind: 'process', name: u })).join('');
+  return detailSec('runs', 'Runs in', countLabel(units.length, 'process'), detailPills(pills));
 }
 function tracedUseCasesFor(id, seen) {
   const n = GRAPH.nodes[id];
@@ -2580,14 +2602,17 @@ function usedInHtml(id) {
   const set = tracedUseCasesFor(id);
   if (!set.size) {
     return HAS_USECASES
-      ? '<dt>In use cases</dt><dd><span class="used-none">No traced use case reaches it.</span></dd>'
+      ? detailSec('uses', 'In use cases', '',
+                  '<p class="used-none">No traced use case reaches it.</p>')
       : '';
   }
-  const link = (uc) => '<a href="#" class="ucref" data-uc="' + esc(uc.id) + '">'
-    + esc(uc.name || uc.id) + '</a>';
+  // A use case is an element with a page of its own, so it wears the element pill — not the bare blue
+  // link this row used to print, which was the only link shape left on these three pages.
+  const link = (uc) => itemPillHtml(uc.id, { kind: 'usecase', name: uc.name || uc.id });
   const ordered = UC_NODES.filter((uc) => set.has(uc.id));
   if (!HAS_CAPABILITIES) {
-    return '<dt>In use cases</dt><dd>' + ordered.map(link).join(', ') + '</dd>';
+    return detailSec('uses', 'In use cases', countLabel(ordered.length, 'use case'),
+                     detailPills(ordered.map(link).join('')));
   }
   const groups = Object.values(GRAPH.nodes || {})
     .filter((x) => x.kind === 'capability')
@@ -2598,13 +2623,23 @@ function usedInHtml(id) {
   // Every FEATURE heading is a link to that feature's page. This is the feature column on the code
   // views: a component serving four features shows four of them here, where one serving none shows the
   // empty state above — and from either you get back to what the product does in one click.
-  const html = groups.map((g) => '<div class="used-cap-group">'
-    + (g.cap
-      ? itemPillHtml(g.cap.id, { kind: 'capability', name: g.cap.name })
-      : '<div class="used-cap-name">Other use cases</div>')
-    + '<ul class="used-uc-list">' + g.ucs.map((uc) => '<li>' + link(uc) + '</li>').join('')
-    + '</ul></div>').join('');
-  return '<dt>In use cases</dt><dd class="used-by-cap">' + featureCountHtml(id) + html + '</dd>';
+  // ONE CARD PER FEATURE, holding that feature's use cases as pills. It was a feature PILL with a row
+  // of use-case pills beside it, and the two read as one flat run of tags that happened to wear
+  // different marks — nothing on screen said the second lot belonged to the first. A card is the shape
+  // this viewer already uses for "a thing, and what is inside it", and it is a door to the feature's
+  // own page, which the pill was too.
+  const card = (g) => (g.cap
+    ? elementCardHtml(g.cap.id, {
+        foot: '<span class="ecard-lbl">Use cases</span>' + detailPills(g.ucs.map(link).join('')) })
+    // THE LOOSE ONES ARE NOT A FEATURE, so they get a card that is not an element's: no mark, no type
+    // word, and nothing to open. A map that assigns every use case never draws it.
+    : plainCardHtml({ key: 'uc-loose', name: 'Other use cases',
+                      desc: 'Use cases the map assigns to no feature.',
+                      foot: '<span class="ecard-lbl">Use cases</span>'
+                            + detailPills(g.ucs.map(link).join('')) }));
+  return detailSec('uses', 'In use cases', countLabel(ordered.length, 'use case'),
+                   featureCountHtml(id)
+                   + '<div class="ecard-list">' + groups.map(card).join('') + '</div>');
 }
 // How many features reach this component, read straight off the DERIVED layer (`componentFeatures`) and
 // never re-counted from the groups below it. The two are the same join in two languages; taking the
@@ -2620,29 +2655,6 @@ function featureCountHtml(id) {
   if (!fids.length) return '';
   return '<p class="used-cap-count">Serves ' + countLabel(fids.length, 'feature') + '</p>';
 }
-// "How it decides" — the T7 rules this component enforces, on its info pane. Modelled on
-// `usedInHtml`: grouped, with an explicit empty state so "this component decides nothing" reads
-// differently from "the map has no decision layer". The membership is DERIVED (a rule's site
-// resolved through Component.files, server-side) and arrives pre-inverted as `byComponent`; a
-// component that shares a file with others appears under EVERY rule sited in it, which is the
-// honest answer, not a rendering accident.
-function decidesHtml(id) {
-  const n = GRAPH.nodes[id];
-  if (!HAS_RULES || !n || n.kind !== 'component') return '';
-  const ids = ((RULES_VIEW.byComponent || {})[id]) || [];
-  if (!ids.length) {
-    return '<dt>How it decides</dt><dd><span class="used-none">No business rule is enforced here.</span></dd>';
-  }
-  // The grouping is `rulesByBlock`, shared with the feature page's "What it decides". Two
-  // implementations of "these rules, by decision area" would eventually disagree about which area a
-  // rule sits in; the MARKUP differs on purpose (a dense pane line here, rows on a page there).
-  const html = rulesByBlock(ids).map((g) => '<div class="used-cap-group">'
-    + '<div class="used-cap-name">' + esc(g.name) + '</div>'
-    + '<div class="used-uc-list">' + g.rules.map((r) =>
-        '<a href="#" class="brref" data-br="' + esc(r.id) + '">' + esc(ruleTitle(r)) + '</a>').join(', ')
-    + '</div></div>').join('');
-  return '<dt>How it decides</dt><dd class="used-by-cap">' + html + '</dd>';
-}
 // The "Triggered by" forward view for a component: its T4 entry points — how the outside world reaches
 // it (an HTTP route, a CLI command, a cron, an event). Each entry point is a selectable paragraph — a
 // kind chip, the trigger, and its CALL SITE as the same pill every code link in the product wears.
@@ -2656,15 +2668,28 @@ function triggeredByHtml(id) {
   const n = GRAPH.nodes[id];
   const eps = (n && n.entry_points) || [];
   if (!eps.length) return '';
+  // A TABLE, THREE COLUMNS, because every row answers the same three questions and as a run of inline
+  // spans the answers did not line up: a long trigger sentence pushed its code link to the right edge
+  // while the next row's sat mid-line, and the kind word was the only thing a reader could scan down.
+  // The row is still the selectable thing (bindTriggeredBy / selectTriggeredBy), so the hooks that were
+  // on the <li> are on the <tr>.
+  //
+  // "KIND OF WAY IN", never a bare "Kind": four different things in this viewer carry a kind and the
+  // vocabularies do not overlap, so the word alone names none of them.
   const rows = eps.map((e, i) => {
     const self = e.activation === 'self';
     const kind = e.kind ? `<span class="tb-kind${self ? ' tb-kind--self' : ''}">${esc(e.kind)}</span>` : '';
-    const trig = e.trigger ? `<span class="tb-trig">${mdInline(e.trigger)}</span>` : '<span class="muted">(entry point)</span>';
+    const trig = e.trigger ? mdInline(e.trigger) : '<span class="muted">(no trigger recorded)</span>';
     const where = (e.source && localRef(e.source)) ? ` data-where="${esc(e.source)}"` : '';
-    const src = e.source ? `<span class="tb-src">${srcCell(e.source)}</span>` : '';
-    return `<li class="tb-ep${self ? ' tb-ep--self' : ''}" data-ep-idx="${i}"${where}>${kind}${trig}${src}</li>`;
+    const src = e.source ? srcCell(e.source) : '';
+    return `<tr class="tb-ep${self ? ' tb-ep--self' : ''}" data-ep-idx="${i}"${where}>`
+      + `<td class="tb-c-kind">${kind}</td><td class="tb-c-trig">${trig}</td>`
+      + `<td class="tb-c-src">${src}</td></tr>`;
   }).join('');
-  return `<dt>Triggered by</dt><dd><ul class="tb-list" data-comp="${esc(id)}">${rows}</ul></dd>`;
+  return detailSec('trig', 'Triggered by', countLabel(eps.length, 'way in'),
+    `<table class="tb-list" data-comp="${esc(id)}">`
+    + '<thead><tr><th>Kind of way in</th><th>What starts it</th><th>Code</th></tr></thead>'
+    + `<tbody>${rows}</tbody></table>`);
 }
 // Wire the "Triggered by" entry-point rows: every row is selectable (click highlights it, like an arrow
 // row); a row with a local source also reveals it in the code viewer on select.
@@ -2702,14 +2727,10 @@ function selectEntryPoint(componentId, epIdx) {
 function applyPendingEpSelect() {
   if (pendingEpSelect && selectTriggeredBy(pendingEpSelect.comp, pendingEpSelect.idx)) pendingEpSelect = null;
 }
-// Entity info-pane rows: WHERE it's persisted (the store dep chip + container/mode) and — reusing the
-// Data view's C→E derivation — WHO writes and reads it. Every chip (store dep, writer, reader)
-// navigates to that element, whose own node carries its source link (the "link every element to its
-// code" rule). The "See in Data view" link deep-links to this entity's row in the Data tab.
 // A record's OWNING FEATURE — the one the data exists for. AUTHORED on the map (its own `owners`,
 // else its area's, walked up), never inferred here: a record several features write is not owned by
 // the busiest one, and this line has no business guessing where the map stayed silent. Absent from
-// `ENTITY_OWNERS` = nobody decided, and the row is not drawn at all.
+// `ENTITY_OWNERS` = nobody decided, and the section is not drawn at all.
 //
 // Each owner is a DOOR to its own page, drawn by the one pill that names an element — so moving a
 // feature's home view cannot break this link, and the pill looks the same here as anywhere else.
@@ -2718,13 +2739,13 @@ function ownedByHtml(id) {
   if (!n || n.kind !== 'entity') return '';
   const own = (ENTITY_OWNERS[id] || []).filter((c) => GRAPH.nodes[c]);
   if (!own.length) return '';
-  const doors = own.map((c) => itemPillHtml(c)).join(' ');
+  const doors = own.map((c) => itemPillHtml(c)).join('');
   // Several owners is a DELIBERATE statement that the record is shared, not an unresolved list, so
-  // the row says so rather than leaving the reader to read a comma as uncertainty.
+  // the section says so rather than leaving the reader to read a comma as uncertainty.
   const note = own.length > 1 ? ' <span class="dv-note">shared, deliberately</span>' : '';
-  // AND WHETHER ANYTHING BACKS IT. 85 of the 237 records that draw this row across the four live
-  // maps sit in an area whose owners no step reaches, and the row said "Owned by <feature>" flatly —
-  // on `E44 SandboxPersistedRef` directly above a "In use cases" row naming a different feature, the
+  // AND WHETHER ANYTHING BACKS IT. 85 of the 237 records that draw this across the four live maps sit
+  // in an area whose owners no step reaches, and it used to say "Owned by <feature>" flatly — on
+  // `E44 SandboxPersistedRef` directly above an "In use cases" row naming a different feature, the
   // contradiction on one screen with nothing marking it. The Features page learned to say this; a
   // record's own page is the other place the same claim is made.
   //
@@ -2738,7 +2759,8 @@ function ownedByHtml(id) {
   const gap = o && o.gap && inherited
     ? ` <span class="dv-note dv-note-gap">${storyGapSentence(o, own.length > 1)}</span>`
     : '';
-  return `<dt>Owned by</dt><dd class="dv-panerow">${doors}${note}${gap}</dd>`;
+  return detailSec('owner', 'Owned by', '',
+                   `<div class="dv-panerow">${detailPills(doors)}${note}${gap}</div>`);
 }
 function persistedInHtml(id) {
   const n = GRAPH.nodes[id];
@@ -2746,7 +2768,7 @@ function persistedInHtml(id) {
   // in-code) keeps its plain "Stored" text row instead (set server-side), so storage shows exactly once.
   if (!n || n.kind !== 'entity' || !n.store || !n.store.dep) return '';
   const st = n.store; const parts = [];
-  if (GRAPH.nodes[st.dep]) parts.push(dvChip(st.dep, GRAPH.nodes[st.dep].name, 'dv-ent'));
+  if (GRAPH.nodes[st.dep]) parts.push(itemPillHtml(st.dep));
   else parts.push(esc(st.dep));
   if (st.container) parts.push(`<span class="dv-coll">${esc(st.container)}</span>`);
   // `collection` is the default mode (a plain table/collection/bucket) — showing it adds no info and
@@ -2757,24 +2779,14 @@ function persistedInHtml(id) {
   if (!parts.length) return '';
   let dd = parts.join(' ');
   if (HAS_DATA) dd += ` <a href="#" class="dv-seelink" data-store="${esc(st.dep)}" data-entity="${esc(id)}">See in Storage →</a>`;
-  return `<dt>Persisted in</dt><dd class="dv-panerow">${dd}</dd>`;
-}
-function accessRowsHtml(id) {
-  const n = GRAPH.nodes[id];
-  const a = (DATA_VIEW.access || {})[id];
-  if (!n || n.kind !== 'entity' || !a) return '';
-  const wl = (a.writers || []).map((c) => dvChip(c.id, c.name, c.owner ? 'dv-write dv-persist' : 'dv-write', c.verb));
-  const rl = (a.readers || []).concat(a.other || []).map((c) => dvChip(c.id, c.name, 'dv-read', c.verb));
-  let out = '';
-  if (wl.length) out += `<dt>Written by</dt><dd class="dv-panerow"><div class="dv-chips">${wl.join('')}</div></dd>`;
-  if (rl.length) out += `<dt>Read by</dt><dd class="dv-panerow"><div class="dv-chips">${rl.join('')}</div></dd>`;
-  return out;
+  return detailSec('store', 'Persisted in', '', `<div class="dv-panerow">${dd}</div>`);
 }
 // Datastore/messaging dep info-pane row: a link into the Data tab focused on this store's pane.
 function persistedDataLinkHtml(id) {
   if (!dataStoreOf(id)) return '';
-  return `<dt>Data</dt><dd class="dv-panerow"><a href="#" class="dv-seelink" data-store="${esc(id)}">`
-    + `View persisted data (${esc(dataDrillLabel(id))}) →</a></dd>`;
+  return detailSec('data', 'Data', '',
+    `<div class="dv-panerow"><a href="#" class="dv-seelink" data-store="${esc(id)}">`
+    + `View persisted data (${esc(dataDrillLabel(id))}) →</a></div>`);
 }
 // The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
 // Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
@@ -2876,8 +2888,22 @@ function nodeDetailBodyHtml(id, noExplain) {
       : (bareAnchor(v) ? srcCell(bareAnchor(v)) : proseBlocksHtml(v, mdInline))) + '</dd>').join('');
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
-  return explain
-    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${ownedByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${decidesHtml(id)}${triggeredByHtml(id)}</dl>`
+  //
+  // NO "DETAILS" SECTION. It held whatever authored fields survived the drops above, and on the three
+  // kinds that reach this page almost nothing ever did: a component's three written facts are its name,
+  // its subsystem and its purpose, and the trail and the hero already carry all three. What remains is
+  // one row on a dependency (its package), and a record's lifecycle — both drawn as `rows` inline,
+  // under no heading, because a heading over one line is a heading that says nothing.
+  //
+  // WHAT THIS PAGE NO LONGER DRAWS, and where each answer went instead:
+  //   * a record's WRITTEN BY / READ BY — the Storage view is built around exactly this, and
+  //     `Persisted in` above links straight into it.
+  //   * a component's HOW IT DECIDES — the rules themselves are a tab, and each rule's own page names
+  //     every component it is enforced in.
+  return explain + (rows ? `<dl>${rows}</dl>` : '')
+    + variantsPaneHtml(id) + runByHtml(id) + ownedByHtml(id) + persistedInHtml(id)
+    + persistedDataLinkHtml(id) + usedInHtml(id)
+    + triggeredByHtml(id)
     + impactSectionHtml(id);
 }
 // Everything the map holds about one element, as a PAGE. The info pane shows the element's card and
@@ -2912,17 +2938,13 @@ function renderElementDetails(id) {
 // Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
 // selectable "Triggered by" entry-point rows.
 function bindNodeDetailHandlers(root) {
-  root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
-    ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
-  }));
-  // "Runs in": each unit opens its own process card, the same target its box drills to.
+  // NO `ucref` / `brref` HANDLERS ANY MORE. A use case and a rule are elements with pages of their own,
+  // so both rows draw the element pill now and `bindItemPills` below opens them — one door for a use
+  // case wherever it is named, instead of a second one that only this page had.
+  // "Runs in": each unit opens its own process card, the same target its box drills to. Still bound —
+  // the Deployment view's own table draws these links too.
   root.querySelectorAll('a.procref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'deploymentUnit', unit: a.getAttribute('data-unit') });
-  }));
-  // "How it decides" / a flow step's rules: deep-link to the RULE'S OWN page under the Business
-  // logic tab — the one place that answers "how is this decision enforced?".
-  root.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
-    ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
   // The FEATURE headings on a component's "In use cases" row are item pills, wired by `bindItemPills`.
   bindItemPills(root);
@@ -3364,8 +3386,10 @@ function itemPillHtml(id, opts) {
   // honest: those pills are reachable by mouse, not by tab, and the box itself still is.
   const tag = o.inBox ? 'span' : 'button';
   const attrs = o.inBox ? '' : ' type="button" data-card-own';
+  // `o.title` for the one caller with something to add beyond the name: a record's writers and readers,
+  // where the VERB (creates, updates, reads) is the fact the section title cannot give.
   return `<${tag}${attrs} class="item-pill item-pill-door${extra}"${style}${kd} `
-    + `data-item="${esc(id)}" title="Open ${esc(name)}">${body}</${tag}>`;
+    + `data-item="${esc(id)}" title="${esc(o.title || ('Open ' + name))}">${body}</${tag}>`;
 }
 // The feature form, named because two card foots ask for it and neither should have to know that a
 // feature's id is what the pill is keyed on.
@@ -7631,8 +7655,18 @@ function cardKeepSets(el) {
   const isArrow = arrow && arrowMidpoint(arrow);
   const ends = isArrow ? edgeEndRects(arrow) : [];
   const g = (list) => list.map((r) => grow(r, CARD_CLEAR));
-  if (!isArrow) return [g(own)];
-  return [g([...own, rectOf(arrow), ...ends]), g([...own, ...ends]), g(ends)];
+  // THE ZOOM CONTROL, which shares the top-right corner with the card and is the card's own default
+  // direction (CARD_DIRS starts up-and-right). Its own `hidden` decides, so on a page with no drawing
+  // there is no shape here at all. A CSS offset cannot do this job: every `top` the stylesheet sets is
+  // overwritten by `put()` a moment later.
+  // IN EVERY SET. The later sets exist so a crowded arrow can place its card at all, by giving up one
+  // shape of the DRAWING at a time; a control is not part of the drawing, and covering one is never the
+  // concession to make. The last-resort clamp below still can — a card off screen is worse.
+  const fixed = (zoomctl && !zoomctl.hidden) ? [grow(rectOf(zoomctl), CARD_CLEAR)] : [];
+  if (!isArrow) return [[...g(own), ...fixed]];
+  return [[...g([...own, rectOf(arrow), ...ends]), ...fixed],
+          [...g([...own, ...ends]), ...fixed],
+          [...g(ends), ...fixed]];
 }
 // THE LINE THAT WILL ACTUALLY BE DRAWN, not a stand-in for it: `syncCallout` runs it from the card's
 // border to the arrow's middle, or to the border of the box you picked. Measuring to a box's CENTRE

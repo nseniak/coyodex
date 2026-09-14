@@ -100,8 +100,7 @@ def make_base_model() -> ProjectModel:
     m.roles = [Role(id="R1", name="Andy", kind="human", wants="orders", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="View order", actors=["R1"])]
     m.happy_path = [HappyStep(id="HP1", uc="UC1")]
-    m.components = [Component(id="C1", name="Viewer", purpose="shows", entry_point="src/v.py:1",
-                              files=["src/v.py"])]
+    m.components = [Component(id="C1", name="Viewer", purpose="shows", files=["src/v.py"])]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
     m.entities = [Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="a thing",
                          source="src/order.py:1",
@@ -1847,8 +1846,11 @@ def _js_function(name: str) -> str:
     return _js_code(VIEWER_JS[start:VIEWER_JS.index("\nfunction ", start + 10)])
 
 
+# `decidesHtml` is not here any more: a component's page no longer lists the rules enforced in it.
+# The rules are a tab of their own and each rule's page names every component it is enforced in, so
+# that section was the third place one join was drawn.
 RULE_RENDERERS = ("renderRules", "renderRule", "ruleAnalysisGapsHtml", "ruleSiteRow",
-                  "ruleBlockGroups", "decidesHtml", "stepRulesHtml")
+                  "ruleBlockGroups", "stepRulesHtml")
 
 
 def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
@@ -2148,12 +2150,16 @@ def test_every_cross_link_into_a_rule_lands_on_the_rules_own_page() -> None:
     scroll — which, now that the answer lives one level down, would land the reader on a list.
 
     A STEP'S RULES ARE ITEM PILLS now, so that door is the one every pill uses: `bindItemPills`, whose
-    single destination is the thing the pill names. The pane's own list keeps its handler."""
-    assert "go({ kind: 'rule', br: a.getAttribute('data-br') })" in _js_function("bindNodeDetailHandlers")
+    single destination is the thing the pill names.
+
+    AND THERE ARE ONLY TWO DOORS LEFT. "How it decides" was the third — a component's own page listing
+    the rules enforced in it — and it is gone: the rules are a tab, and each rule's page names every
+    component it is enforced in, so the component->rules direction was one join drawn a third time."""
+    assert "function decidesHtml(" not in VIEWER_JS, "the component's copy of the rule list is back"
+    assert 'class="brref"' not in VIEWER_JS, "the page-only door into a rule is back"
     assert "bindItemPills(host);" in _js_function("bindFlowStepInfo")
-    # The block id those two doors read is dead payload now — a link carries only the rule.
-    for fn in ("decidesHtml", "stepRulesHtml"):
-        assert "data-blk" not in _js_function(fn), fn
+    # The block id that door read is dead payload now — a link carries only the rule.
+    assert "data-blk" not in _js_function("stepRulesHtml")
 
 
 def test_a_rule_whose_area_the_map_never_declared_still_appears() -> None:

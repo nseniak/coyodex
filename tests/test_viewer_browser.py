@@ -4112,9 +4112,10 @@ def test_a_records_own_page_says_whether_anything_backs_its_owner() -> None:
     with _served_map(make_owner_states_map) as url, _page(url + "#v=element&id=E26") as page:
         _settle(page)
         got = page.evaluate("""() => {
-            const dt = [...document.querySelectorAll('dt')]
-                .find(d => d.textContent.trim() === 'Owned by');
-            return { row: dt ? dt.nextElementSibling.textContent : '(no row)',
+            const sec = [...document.querySelectorAll('.item-sec')]
+                .find(s => (s.querySelector('h2') || {}).textContent === 'Owned by');
+            const body = sec && sec.querySelector('.item-sec-body');
+            return { row: body ? body.textContent : '(no row)',
                      note: document.querySelectorAll('.dv-note-gap').length };
         }""")
         assert "Tool access via gateway" in got["row"], got
@@ -4126,13 +4127,15 @@ def test_a_records_own_page_says_whether_anything_backs_its_owner() -> None:
     with _served_map(make_owner_states_map) as url, _page(url + "#v=element&id=E1") as page:
         _settle(page)
         got = page.evaluate("""() => ({
-            row: (() => { const dt = [...document.querySelectorAll('dt')]
-                    .find(d => d.textContent.trim() === 'Owned by');
-                  return dt ? dt.nextElementSibling.textContent : '(no row)'; })(),
+            row: (() => { const sec = [...document.querySelectorAll('.item-sec')]
+                    .find(s => (s.querySelector('h2') || {}).textContent === 'Owned by');
+                  const bd = sec && sec.querySelector('.item-sec-body');
+                  return bd ? bd.textContent : '(no row)'; })(),
             note: document.querySelectorAll('.dv-note-gap').length })""")
         assert "No step of" not in got["row"], got
         assert got["note"] == 0, got
         assert not page.js_errors, page.js_errors
+
 
 
 def test_a_pages_own_title_carries_no_glossary_link() -> None:
