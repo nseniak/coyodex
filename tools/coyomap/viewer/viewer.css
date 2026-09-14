@@ -3122,10 +3122,18 @@ body.insp-on { cursor: crosshair; }
 
 /* A step card's title is the ACTION. When that action is running a shared sub-use case, the title IS the link
    to it — the same weight and colour as any other step title, so the card reads the same either way. */
+/* A BUTTON, so it needs telling that it is text: a button centres its own label, which set a two-line
+   step phrase down the middle of the card while every other line beside it was ranged left. */
 .pane-title-link { font: inherit; color: inherit; background: none; border: 0; padding: 0;
-                   cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+                   text-align: left; cursor: pointer;
+                   text-decoration: underline; text-underline-offset: 3px;
                    text-decoration-color: #c7d2fe; }
 .pane-title-link:hover { text-decoration-color: #4338ca; }
+/* …AND A STEP'S TITLE CARRIES NO UNDERLINE AT ALL. On every other card this title is a NAME — a
+   sub-flow's, an arrow's pair — and the underline says that name opens. A step's title is not a name,
+   it is the sentence saying what the step does, and an underline under a sentence reads as emphasis
+   rather than as a door. It still opens; the pointer and the tooltip say so. */
+.ecard-step .pane-title-link, .ecard-step .pane-title-link:hover { text-decoration: none; }
 
 /* A BOX'S NAME IS A LINK, and it says so on hover — the same underline `.ibox-name` draws on the
    Interfaces picture and `.ecard-name` draws on a card. Only on boxes whose name actually opens

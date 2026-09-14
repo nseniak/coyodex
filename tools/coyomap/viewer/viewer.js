@@ -843,6 +843,10 @@ const ITEM_KIND = {
   // back to the neutral slate — a rule's card and its area's card were the only element cards on the
   // viewer with nothing in the figure column.
   rule: 'rule', block: 'block',
+  // ONE STEP of a use case. It is not an element of the product — it is a piece of one use case's
+  // story — but it has a card and a page now, and a card with no mark is the one thing on this viewer
+  // that appears unlabelled.
+  step: 'step',
   // A shared sub-use case's chips name their kind as the map does — `actor` for a person.
   actor: 'human', role: 'human',
 };
@@ -856,6 +860,10 @@ function itemHasGlyph(k) { return Object.prototype.hasOwnProperty.call(ITEM_KIND
 // ELEMENT_TINT, shipped in the bundle). A kind the table has no entry for falls back to the shared
 // walk's neutral slate rather than to a colour that would claim something.
 function itemTint(k) {
+  // A STEP WEARS ITS USE CASE'S SKY. It belongs to one use case and nothing else, so sharing that
+  // colour says where it lives — and it is read from the map's own table rather than added to it, so
+  // every map already built draws the mark today instead of falling back to the neutral slate.
+  if (k === 'step') k = 'usecase';
   return (ELEMENT_TINT && ELEMENT_TINT[k]) || { fill: '#f8fafc', stroke: '#475569' };
 }
 // The word a box's type pill carries. An interface says WHICH DOOR (`MCP`, `website`); everything
@@ -953,6 +961,13 @@ function itemMarkD(k, fill) {
   if (k === 'block') {
     return lucideMark(['M19 17V5a2 2 0 0 0-2-2H4',
       'M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3']);
+  }
+  // A STEP IS ONE THING ACTING ON ANOTHER, which is an arrow and nothing else: the shaft carries the
+  // eye left to right the way the step's own sentence reads, and the head says which way it goes.
+  // Drawn OPEN — two strokes, no filled head — so it stays an arrow at 11px on a pill, where a solid
+  // triangle closes into a blob. Same reason the diagrams' own arrowheads are strokes.
+  if (k === 'step') {
+    return '<path d="M2.8 9h10.4"/><path d="M9.6 5.2 13.8 9l-4.2 3.8"/>';
   }
   if (k === 'subflow') {
     return '<path d="M3.4 12.6 L9 6.2 L14.6 11.4"/>'
@@ -2920,6 +2935,14 @@ function textOf(html) {
   d.innerHTML = html;
   return d.textContent || '';
 }
+// THE CODE LINE ON A HERO: the file's own name and the line, and nothing else. No label over it —
+// a `path:line` in this product's blue monospace is already unmistakably a code link, and the word
+// CODE above one line of it was a heading for a single fact. No folder either: opening it puts the
+// whole path in the code pane's header, which is where a reader who wants the folder is looking.
+// It sits under the sentence, the one slot on the hero for a fact about the thing rather than its name.
+function heroSourceLine(where) {
+  return where ? '<span class="page-hero-meta-line hero-src">' + srcCell(where) + '</span>' : '';
+}
 function renderFlowStepPage(uc, sn) {
   // `flowStepIndex` is the ONE lookup from a step's number to its place, shared with the chips that
   // label and act on a step — so the number in the address and the step it lands on cannot disagree.
@@ -2936,29 +2959,22 @@ function renderFlowStepPage(uc, sn) {
     + (st.dstId && GRAPH.nodes[st.dstId] ? itemPillHtml(st.dstId) : esc(st.dst || ''));
   const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
   const hero = pageHeroHtml({
-    glyph: itemGlyphSvg('usecase'), type: 'Step ' + esc(String(st.n)) + ' of ' + all.length,
+    glyph: itemGlyphSvg('step'), type: 'Step ' + esc(String(st.n)) + ' of ' + all.length,
     // THE ACTION, as plain words. `pageHeroHtml` escapes the name (it is a name, not prose), so the
     // markdown the phrase may carry is stripped rather than rendered — `mdInline` here would print the
     // asterisks. The popup renders it, because there the phrase is the card's own prose line.
     name: st.verb ? capFirst(textOf(mdInline(st.verb))) : 'Step ' + st.n,
     desc: st.note ? mdInline(st.note) : '', noDesc: false,
-    meta: '<span class="page-hero-meta-line lp-ends">' + ends + '</span>' });
+    meta: '<span class="page-hero-meta-line lp-ends">' + ends + '</span>' + heroSourceLine(st.where) });
+  // THE CALL SITE IS ON THE HERO, not a section of its own: it is one line, and a framed block with a
+  // heading over one line is a heading that says nothing. Same reason the use case it belongs to is in
+  // the TRAIL and not a card — the breadcrumb above already names it, and a card repeated it.
   const secs = [];
-  // WHERE THE CODE IS. The step's own call site, which is THE location — an arrow's `where` is only an
-  // example site, and this is why a step's card never shows the arrow's.
-  if (st.where) {
-    secs.push(detailSec('src', 'Where the code is', '',
-                        '<div class="dv-panerow">' + srcCell(st.where) + '</div>'));
-  }
   // THE RULES THIS STEP DECIDES, the same pills the popup carries.
   // ONE builder for "which rules does this step decide", shared with the popup — two of them would
   // eventually disagree about which step a rule sits on, and that join is fiddly (see stepRulesHtml).
   const rules = stepRulesHtml(uc, st);
   if (rules) secs.push(detailSec('rules', 'What it decides', '', rules));
-  // THE USE CASE IT BELONGS TO — its card, so the reader can read what the whole story is for and open
-  // it in one click.
-  secs.push(detailSec('uc', 'It belongs to', '',
-                      '<div class="ecard-list">' + elementCardHtml(uc, {}) + '</div>'));
   // …AND THE OTHER STEPS AT THE SAME PAIR, where there are any. This is the pair page's question, and
   // it is a SECOND question: offered as a line, not as the page.
   const pair = (st.srcId && st.dstId && isLeafPair(st.srcId, st.dstId))
@@ -3071,7 +3087,9 @@ function renderElementDetails(id) {
   const c = cardFacts(id);
   const hero = pageHeroHtml({ glyph: elementHeroGlyph(n.kind), name: c ? c.name : n.name || id,
                               type: c ? c.type : elementLabel(n.kind), pills: extra,
-                              desc: c && c.desc ? mdInline(c.desc) : '', noDesc: false });
+                              desc: c && c.desc ? mdInline(c.desc) : '', noDesc: false,
+                              // …and where its code is, the same one line a step's page carries.
+                              meta: heroSourceLine(n.file) });
   // A PROCESS closes with the threads it hosts. That table is read off the map's entry points rather than
   // off the element's own fields, so the generic body cannot build it — and this page is where all of a
   // process's depth lives now that its page on the Deployment view carries only a hero.
@@ -3892,9 +3910,9 @@ function flowStepInfoHtml(uc, i) {
       + ' title="Open this step\u2019s page">' + action + '</button>';
   const facts = [];
   if (st.note) facts.push(['Note', mdInline(st.note), true]);
-  // The call site wears the SAME pill every other code link in the product wears (`srcCell`: name +
-  // line, a `.srclink` button the delegated pane listener already serves).
-  if (st.where) facts.push(['Source', srcCell(st.where), true]);
+  // NO CALL SITE ON THIS CARD. It is on the step's own page, which the title opens, and the card is a
+  // glance at what the step does — a `SOURCE path:line` row was the only line on it a reader could not
+  // read as a sentence.
   // WHICH STEP THIS IS rides beside the name, in the slot every card's type word uses. It is what
   // ties the card to the numbers on the drawing and to the "6 / 17" counter, so it belongs at the
   // head rather than down in the band with the counts.
@@ -3906,14 +3924,18 @@ function flowStepInfoHtml(uc, i) {
   // borrow the WALK's — its mark, how many steps it holds, the people and records inside it — and so
   // answered a question the reader had not asked: they clicked a step, and got the thing it runs.
   // The walk's own screen is one click away, through the name, and everything about it lives there.
-  return itemBoxHtml({ k: '', name: '', pills: [],
+  // THE SAME CARD A COMPONENT AND A RECORD GET: its kind's mark, its name, its type word on the one
+  // line, then the sentence. The step was the only card in the viewer drawn without a mark, on the
+  // reasoning that the map had no drawing for a step and the component's gear would lie. It has one
+  // now — an arrow, because a step is one thing acting on another — so the exception is retired.
+  return itemBoxHtml({ k: 'step', name: '', pills: [],
                        what: st.why || '', facts, band: [], chips: [] }, 'card', {
     nameHtml: title,
-    // No mark: a step is not one of the kinds the map has one for, and the component's gear would
-    // say it is a component.
-    glyph: false,
     // PLAIN, like every type word whose click would go nowhere: a step has no home view to show it in.
-    wordHtml: '<span class="ecard-type ecard-type-plain">step ' + (i + 1) + '</span>',
+    // ITS OWN NUMBER, not its position: `st.n` is what the board draws, what the player counts to and
+    // what the step's address carries, and the card naming a different one would be the card and the
+    // page disagreeing about which step this is.
+    wordHtml: '<span class="ecard-type ecard-type-plain">step ' + esc(String(st.n)) + '</span>',
     // NO FRAME OF ITS OWN. This card only ever appears inside the floating card or the info pane, and
     // there the box IS the surface — a frame inside a frame reads as two objects. Same option every
     // other card in that position takes.

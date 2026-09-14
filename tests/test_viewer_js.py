@@ -3892,9 +3892,15 @@ def test_a_code_link_has_exactly_one_shape_and_one_builder() -> None:
     place that emits a source-link button, which is also what makes the one delegated pane listener
     enough to serve every link in the app."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    # THE STEP'S CARD CARRIES NO CALL SITE any more — the card is a glance at what the step does, and
+    # a `SOURCE path:line` row was the only line on it a reader could not read as a sentence. The
+    # anchor is on the step's own PAGE, which the card's title opens, and there it goes through the
+    # shared builder like every other code link.
     step = js[js.index("function flowStepInfoHtml(uc, i) {"):
               js.index("\nfunction ", js.index("function flowStepInfoHtml(uc, i) {") + 10)]
-    assert "srcCell(st.where)" in step, "the step card's Source row is the shared pill"
+    assert "srcCell(" not in step, "the card's call-site row is back"
+    assert "srcCell(where)" in js[js.index("function heroSourceLine(where) {"):][:400], \
+        "a hero's code line is the shared pill"
     assert "esc(st.where)" not in step, "the step card never prints its raw anchor"
     # The hand-rolled link and its per-render click handler are gone, markup and stylesheet alike.
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
