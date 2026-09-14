@@ -51,7 +51,6 @@ def make_tiny_model_json() -> str:
       "name": "X",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "",
       "source": null,
       "confidence": "",

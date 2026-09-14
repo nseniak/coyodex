@@ -44,12 +44,10 @@ def make_map(*, capability_on_uc: str | None = "CAP1", rules: list[dict] | None 
                          {"id": "EP2", "kind": "cli", "trigger": "pay",
                           "source": "src/b.py:1", "component": "C2"}],
         "components": [
-            {"id": "C1", "name": "Front", "purpose": "takes the ask", "entry_point": "src/a.py:1",
-             "files": files_c1 if files_c1 is not None else ["src/a.py"]},
-            {"id": "C2", "name": "Back", "purpose": "answers it", "entry_point": "src/b.py:1",
-             "files": files_c2 if files_c2 is not None else ["src/b.py"]},
+            {"id": "C1", "name": "Front", "purpose": "takes the ask", "files": files_c1 if files_c1 is not None else ["src/a.py"]},
+            {"id": "C2", "name": "Back", "purpose": "answers it", "files": files_c2 if files_c2 is not None else ["src/b.py"]},
             {"id": "C3", "name": "Lonely", "purpose": "nothing reaches it",
-             "entry_point": "src/c.py:1", "files": ["src/c.py"]}],
+             "files": ["src/c.py"]}],
         "entities": [{"id": "E1", "name": "Payment", "meaning": "money moved",
                       "source": "src/a.py:1"}],
         "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": "to answer",
@@ -236,7 +234,7 @@ def test_ids_come_back_in_id_order_not_string_order():
     """`C9` before `C10`. A rendered list sorted as strings reads as shuffled."""
     doc = make_map()
     doc["components"] += [{"id": f"C{i}", "name": f"N{i}", "purpose": "p",
-                           "entry_point": "src/a.py:1", "files": []} for i in (9, 10)]
+                           "files": []} for i in (9, 10)]
     doc["flows"][0]["steps"] += [
         {"n": 5, "src": "C1", "dst": "C10", "phrase": "then", "where": "src/a.py:15"},
         {"n": 6, "src": "C1", "dst": "C9", "phrase": "then", "where": "src/a.py:16"}]

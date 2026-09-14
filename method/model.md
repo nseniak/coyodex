@@ -101,7 +101,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "tech": "<one stack label, e.g. 'Python/FastAPI'>",   // subsystem-only; blocked on subdomains
                      "tech_source": "<bare path:line to the manifest line>" } ],
   "components":  [ { "id": "Cn",  "name", "subsystem": "Sn|null", "purpose",
-                     "entry_point": "<path:line|null>", "depends_on": "<derived summary text>",
+                     "depends_on": "<derived summary text>",
                      "source": "<canonical source anchor|null>", "confidence",
                      "files": [ "<repo-relative path>", … ],
                      "runs_in": [ "<deployment[].unit name>", … ],   // the process(es) that run this component (Deployment view) — DERIVE from the deploy manifests, never an id-range formula (method.md 'Deployment & topology')
@@ -564,7 +564,7 @@ Semantics, stated on the fields:
 - **Anchor formats.** Every source-location string in the map uses ONE canonical, bare `path:line`
   syntax (see the schema for the exact shape) — never a markdown link, never prose, never two refs
   joined by a separator. `components[].source`, `entities[].source`, `glossary[].source`,
-  `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `flows[].steps[].where`,
+  `deps[].where_configured`, `edges[].where`, `flows[].steps[].where`,
   `entry_points[].source`, **`entry_points[].cadence_source`** (the line declaring a schedule; may
   be `""` = inferred), **`subsystems[].tech_source`** (the manifest line proving a tech label;
   optional), **`states.source`** (the line declaring a state machine, on entities and components;
@@ -590,10 +590,13 @@ Semantics, stated on the fields:
 - **`source` is the single canonical name for "where an element is defined"** — used uniformly across
   `components[].source`, `subsystems[].source` / `subdomains[].source`, `entities[].source`,
   `non_entity_types[].source`, `glossary[].source`, `entry_points[].source`, and `security[].source`.
-  On a component it is where the component *lives*, distinct from `entry_point` (where it's
-  *triggered* — see the schema for that distinction spelled out). An umbrella component with
-  several entry points is described by its `source` **plus** every `entry_points` row naming it, so
-  no single arbitrary file stands in for the whole thing.
+  On a component it is where the component *lives*. A component once carried a second anchor,
+  `entry_point`, meant as "where it is triggered"; it is **gone**. Every reader of it was a fallback
+  behind `source`, and on all five live maps every component carrying it carried a `source` too, so
+  the fallback never once fired — while the word collided head-on with the T4 rows this model calls
+  entry points, which are WAYS IN and not code lines at all. An umbrella component with several ways
+  in is described by its `source` **plus** every `entry_points` row naming it, so no single arbitrary
+  file stands in for the whole thing.
 - **Deps are described as external systems, never as code files.** A dep endpoint reads
   `"D4 = Google OAuth (service: Google OAuth 2.0 endpoints)"` — its `kind` + `type` — not a source
   anchor; a component calling the real external system is never described through some local

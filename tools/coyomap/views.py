@@ -115,7 +115,7 @@ def _source_line(source: str) -> str:
 
 
 def _anchor_link(href: str | None) -> str:
-    """A bare `path:line` anchor (components[].entry_point, deps[].where_configured, edges[].where,
+    """A bare `path:line` anchor (deps[].where_configured, edges[].where,
     entry_points[].source) as a markdown-link table cell, labelled with its basename — so the
     generated view stays clickable even though the model itself stores these bare, like
     `Entity.source`."""
@@ -265,11 +265,18 @@ def _store_str(st: Store | None) -> str:
 
 
 def _component_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
-    """T1's column set: the canonical six, plus Conf./Files/Evidence when any component states one,
-    plus the union of authored extra columns (sorted — deterministic)."""
+    """T1's column set: the canonical five, plus Conf./Files/Evidence when any component states one,
+    plus the union of authored extra columns (sorted — deterministic).
+
+    NO "ENTRY POINT" COLUMN. It held a `path:line` — where a component's code STARTS — and `source`
+    replaced it: every reader of it was a fallback behind `source`, and on all five live maps every
+    component carrying it carried a `source` too, so the fallback never once fired. It also collided
+    head-on with the T4 rows this map calls entry points, which are ways in and not code lines at
+    all: a component's page printed "Entry point: cli.py:139" a few lines above "Triggered by · 10
+    ways in", one word meaning two things on one screen."""
     with_conf = any(c.confidence for c in m.components)
     extra = sorted({k for c in m.components for k in c.extra})
-    headers = ["ID", "Component", "Subsystem", "Purpose", "Entry point", "Depends on"]
+    headers = ["ID", "Component", "Subsystem", "Purpose", "Depends on"]
     if with_conf:
         headers.append("Conf.")
     if any(c.files for c in m.components):
@@ -405,7 +412,7 @@ def model_to_markdown(m: ProjectModel) -> str:
         headers, with_conf, extra = _component_headers(m)
         rows = []
         for c in m.components:
-            row = [f"**{c.id}**", c.name, c.subsystem or "", c.purpose, _anchor_link(c.entry_point),
+            row = [f"**{c.id}**", c.name, c.subsystem or "", c.purpose,
                    c.depends_on]
             if with_conf:
                 row.append(c.confidence)
@@ -1145,13 +1152,12 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
     for c in m.components:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
-                  "Entry point": c.entry_point or "",
                   **({"Runs in": ", ".join(c.runs_in)} if c.runs_in else {}),
                   **({"States": _states_str(c.states)} if c.states else {}),
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
         # `source` is the v2 canonical home; `entry_point` (also bare) is the next best single
         # location; only then fall back to hunting a markdown link in the free-text cells.
-        href = c.source or c.entry_point or _first_href(c.purpose, c.depends_on)
+        href = c.source or _first_href(c.purpose, c.depends_on)
         node = _node(c, "component", c.name, href, fields, c.subsystem)
         node.files = _component_files(c)
         node.entry_points = eps_by_comp.get(c.id, [])

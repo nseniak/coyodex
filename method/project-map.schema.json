@@ -564,14 +564,6 @@
         "purpose": {
           "type": "string"
         },
-        "entry_point": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
-          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). Where the component is TRIGGERED \u2014 distinct from `source` (where it LIVES)."
-        },
         "depends_on": {
           "type": "string"
         },

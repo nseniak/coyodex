@@ -139,7 +139,7 @@ def make_model(extra_order: tuple[str, ...] = ("Zeta", "Alpha")) -> ProjectModel
     extra: dict[str, object] = {k: k.lower() for k in extra_order}
     m.components = [
         Component(id="C1", name="Viewer", subsystem="S1", purpose="shows orders",
-                  entry_point="src/viewer.py:1", extra=extra),
+                  extra=extra),
         Component(id="C2", name="Store", subsystem="S1", purpose="persists orders"),
     ]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database",

@@ -223,119 +223,119 @@ why: terminal — purges everything created above
 
 ## T1 — Components
 
-| ID | Component | Subsystem | Purpose | Entry point | Depends on |
-|---|---|---|---|---|---|
-| **C1** | App factory / wiring spine | S1 | Builds the FastAPI app, mounts every sub-app, runs lifespan background loops | [app.py](backend/src/mcpolis/entrypoints/app.py:893) | C8 C21 C2 C3 |
-| **C2** | Gateway MCP app builder | S2 | Wraps `/mcp` with bearer auth + org-pin + slug-aware metadata middleware | [app.py](backend/src/mcpolis/entrypoints/app.py:296) | C72 C5 C12 C111 |
-| **C3** | Admin MCP app builder | S3 | Wraps `/admin-mcp/{slug}` with per-org admin-role gate | [app.py](backend/src/mcpolis/entrypoints/app.py:452) | C72 C6 C23 |
-| **C4** | Superadmin MCP app builder | S3 | Wraps `/admin-mcp/system` with email-allowlist gate (cloud only) | [app.py](backend/src/mcpolis/entrypoints/app.py:602) | C72 C7 |
-| **C5** | Gateway controller (MCP server) | S2 | Low-level MCP server: list/call tools, list/read resources, prompts | [gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:281) | C21 C24 C25 C45 |
-| **C6** | Admin MCP controller | S3 | ~40 admin tools: upstream CRUD/connect, users, roles, audit | [admin_mcp_controller.py](backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99) | C21 C26 C22 C33 |
-| **C7** | Superadmin MCP controller | S3 | 4 cross-org tools: list/get org, system status, delete org | [superadmin_controller.py](backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:19) | C22 C55 |
-| **C8** | Storage factory | S1 | Picks file (standalone) vs Mongo/Redis (cloud) repos; builds StorageBundle | [storage_factory.py](backend/src/mcpolis/entrypoints/storage_factory.py:180) | C49 C108 C109 C107 |
-| **C9** | Lifecycle / drain coordinator | S1 | Graceful SIGTERM drain; drives `/healthz` 503 while draining | [lifecycle.py](backend/src/mcpolis/entrypoints/lifecycle.py:24) |  |
-| **C10** | Slug-aware OAuth helpers | S2 | Per-request protected-resource metadata + `WWW-Authenticate` from org slug | [slug_aware_oauth.py](backend/src/mcpolis/entrypoints/slug_aware_oauth.py:44) |  |
-| **C11** | Org-context middleware | S15 | Resolves `/mcp/{slug}` → org_id, rewrites path, anti-enumeration 401 | [org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py:111) | C55 C21 |
-| **C12** | Service-token org-pin middleware | S13 | Pins `svct_` bearers to their org; slug mismatch 401s, fails closed | [service_token_pin.py](backend/src/mcpolis/entrypoints/middleware/service_token_pin.py:39) |  |
-| **C13** | Rate-limit middleware (built, unwired) | S14 | Per-category limiter returning 429; present but not installed today | [rate_limit_middleware.py](backend/src/mcpolis/entrypoints/middleware/rate_limit_middleware.py:123) | C109 |
-| **C14** | Dashboard REST API router | S4 | Composes 14 per-concern `/api/*` routers (upstreams, roles, users, audit…) | [dashboard_api.py](backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73) | C21 C26 C22 C41 |
-| **C15** | Dashboard auth (session cookie) | S15 | Browser login/logout/callback; HMAC session cookie; require_admin | [dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217) | C101 C110 |
-| **C16** | Gateway Google OAuth callback | S13 | Public callback completing the gateway bearer Google flow | [google_callback.py](backend/src/mcpolis/entrypoints/routes/google_callback.py:56) | C72 |
-| **C17** | Org signup / public routes | S4 | `/api/orgs` create/list/switch/info/delete + one public invite read | [org_routes.py](backend/src/mcpolis/entrypoints/routes/org_routes.py:82) | C22 |
-| **C18** | Upstream OAuth callback | S13 | Public callback completing per-MCP upstream OAuth via signed state | [upstream_oauth_callback.py](backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:182) | C100 C27 |
-| **C19** | Sandbox / debug / superadmin REST routers | S4 | Sandbox caps, observability smoke (404-masked), client-errors, superadmin API | [sandbox_routes.py](backend/src/mcpolis/entrypoints/routes/sandbox_routes.py:80) | C37 C62 |
-| **C20** | Demo MCP server (dev) | S2 | Bundled "kitchen sink" FastMCP at `/dev/mcp-demo` with 5 widget kinds | [demo_mcp_server.py](backend/src/mcpolis/dev/demo_mcp_server.py:512) |  |
-| **C21** | OrgRuntimeManager | S1 | Per-org runtime lifecycle: build/cache policy_engine, registry, clients, router | [org_runtime.py](backend/src/mcpolis/domain/services/org_runtime.py:100) | C23 C24 C25 C64 |
-| **C22** | OrgService | S6 | Org/membership CRUD, creation seeding, org-deletion cascade | [org_service.py](backend/src/mcpolis/domain/services/org_service.py:113) | C55 C54 C57 C62 |
-| **C23** | PolicyEngine | S14 | Role→tool authorization, argument checks, is_admin | [policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py:61) | C42 C54 |
-| **C24** | ToolRegistry | S2 | Per-upstream tool/resource/prompt discovery + cache; prefixed wire tools | [tool_registry.py](backend/src/mcpolis/domain/services/tool_registry.py:103) | C64 C61 |
-| **C25** | ToolRouter | S2 | Route a gateway call to the right upstream session with heal+retry+audit | [tool_router.py](backend/src/mcpolis/domain/services/tool_router.py:256) | C23 C64 C62 C104 |
-| **C26** | UpstreamConfigService | S16 | Upstream CRUD with side effects; secret-scan on save; cascade purge | [upstream_config_service.py](backend/src/mcpolis/domain/services/upstream_config_service.py:28) | C53 C40 C64 C24 |
-| **C27** | UpstreamConnectionService | S17 | OAuth connect/reconnect/heal of live upstream sessions | [upstream_connection_service.py](backend/src/mcpolis/domain/services/upstream_connection_service.py:735) | C64 C47 C28 C100 |
-| **C28** | OAuthRefresh | S18 | Background near-expiry token refresh; delete + notify on invalid_grant | [oauth_refresh.py](backend/src/mcpolis/domain/services/oauth_refresh.py:105) | C47 C107 C103 |
-| **C29** | OAuthLiveness | S18 | Periodic `list_tools` probe of live sessions; feed dead ones to reconnect | [oauth_liveness.py](backend/src/mcpolis/domain/services/oauth_liveness.py:76) | C64 C27 |
-| **C30** | UpstreamHealthCheck | S18 | Send signed re-auth email for tokens flagged invalid_grant | [upstream_health_check.py](backend/src/mcpolis/domain/services/upstream_health_check.py:173) | C47 C103 |
-| **C31** | UpstreamRuntimeHash | S16 | SHA-256 fingerprint of runtime inputs → dashboard "dirty / restart" banner | [upstream_runtime_hash.py](backend/src/mcpolis/domain/services/upstream_runtime_hash.py:108) |  |
-| **C32** | OAuthAppResolver | S13 | Match an upstream URL host to configured instance OAuth app credentials | [oauth_app_resolver.py](backend/src/mcpolis/domain/services/oauth_app_resolver.py:9) | C52 |
-| **C33** | PlanGates | S14 | Assert plan limits (seats, upstreams, roles); raise 402 + analytics event | [plan_gates.py](backend/src/mcpolis/domain/services/plan_gates.py:93) | C34 C104 |
-| **C34** | PlanPolicy | S14 | Source of truth for per-plan limits + PlanLimitExceeded | [plan_policy.py](backend/src/mcpolis/domain/services/plan_policy.py:34) |  |
-| **C35** | PolicyNotifier | S2 | Debounced push of `tools/list_changed` to affected gateway sessions | [policy_notifier.py](backend/src/mcpolis/domain/services/policy_notifier.py:43) | C111 C24 |
-| **C36** | SandboxService (boundary) | S8 | The Protocol every stdio sandbox backend implements + shared value types | [sandbox_service.py](backend/src/mcpolis/domain/services/sandbox_service.py:277) |  |
-| **C37** | SandboxResolver | S8 | Decide which sandbox provider an org's stdio session uses | [sandbox_resolver.py](backend/src/mcpolis/domain/services/sandbox_resolver.py:18) |  |
-| **C38** | SandboxReconciler (policy) | S8 | Reconcile live vs persisted sandboxes; orphan-kill + snapshot GC policy | [sandbox_reconciler.py](backend/src/mcpolis/domain/services/sandbox_reconciler.py:58) |  |
-| **C39** | SandboxPath | S8 | Confine a materialize-file path to the sandbox home (reject traversal) | [sandbox_path.py](backend/src/mcpolis/domain/services/sandbox_path.py:27) |  |
-| **C40** | SecretScanner | S14 | Heuristic raw-credential detection in upstream env/headers at save time | [secret_scanner.py](backend/src/mcpolis/domain/services/secret_scanner.py:119) |  |
-| **C41** | ServiceTokenService | S13 | Service-token lifecycle: mint / list / revoke / verify | [service_token_service.py](backend/src/mcpolis/domain/services/service_token_service.py:42) | C57 |
-| **C42** | SettingsResolver | S14 | Resolve effective MCP/tool access for a user or role, failing closed | [settings_resolver.py](backend/src/mcpolis/domain/services/settings_resolver.py:33) | C54 |
-| **C43** | StdoutFraming | S8 | Bounded newline-framing of a sandboxed MCP's stdout into JSON-RPC lines | [stdout_framing.py](backend/src/mcpolis/domain/services/stdout_framing.py:26) |  |
-| **C44** | SystemVariables / TemplateVarSubstitution | S8 | `${NAME}` substitution into command/args/env/url/headers at launch | [template_var_substitution.py](backend/src/mcpolis/domain/services/template_var_substitution.py:64) | C58 |
-| **C45** | UriWrapping / UrlSafety | S2 | Wrap/unwrap upstream resource & widget URIs; SSRF deny-list on URLs | [uri_wrapping.py](backend/src/mcpolis/domain/services/uri_wrapping.py:129) |  |
-| **C46** | ConnectionStore port + OAuthToken | S17 | Abstract port for stored upstream tokens + connection state; OAuthToken type | [connection_store.py](backend/src/mcpolis/adapters/repositories/connection_store.py:27) |  |
-| **C47** | Connection repository (file + mongo) | S17 | Stored-token store; mongo encrypts access/refresh tokens | [file_connection_store.py](backend/src/mcpolis/adapters/repositories/file_connection_store.py:73) | C46 C49 |
-| **C48** | Field encryption (AES-256-GCM) | S9 | HKDF-derive key; encrypt/decrypt field values with `enc:v1:` prefix | [encryption.py](backend/src/mcpolis/adapters/repositories/encryption.py:54) |  |
-| **C49** | Mongo client + OrgScopedCollection | S9 | The sole class touching a raw collection; injects org_id, transparent crypto | [mongo_client.py](backend/src/mcpolis/adapters/repositories/mongo_client.py:110) | C48 |
-| **C50** | mcp.json store | S16 | Read/write upstreams in standard mcpServers JSON (file, single-org) | [mcp_json_store.py](backend/src/mcpolis/adapters/repositories/mcp_json_store.py:23) |  |
-| **C51** | Upstream-config loader / merger | S16 | Merge mcp.json + options into UpstreamDefinitions; flatten import blobs | [upstream_config_loader.py](backend/src/mcpolis/adapters/repositories/upstream_config_loader.py:169) | C52 |
-| **C52** | OAuth-apps loader | S16 | Load instance OAuth app credentials from env JSON or file | [oauth_apps_loader.py](backend/src/mcpolis/adapters/repositories/oauth_apps_loader.py:29) |  |
-| **C53** | Upstream-config repository (file + mongo) | S16 | Persist UpstreamDefinitions; mongo encrypts config/options blobs | [file_upstream_config_store.py](backend/src/mcpolis/adapters/repositories/file_upstream_config_store.py:24) | C49 |
-| **C54** | Config / policy repository (file + mongo) | S14 | Persist roles, users, options (one settings doc per org) | [file_config_store.py](backend/src/mcpolis/adapters/repositories/file_config_store.py:20) | C49 |
-| **C55** | Organization repository (file + mongo) | S6 | Persist orgs + memberships; mongo enforces unique slug | [file_organization_repository.py](backend/src/mcpolis/adapters/repositories/file_organization_repository.py:32) | C49 |
-| **C56** | OAuth-state repository (file + mongo) | S13 | Persist gateway OAuth provider state (clients, tokens) per org | [file_oauth_state_repository.py](backend/src/mcpolis/adapters/repositories/file_oauth_state_repository.py:32) | C49 |
-| **C57** | Service-token repository (file + mongo) | S13 | Persist `svct_` registry (sha256 hash + org/label/role) | [file_service_token_repository.py](backend/src/mcpolis/adapters/repositories/file_service_token_repository.py:71) | C49 |
-| **C58** | Template-var repository (file + mongo) | S8 | Persist per-MCP variables/secrets; mongo encrypts the value | [file_template_var_repository.py](backend/src/mcpolis/adapters/repositories/file_template_var_repository.py:45) | C49 |
-| **C59** | Sandbox-file repository (file + mongo) | S8 | Persist per-MCP uploaded files; mongo encrypts contents | [file_sandbox_file_repository.py](backend/src/mcpolis/adapters/repositories/file_sandbox_file_repository.py:53) | C49 |
-| **C60** | Sandbox-persistence repository (inmem + mongo) | S8 | Track current sandbox / paused-snapshot ref per (org,upstream) | [mongo_sandbox_persistence_repository.py](backend/src/mcpolis/adapters/repositories/mongo_sandbox_persistence_repository.py:46) | C49 |
-| **C61** | Tool-catalog repository (file + mongo) | S16 | Persist discovered tool catalog so the UI survives restarts | [file_tool_catalog_store.py](backend/src/mcpolis/adapters/repositories/file_tool_catalog_store.py:18) | C49 |
-| **C62** | Audit repository (file + mongo) | S9 | Append-only audit log + search; mongo TTL by retention days | [file_audit_repository.py](backend/src/mcpolis/adapters/repositories/file_audit_repository.py:22) | C49 |
-| **C63** | One-shot Mongo migrations | S9 | Irreversible at-rest migrations (encrypt upstreams; normalize sandbox refs) | [upstreams_encrypt_phase_a.py](backend/src/mcpolis/adapters/repositories/migrations/upstreams_encrypt_phase_a.py:211) | C49 |
-| **C64** | UpstreamClientManager | S17 | Owns all long-lived MCP sessions; state machine, stall-heal, idle sweep | [client_manager.py](backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103) | C65 C66 C67 C44 |
-| **C65** | HTTP upstream MCP client | S17 | One streamable-http MCP connection over an SSRF-safe transport | [http_adapter.py](backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:36) | C67 C45 |
-| **C66** | stdio upstream MCP client | S17 | One stdio MCP session over the SandboxService boundary | [stdio_adapter.py](backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:178) | C36 C43 |
-| **C67** | Connection-task base + SSRF transport + log buffers | S17 | Shared task lifecycle; re-validating httpx transport; redacting stderr buffers | [connection_task_base.py](backend/src/mcpolis/adapters/upstream_clients/connection_task_base.py:57) | C45 |
-| **C68** | E2B sandbox service | S8 | Prod SandboxService over E2B: session/pause/resume, volumes, docker daemon | [service.py](backend/src/mcpolis/adapters/sandbox_e2b/service.py:123) | C36 C70 C60 |
-| **C69** | E2B sandbox reconciler | S8 | Startup sweep killing orphan sandboxes / GC unknown snapshots | [reconciler.py](backend/src/mcpolis/adapters/sandbox_e2b/reconciler.py:34) | C60 C38 |
-| **C70** | E2B template grid | S8 | The 24-template grid (node/python/docker × 8 CPU/RAM) + capabilities | [template_grid.py](backend/src/mcpolis/adapters/sandbox_e2b/template_grid.py:35) |  |
-| **C71** | Local-subprocess sandbox service | S8 | Dev-only no-isolation SandboxService spawning a host subprocess | [local_subprocess.py](backend/src/mcpolis/adapters/sandbox_services/local_subprocess.py:64) | C36 |
-| **C72** | Gateway OAuth provider + service-token verifier | S13 | Issue gateway bearers via Google; route `svct_` to the token verifier | [mcp_gateway_oauth_provider.py](backend/src/mcpolis/adapters/auth/mcp_gateway_oauth_provider.py:76) | C41 C56 |
-| **C73** | SPA root + router | S23 | Route table, QueryClient, AuthContext; DefaultRedirect resolves `/app` per role | [App.tsx](frontend/src/App.tsx:127) | C74 C76 |
-| **C74** | API client / fetch layer | S23 | `apiFetch` with cookie auth + X-Org-Slug; ApiError/PlanLimitError typing | [client.ts](frontend/src/api/client.ts:70) | C14 C15 C17 |
-| **C75** | React-query resource hooks | S23 | `useUpstreams` / `useFeatures` / `useOrgSlug` org-scoped caches | [useUpstreams.ts](frontend/src/hooks/useUpstreams.ts:6) | C74 |
-| **C76** | Auth / session context | S23 | Loads `/api/auth/me`, holds user, wires Sentry + analytics, 401 handler | [useAuth.ts](frontend/src/hooks/useAuth.ts:33) | C74 C99 |
-| **C77** | Upstreams page | S19 | Add HTTP/stdio MCP, sandbox sizing, import, live status via SSE | [UpstreamsPage.tsx](frontend/src/pages/admin/UpstreamsPage.tsx:1) | C75 C98 C97 |
-| **C78** | Upstream detail page + LogViewer | S19 | Single-MCP edit; inline log stream over SSE; variables & files managers | [UpstreamDetailPage.tsx](frontend/src/pages/admin/UpstreamDetailPage.tsx:1) | C74 C84 C85 |
-| **C79** | Roles & Access page | S19 | Per-role MCP access, 3-state tool toggles, category defaults, argument checks | [AccessPage.tsx](frontend/src/pages/admin/AccessPage.tsx:1) | C80 C74 |
-| **C80** | McpAccessTable + ToolAccessSection | S19 | Shared access table reused by Access + User pages | [McpAccessTable.tsx](frontend/src/components/admin/McpAccessTable.tsx:14) | C92 |
-| **C81** | Users / Team page | S19 | List/add members, assign role, invite link, remove; per-user detail | [UsersPage.tsx](frontend/src/pages/admin/UsersPage.tsx:1) | C74 C80 C93 |
-| **C82** | Service Tokens page | S19 | Mint/revoke `svct_` tokens scoped to one org+role; value shown once | [ServiceTokensPage.tsx](frontend/src/pages/admin/ServiceTokensPage.tsx:1) | C74 C93 |
-| **C83** | Audit log page | S19 | Filterable audit table with live SSE tail | [AuditPage.tsx](frontend/src/pages/admin/AuditPage.tsx:1) | C74 C97 |
-| **C84** | Template Variables manager | S19 | Per-MCP variable/password editor with write-time redaction | [TemplateVarsManager.tsx](frontend/src/components/TemplateVarsManager.tsx:1) | C74 |
-| **C85** | Sandbox files manager | S19 | Per-MCP file editor; system-variable hints | [SandboxFilesManager.tsx](frontend/src/components/SandboxFilesManager.tsx:1) | C74 |
-| **C86** | Org switcher / org context | S23 | Header dropdown switching active org; slug drives scoped queries | [OrgSwitcher.tsx](frontend/src/components/layout/OrgSwitcher.tsx:1) | C74 |
-| **C87** | Gateway connection-info page | S19 | Shows `/mcp` URL + config snippet, connected users, admin disconnect | [GatewayPage.tsx](frontend/src/pages/admin/GatewayPage.tsx:1) | C74 |
-| **C88** | Marketing site + MarketingLayout | S21 | Public landing/pricing/legal pages under a buyer-shaped shell | [MarketingLayout.tsx](frontend/src/components/layout/MarketingLayout.tsx:1) | C73 |
-| **C89** | Docs page (markdown renderer) | S21 | `/docs/:slug` renders user docs with a curated sidebar + hash anchors | [DocsPage.tsx](frontend/src/pages/marketing/DocsPage.tsx:1) | C73 |
-| **C90** | Join / Signup / OAuth flow | S20 | Invite landing, org-creation signup, per-MCP OAuth popup | [JoinPage.tsx](frontend/src/pages/JoinPage.tsx:1) | C74 |
-| **C91** | User dashboard (Connect + My Tools) | S20 | End-user gateway setup + per-MCP connect/disconnect | [ConnectPage.tsx](frontend/src/pages/user/ConnectPage.tsx:1) | C74 C97 |
-| **C92** | Shared UI kit | S23 | base-ui/tailwind primitives: button, table, toggles, id-input | [button.tsx](frontend/src/components/ui/button.tsx:1) |  |
-| **C93** | Shared dialogs + badges | S23 | Confirm/Import/Promo/Secret/Upgrade dialogs; status/role badges; dirty banner | [ConfirmDialog.tsx](frontend/src/components/ConfirmDialog.tsx:1) | C92 |
-| **C94** | Dashboard shell (layout + sidebar) | S23 | Auth-gated layout + role-aware sidebar nav | [DashboardLayout.tsx](frontend/src/components/layout/DashboardLayout.tsx:15) | C76 C86 |
-| **C95** | Admin MCP page | S19 | Read-only listing of the `/admin-mcp` tool catalog | [AdminMcpPage.tsx](frontend/src/pages/admin/AdminMcpPage.tsx:1) | C74 |
-| **C96** | Superadmin dashboard | S22 | Cross-org browse + soft actions, gated by SuperadminGuard | [OverviewPage.tsx](frontend/src/pages/superadmin/OverviewPage.tsx:1) | C74 |
-| **C97** | EventSource / SSE hook | S23 | `useEventSource` to `/api/events` backing live status / audit / connect | [useEventSource.ts](frontend/src/hooks/useEventSource.ts:11) | C14 |
-| **C98** | Upstream action + config widgets | S19 | Action buttons, capacity pills, sandbox select, JSON editor, tool table | [UpstreamActionButtons.tsx](frontend/src/components/UpstreamActionButtons.tsx:1) | C74 |
-| **C99** | Cross-cutting libs (analytics/sentry/errors) | S23 | Mixpanel, Sentry, client-error reporter, plan-limit upgrade opener, i18n | [analytics.ts](frontend/src/lib/analytics.ts:1) | D8 D7 |
-| **C100** | Pending-auth coordinator | S13 | Coordinate the upstream OAuth callback dance via signed HMAC state | [pending_auth.py](backend/src/mcpolis/adapters/auth/pending_auth.py:169) | C27 |
-| **C101** | Dashboard Google OAuth provider + dev stub | S15 | Sign admins into the dashboard via Google (httpx); dev email-picker stub | [google_oauth_provider.py](backend/src/mcpolis/adapters/auth/google_oauth_provider.py:25) | D4 |
-| **C102** | MCP SDK token-storage adapter | S13 | Implement the mcp SDK TokenStorage port over ConnectionStore | [mcp_token_storage.py](backend/src/mcpolis/adapters/auth/mcp_token_storage.py:23) | C46 |
-| **C103** | Email sender (smtp + stub) | S11 | Outbound mail via aiosmtplib; stub records without sending | [smtp_email_sender.py](backend/src/mcpolis/adapters/email/smtp_email_sender.py:39) | D6 |
-| **C104** | Analytics client (Mixpanel) | S11 | Fire-and-forget product analytics with hashed emails | [analytics_client.py](backend/src/mcpolis/adapters/observability/analytics_client.py:25) | D8 |
-| **C105** | Sentry setup | S11 | Init Sentry with user/org enrichment + header scrubbing | [sentry_setup.py](backend/src/mcpolis/adapters/observability/sentry_setup.py:158) | D7 |
-| **C106** | Structlog setup + redact processor | S11 | Configure one JSON log stream; mask secret-shaped keys | [structlog_setup.py](backend/src/mcpolis/adapters/observability/structlog_setup.py:46) | D20 |
-| **C107** | Distributed lock (mongo + noop) | S10 | Cross-process lock for cloud token refresh; noop for standalone | [distributed_lock_mongo.py](backend/src/mcpolis/adapters/distributed_lock_mongo.py:25) | D1 |
-| **C108** | Event stream (inprocess + redis) | S10 | SSE pub/sub: asyncio queues (standalone) vs Redis channels (cloud) | [event_stream_redis.py](backend/src/mcpolis/adapters/event_stream_redis.py:73) | D2 |
-| **C109** | Rate limiter (inprocess + redis) | S10 | Sliding-window limiter: deque vs Redis ZSET+Lua; fails open | [rate_limiter_redis.py](backend/src/mcpolis/adapters/rate_limiter_redis.py:88) | D2 |
-| **C110** | Session revocation (inprocess + redis) | S15 | Logged-out-cookie deny-list keyed by jti; fails open | [session_revocation_redis.py](backend/src/mcpolis/adapters/session_revocation_redis.py:37) | D2 |
-| **C111** | Gateway session registry | S2 | In-process map of gateway session_id → (org,user) | [gateway_session_registry.py](backend/src/mcpolis/adapters/gateway_session_registry.py:14) |  |
+| ID | Component | Subsystem | Purpose | Depends on |
+|---|---|---|---|---|
+| **C1** | App factory / wiring spine | S1 | Builds the FastAPI app, mounts every sub-app, runs lifespan background loops | C8 C21 C2 C3 |
+| **C2** | Gateway MCP app builder | S2 | Wraps `/mcp` with bearer auth + org-pin + slug-aware metadata middleware | C72 C5 C12 C111 |
+| **C3** | Admin MCP app builder | S3 | Wraps `/admin-mcp/{slug}` with per-org admin-role gate | C72 C6 C23 |
+| **C4** | Superadmin MCP app builder | S3 | Wraps `/admin-mcp/system` with email-allowlist gate (cloud only) | C72 C7 |
+| **C5** | Gateway controller (MCP server) | S2 | Low-level MCP server: list/call tools, list/read resources, prompts | C21 C24 C25 C45 |
+| **C6** | Admin MCP controller | S3 | ~40 admin tools: upstream CRUD/connect, users, roles, audit | C21 C26 C22 C33 |
+| **C7** | Superadmin MCP controller | S3 | 4 cross-org tools: list/get org, system status, delete org | C22 C55 |
+| **C8** | Storage factory | S1 | Picks file (standalone) vs Mongo/Redis (cloud) repos; builds StorageBundle | C49 C108 C109 C107 |
+| **C9** | Lifecycle / drain coordinator | S1 | Graceful SIGTERM drain; drives `/healthz` 503 while draining |  |
+| **C10** | Slug-aware OAuth helpers | S2 | Per-request protected-resource metadata + `WWW-Authenticate` from org slug |  |
+| **C11** | Org-context middleware | S15 | Resolves `/mcp/{slug}` → org_id, rewrites path, anti-enumeration 401 | C55 C21 |
+| **C12** | Service-token org-pin middleware | S13 | Pins `svct_` bearers to their org; slug mismatch 401s, fails closed |  |
+| **C13** | Rate-limit middleware (built, unwired) | S14 | Per-category limiter returning 429; present but not installed today | C109 |
+| **C14** | Dashboard REST API router | S4 | Composes 14 per-concern `/api/*` routers (upstreams, roles, users, audit…) | C21 C26 C22 C41 |
+| **C15** | Dashboard auth (session cookie) | S15 | Browser login/logout/callback; HMAC session cookie; require_admin | C101 C110 |
+| **C16** | Gateway Google OAuth callback | S13 | Public callback completing the gateway bearer Google flow | C72 |
+| **C17** | Org signup / public routes | S4 | `/api/orgs` create/list/switch/info/delete + one public invite read | C22 |
+| **C18** | Upstream OAuth callback | S13 | Public callback completing per-MCP upstream OAuth via signed state | C100 C27 |
+| **C19** | Sandbox / debug / superadmin REST routers | S4 | Sandbox caps, observability smoke (404-masked), client-errors, superadmin API | C37 C62 |
+| **C20** | Demo MCP server (dev) | S2 | Bundled "kitchen sink" FastMCP at `/dev/mcp-demo` with 5 widget kinds |  |
+| **C21** | OrgRuntimeManager | S1 | Per-org runtime lifecycle: build/cache policy_engine, registry, clients, router | C23 C24 C25 C64 |
+| **C22** | OrgService | S6 | Org/membership CRUD, creation seeding, org-deletion cascade | C55 C54 C57 C62 |
+| **C23** | PolicyEngine | S14 | Role→tool authorization, argument checks, is_admin | C42 C54 |
+| **C24** | ToolRegistry | S2 | Per-upstream tool/resource/prompt discovery + cache; prefixed wire tools | C64 C61 |
+| **C25** | ToolRouter | S2 | Route a gateway call to the right upstream session with heal+retry+audit | C23 C64 C62 C104 |
+| **C26** | UpstreamConfigService | S16 | Upstream CRUD with side effects; secret-scan on save; cascade purge | C53 C40 C64 C24 |
+| **C27** | UpstreamConnectionService | S17 | OAuth connect/reconnect/heal of live upstream sessions | C64 C47 C28 C100 |
+| **C28** | OAuthRefresh | S18 | Background near-expiry token refresh; delete + notify on invalid_grant | C47 C107 C103 |
+| **C29** | OAuthLiveness | S18 | Periodic `list_tools` probe of live sessions; feed dead ones to reconnect | C64 C27 |
+| **C30** | UpstreamHealthCheck | S18 | Send signed re-auth email for tokens flagged invalid_grant | C47 C103 |
+| **C31** | UpstreamRuntimeHash | S16 | SHA-256 fingerprint of runtime inputs → dashboard "dirty / restart" banner |  |
+| **C32** | OAuthAppResolver | S13 | Match an upstream URL host to configured instance OAuth app credentials | C52 |
+| **C33** | PlanGates | S14 | Assert plan limits (seats, upstreams, roles); raise 402 + analytics event | C34 C104 |
+| **C34** | PlanPolicy | S14 | Source of truth for per-plan limits + PlanLimitExceeded |  |
+| **C35** | PolicyNotifier | S2 | Debounced push of `tools/list_changed` to affected gateway sessions | C111 C24 |
+| **C36** | SandboxService (boundary) | S8 | The Protocol every stdio sandbox backend implements + shared value types |  |
+| **C37** | SandboxResolver | S8 | Decide which sandbox provider an org's stdio session uses |  |
+| **C38** | SandboxReconciler (policy) | S8 | Reconcile live vs persisted sandboxes; orphan-kill + snapshot GC policy |  |
+| **C39** | SandboxPath | S8 | Confine a materialize-file path to the sandbox home (reject traversal) |  |
+| **C40** | SecretScanner | S14 | Heuristic raw-credential detection in upstream env/headers at save time |  |
+| **C41** | ServiceTokenService | S13 | Service-token lifecycle: mint / list / revoke / verify | C57 |
+| **C42** | SettingsResolver | S14 | Resolve effective MCP/tool access for a user or role, failing closed | C54 |
+| **C43** | StdoutFraming | S8 | Bounded newline-framing of a sandboxed MCP's stdout into JSON-RPC lines |  |
+| **C44** | SystemVariables / TemplateVarSubstitution | S8 | `${NAME}` substitution into command/args/env/url/headers at launch | C58 |
+| **C45** | UriWrapping / UrlSafety | S2 | Wrap/unwrap upstream resource & widget URIs; SSRF deny-list on URLs |  |
+| **C46** | ConnectionStore port + OAuthToken | S17 | Abstract port for stored upstream tokens + connection state; OAuthToken type |  |
+| **C47** | Connection repository (file + mongo) | S17 | Stored-token store; mongo encrypts access/refresh tokens | C46 C49 |
+| **C48** | Field encryption (AES-256-GCM) | S9 | HKDF-derive key; encrypt/decrypt field values with `enc:v1:` prefix |  |
+| **C49** | Mongo client + OrgScopedCollection | S9 | The sole class touching a raw collection; injects org_id, transparent crypto | C48 |
+| **C50** | mcp.json store | S16 | Read/write upstreams in standard mcpServers JSON (file, single-org) |  |
+| **C51** | Upstream-config loader / merger | S16 | Merge mcp.json + options into UpstreamDefinitions; flatten import blobs | C52 |
+| **C52** | OAuth-apps loader | S16 | Load instance OAuth app credentials from env JSON or file |  |
+| **C53** | Upstream-config repository (file + mongo) | S16 | Persist UpstreamDefinitions; mongo encrypts config/options blobs | C49 |
+| **C54** | Config / policy repository (file + mongo) | S14 | Persist roles, users, options (one settings doc per org) | C49 |
+| **C55** | Organization repository (file + mongo) | S6 | Persist orgs + memberships; mongo enforces unique slug | C49 |
+| **C56** | OAuth-state repository (file + mongo) | S13 | Persist gateway OAuth provider state (clients, tokens) per org | C49 |
+| **C57** | Service-token repository (file + mongo) | S13 | Persist `svct_` registry (sha256 hash + org/label/role) | C49 |
+| **C58** | Template-var repository (file + mongo) | S8 | Persist per-MCP variables/secrets; mongo encrypts the value | C49 |
+| **C59** | Sandbox-file repository (file + mongo) | S8 | Persist per-MCP uploaded files; mongo encrypts contents | C49 |
+| **C60** | Sandbox-persistence repository (inmem + mongo) | S8 | Track current sandbox / paused-snapshot ref per (org,upstream) | C49 |
+| **C61** | Tool-catalog repository (file + mongo) | S16 | Persist discovered tool catalog so the UI survives restarts | C49 |
+| **C62** | Audit repository (file + mongo) | S9 | Append-only audit log + search; mongo TTL by retention days | C49 |
+| **C63** | One-shot Mongo migrations | S9 | Irreversible at-rest migrations (encrypt upstreams; normalize sandbox refs) | C49 |
+| **C64** | UpstreamClientManager | S17 | Owns all long-lived MCP sessions; state machine, stall-heal, idle sweep | C65 C66 C67 C44 |
+| **C65** | HTTP upstream MCP client | S17 | One streamable-http MCP connection over an SSRF-safe transport | C67 C45 |
+| **C66** | stdio upstream MCP client | S17 | One stdio MCP session over the SandboxService boundary | C36 C43 |
+| **C67** | Connection-task base + SSRF transport + log buffers | S17 | Shared task lifecycle; re-validating httpx transport; redacting stderr buffers | C45 |
+| **C68** | E2B sandbox service | S8 | Prod SandboxService over E2B: session/pause/resume, volumes, docker daemon | C36 C70 C60 |
+| **C69** | E2B sandbox reconciler | S8 | Startup sweep killing orphan sandboxes / GC unknown snapshots | C60 C38 |
+| **C70** | E2B template grid | S8 | The 24-template grid (node/python/docker × 8 CPU/RAM) + capabilities |  |
+| **C71** | Local-subprocess sandbox service | S8 | Dev-only no-isolation SandboxService spawning a host subprocess | C36 |
+| **C72** | Gateway OAuth provider + service-token verifier | S13 | Issue gateway bearers via Google; route `svct_` to the token verifier | C41 C56 |
+| **C73** | SPA root + router | S23 | Route table, QueryClient, AuthContext; DefaultRedirect resolves `/app` per role | C74 C76 |
+| **C74** | API client / fetch layer | S23 | `apiFetch` with cookie auth + X-Org-Slug; ApiError/PlanLimitError typing | C14 C15 C17 |
+| **C75** | React-query resource hooks | S23 | `useUpstreams` / `useFeatures` / `useOrgSlug` org-scoped caches | C74 |
+| **C76** | Auth / session context | S23 | Loads `/api/auth/me`, holds user, wires Sentry + analytics, 401 handler | C74 C99 |
+| **C77** | Upstreams page | S19 | Add HTTP/stdio MCP, sandbox sizing, import, live status via SSE | C75 C98 C97 |
+| **C78** | Upstream detail page + LogViewer | S19 | Single-MCP edit; inline log stream over SSE; variables & files managers | C74 C84 C85 |
+| **C79** | Roles & Access page | S19 | Per-role MCP access, 3-state tool toggles, category defaults, argument checks | C80 C74 |
+| **C80** | McpAccessTable + ToolAccessSection | S19 | Shared access table reused by Access + User pages | C92 |
+| **C81** | Users / Team page | S19 | List/add members, assign role, invite link, remove; per-user detail | C74 C80 C93 |
+| **C82** | Service Tokens page | S19 | Mint/revoke `svct_` tokens scoped to one org+role; value shown once | C74 C93 |
+| **C83** | Audit log page | S19 | Filterable audit table with live SSE tail | C74 C97 |
+| **C84** | Template Variables manager | S19 | Per-MCP variable/password editor with write-time redaction | C74 |
+| **C85** | Sandbox files manager | S19 | Per-MCP file editor; system-variable hints | C74 |
+| **C86** | Org switcher / org context | S23 | Header dropdown switching active org; slug drives scoped queries | C74 |
+| **C87** | Gateway connection-info page | S19 | Shows `/mcp` URL + config snippet, connected users, admin disconnect | C74 |
+| **C88** | Marketing site + MarketingLayout | S21 | Public landing/pricing/legal pages under a buyer-shaped shell | C73 |
+| **C89** | Docs page (markdown renderer) | S21 | `/docs/:slug` renders user docs with a curated sidebar + hash anchors | C73 |
+| **C90** | Join / Signup / OAuth flow | S20 | Invite landing, org-creation signup, per-MCP OAuth popup | C74 |
+| **C91** | User dashboard (Connect + My Tools) | S20 | End-user gateway setup + per-MCP connect/disconnect | C74 C97 |
+| **C92** | Shared UI kit | S23 | base-ui/tailwind primitives: button, table, toggles, id-input |  |
+| **C93** | Shared dialogs + badges | S23 | Confirm/Import/Promo/Secret/Upgrade dialogs; status/role badges; dirty banner | C92 |
+| **C94** | Dashboard shell (layout + sidebar) | S23 | Auth-gated layout + role-aware sidebar nav | C76 C86 |
+| **C95** | Admin MCP page | S19 | Read-only listing of the `/admin-mcp` tool catalog | C74 |
+| **C96** | Superadmin dashboard | S22 | Cross-org browse + soft actions, gated by SuperadminGuard | C74 |
+| **C97** | EventSource / SSE hook | S23 | `useEventSource` to `/api/events` backing live status / audit / connect | C14 |
+| **C98** | Upstream action + config widgets | S19 | Action buttons, capacity pills, sandbox select, JSON editor, tool table | C74 |
+| **C99** | Cross-cutting libs (analytics/sentry/errors) | S23 | Mixpanel, Sentry, client-error reporter, plan-limit upgrade opener, i18n | D8 D7 |
+| **C100** | Pending-auth coordinator | S13 | Coordinate the upstream OAuth callback dance via signed HMAC state | C27 |
+| **C101** | Dashboard Google OAuth provider + dev stub | S15 | Sign admins into the dashboard via Google (httpx); dev email-picker stub | D4 |
+| **C102** | MCP SDK token-storage adapter | S13 | Implement the mcp SDK TokenStorage port over ConnectionStore | C46 |
+| **C103** | Email sender (smtp + stub) | S11 | Outbound mail via aiosmtplib; stub records without sending | D6 |
+| **C104** | Analytics client (Mixpanel) | S11 | Fire-and-forget product analytics with hashed emails | D8 |
+| **C105** | Sentry setup | S11 | Init Sentry with user/org enrichment + header scrubbing | D7 |
+| **C106** | Structlog setup + redact processor | S11 | Configure one JSON log stream; mask secret-shaped keys | D20 |
+| **C107** | Distributed lock (mongo + noop) | S10 | Cross-process lock for cloud token refresh; noop for standalone | D1 |
+| **C108** | Event stream (inprocess + redis) | S10 | SSE pub/sub: asyncio queues (standalone) vs Redis channels (cloud) | D2 |
+| **C109** | Rate limiter (inprocess + redis) | S10 | Sliding-window limiter: deque vs Redis ZSET+Lua; fails open | D2 |
+| **C110** | Session revocation (inprocess + redis) | S15 | Logged-out-cookie deny-list keyed by jti; fails open | D2 |
+| **C111** | Gateway session registry | S2 | In-process map of gateway session_id → (org,user) |  |
 
 ---
 

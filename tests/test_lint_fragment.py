@@ -227,7 +227,7 @@ def test_expect_is_silent_inside_the_band_and_speaks_outside_it():
     with budgets summing to ~55 delivered 86, every slice over, and nothing noticed until the lead's
     granularity advisory after assembly."""
     m = make_fragment({"components": [
-        {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+        {"id": f"C{i}", "name": f"C{i}", "purpose": "p"}
         for i in range(1, 13)]})
     assert lint_fragment._budget_warnings(m, None) == []      # opt-in: no budget, no opinion
     assert lint_fragment._budget_warnings(m, 10) == []        # 12 vs 10 is inside 0.5x-1.5x
@@ -248,7 +248,7 @@ def test_a_slice_over_its_budget_says_so_in_the_VERDICT_line(tmp_path, capsys):
     Nobody lost the signal. This is redundancy for a `head -1` reader, not a repair."""
     frag = tmp_path / "h6.json"
     frag.write_text(json.dumps({"components": [
-        {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+        {"id": f"C{i}", "name": f"C{i}", "purpose": "p"}
         for i in range(1, 13)]}), encoding="utf-8")
     assert lint_fragment.main(["--expect", "4", str(frag)]) == 0     # advisory: still exit 0
     out = capsys.readouterr()
@@ -261,7 +261,7 @@ def test_the_verdict_note_and_the_warning_share_one_threshold(tmp_path, capsys):
     def frag(n: int) -> str:
         p = tmp_path / f"f{n}.json"
         p.write_text(json.dumps({"components": [
-            {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+            {"id": f"C{i}", "name": f"C{i}", "purpose": "p"}
             for i in range(1, n + 1)]}), encoding="utf-8")
         return str(p)
     assert lint_fragment.main(["--expect", "10", frag(15)]) == 0          # exactly 1.5x
@@ -279,7 +279,7 @@ def test_a_slice_inside_its_budget_leaves_the_verdict_line_alone(tmp_path, capsy
     beyond the band the warning itself uses — one threshold, not two that can drift apart."""
     frag = tmp_path / "h6.json"
     frag.write_text(json.dumps({"components": [
-        {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+        {"id": f"C{i}", "name": f"C{i}", "purpose": "p"}
         for i in range(1, 13)]}), encoding="utf-8")
     assert lint_fragment.main(["--expect", "10", str(frag)]) == 0
     out = capsys.readouterr()

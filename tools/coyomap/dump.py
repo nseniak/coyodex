@@ -117,7 +117,7 @@ def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
     source: str | None = None
     members: list[object] = []
     if isinstance(el, Component):
-        source = el.source or _href(el.entry_point)
+        source = el.source
         members = [{"trigger": ep.trigger, "source": ep.source}
                    for ep in m.entry_points if ep.component == eid]
     elif isinstance(el, Group):

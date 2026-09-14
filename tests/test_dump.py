@@ -37,8 +37,7 @@ def make_model() -> ProjectModel:
                     Group(id="S2", name="Edge", parent="S1")]
     m.components = [
         Component(id="C1", name="Viewer", subsystem="S1", source="backend/viewer.py#L1"),
-        Component(id="C2", name="Store", subsystem="S1",
-                  entry_point="backend/store.py#L5"),
+        Component(id="C2", name="Store", subsystem="S1"),
         Component(id="C3", name="Umbrella", subsystem="S2"),
     ]
     # Ids as an ASSEMBLED map carries them: entry-point ids are minted at assemble and exist in no
@@ -63,11 +62,6 @@ def test_resolve_component_uses_its_canonical_anchor():
     r = resolve_id(make_model(), "C1")
     assert r == {"id": "C1", "kind": "component", "name": "Viewer",
                  "source": "backend/viewer.py#L1", "members": []}
-
-
-def test_resolve_component_falls_back_to_the_entry_point_href():
-    r = resolve_id(make_model(), "C2")
-    assert r is not None and r["source"] == "backend/store.py#L5"
 
 
 def test_resolve_component_lists_its_member_entry_points():
@@ -98,7 +92,7 @@ def test_resolve_unknown_id_is_none():
 def test_record_is_the_full_stored_element():
     r = record_of(make_model(), "C2")
     assert r is not None
-    assert r["entry_point"] == "backend/store.py#L5" and r["subsystem"] == "S1"
+    assert r["subsystem"] == "S1"
 
 
 # --- --edges ---------------------------------------------------------------------

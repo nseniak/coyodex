@@ -1321,8 +1321,7 @@ def make_refuted_map(claim_text: str):
     from coyomap.model import load_model
     return load_model(json.dumps({
         "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
-        "components": [{"id": "C1", "name": "Front", "purpose": claim_text,
-                        "entry_point": "a.py:1"}],
+        "components": [{"id": "C1", "name": "Front", "purpose": claim_text}],
     }))
 
 

@@ -92,8 +92,7 @@ def make_valid_model() -> ProjectModel:
     m.roles = [Role(id="R1", name="Andy", kind="human", wants="orders", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="View order", actors=["R1"])]
     m.happy_path = [HappyStep(id="HP1", uc="UC1")]
-    m.components = [Component(id="C1", name="Viewer", purpose="shows",
-                              entry_point="src/v.py:1")]
+    m.components = [Component(id="C1", name="Viewer", purpose="shows")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
     m.entities = [make_entity()]
     m.flows = [Flow(uc="UC1", title="View order",
@@ -558,7 +557,7 @@ def test_isolated_component_canary_fires_and_escapes() -> None:
     # broker" carried no edge and no messaging role, so no view could draw the link it describes.
     m = make_valid_model()
     m.components.append(Component(id="C2", name="Custom shard fleet", purpose="pushes events to the "
-                                  "same broker", entry_point="src/shard.go:1"))
+                                  "same broker"))
     ws = [w for w in warnings_of(m) if "carry no backbone edge and no" in w]
     assert len(ws) == 1                                    # ONE aggregated line, not one per component
     assert "1 of 2 component(s)" in ws[0] and "C2 (Custom shard fleet)" in ws[0]
@@ -579,8 +578,7 @@ def test_isolated_component_canary_fires_and_escapes() -> None:
 def test_isolated_component_canary_caps_the_inline_list() -> None:
     m = make_valid_model()
     for i in range(2, 14):
-        m.components.append(Component(id=f"C{i}", name=f"Leaf {i}", purpose="p",
-                                      entry_point=f"src/l{i}.py:1"))
+        m.components.append(Component(id=f"C{i}", name=f"Leaf {i}", purpose="p"))
     ws = [w for w in warnings_of(m) if "carry no backbone edge and no" in w]
     assert len(ws) == 1 and "12 of 13 component(s)" in ws[0]
     assert "+4 more" in ws[0]                              # 12 isolated, 8 shown inline
@@ -2067,7 +2065,7 @@ def test_the_two_sides_of_persistence_exceptions_do_not_cross_silence():
     m = make_unowned_entity_model()
     m.entities[0].store = Store(dep="D1", container="orders", mode="collection")
     m.edges.append(Edge(src="C1", verb="writes", dst="D1", why="rows", where="src/v.py:9"))
-    m.components.append(Component(id="C2", name="Locks", purpose="infra", entry_point="src/l.py:1"))
+    m.components.append(Component(id="C2", name="Locks", purpose="infra"))
     m.edges.append(Edge(src="C2", verb="writes", dst="D1", why="locks", where="src/l.py:4"))
     m.extras = [ExtraSection(heading="Persistence exceptions",
                              body="C2: lock rows only — infra, not domain.")]
@@ -2407,14 +2405,9 @@ def test_colon_range_anchor_is_not_flagged():
     assert problems_of(m) == []
 
 
-# --- anchor format gate: entry_point / where_configured / edges.where / entry_points.source ---
+# --- anchor format gate: where_configured / edges.where / entry_points.source ---
 # must be bare `path:line`, never a markdown link (the label was always just the file's basename).
-
-def test_component_entry_point_md_link_is_a_blocking_problem():
-    m = make_valid_model()
-    m.components[0].entry_point = "[v.py](src/v.py:1)"
-    assert any("entry_point" in p and "not a valid" in p for p in problems_of(m))
-
+# A component's own `entry_point` was checked here too; the field is gone (see `_component_headers`).
 
 def test_dep_where_configured_md_link_is_a_blocking_problem():
     m = make_valid_model()
@@ -2558,8 +2551,7 @@ def test_granularity_advisory_fires_through_check_coverage():
 def test_granularity_advisory_silent_within_band():
     """A component count inside E's ±40% band stays silent — the anchor nudges, it never nags."""
     m = make_valid_model()
-    m.components = [Component(id=f"C{i}", name=f"Unit {i}", purpose="one unit",
-                              entry_point="src/v.py:1") for i in range(1, 11)]  # 10 ≈ E
+    m.components = [Component(id=f"C{i}", name=f"Unit {i}", purpose="one unit") for i in range(1, 11)]  # 10 ≈ E
     m.edges = []  # the demo edges/flows reference C1 only — drop them so the model stays valid
     m.flows = []
     with tempfile.TemporaryDirectory() as td:
@@ -2712,8 +2704,8 @@ def test_formula_fill_silent_on_grounded_dual_deployment():
     # a real split unit (standalone + backend/frontend), and the only EMPTY units are infra, must NOT
     # be called formula-filled — the spread across real units and the infra-only emptiness are grounding.
     m = make_valid_model()
-    m.components = [Component(id="C1", name="A", purpose="p", entry_point="a.py:1"),
-                   Component(id="C2", name="B", purpose="p", entry_point="b.py:1")]
+    m.components = [Component(id="C1", name="A", purpose="p"),
+                   Component(id="C2", name="B", purpose="p")]
     m.edges = []
     m.flows = []
     m.deps = [Dep(id="D1", name="MongoDB", kind="datastore", type="db")]
@@ -2895,8 +2887,7 @@ def make_token_tagged_deployment_model(placed: int = 1, total: int = 12) -> Proj
     check needs a real number of unplaced components before it means anything."""
     m = make_valid_model()
     m.deployment = [DeploymentRow(unit="api")]
-    m.components = [Component(id=f"C{i}", name=f"Comp{i}", purpose="does",
-                              entry_point=f"src/c{i}.py:1") for i in range(1, total + 1)]
+    m.components = [Component(id=f"C{i}", name=f"Comp{i}", purpose="does") for i in range(1, total + 1)]
     for i, c in enumerate(m.components):
         c.runs_in = ["api"] if i < placed else []
     return m
@@ -3020,7 +3011,7 @@ def test_role_revealing_cd_verb_is_not_flagged():
 def test_roleless_verb_off_the_dep_boundary_is_not_flagged():
     # C→C and C→E generic `uses` are legitimate — the nudge is C→D ONLY (T4), else it floods.
     m = make_valid_model()
-    m.components.append(Component(id="C2", name="Other", purpose="p", entry_point="src/o.py:1"))
+    m.components.append(Component(id="C2", name="Other", purpose="p"))
     m.edges = [Edge(src="C1", verb="uses", dst="C2", why="x", where="src/v.py:3"),   # C→C uses
                Edge(src="C1", verb="uses", dst="E1", why="y", where="src/v.py:5")]   # C→E uses
     assert not any("name no role" in w for w in warnings_of(m))
@@ -3344,8 +3335,7 @@ def test_json_mode_emits_whole_lists_where_the_human_view_truncates():
     block, and re-derived the whole list in a throwaway script. Every such list goes through one
     helper so `--json` cannot cover nine sites and miss the tenth."""
     m = make_valid_model()
-    m.components = [Component(id=f"C{i}", name=f"Comp{i}", purpose="does",
-                              entry_point=f"src/c{i}.py:1") for i in range(1, 21)]
+    m.components = [Component(id=f"C{i}", name=f"Comp{i}", purpose="does") for i in range(1, 21)]
     m.edges = []
     m.flows = []
     try:

@@ -1019,7 +1019,7 @@ def _endpoint_detail(m: ProjectModel) -> dict[str, str]:
     out: dict[str, str] = {}
     for c in m.components:
         desc = f"{c.id} = {c.name}" if c.name and c.name != c.id else c.id
-        home = c.source or href(c.entry_point)
+        home = c.source
         if home:
             desc += f" ({home})"
         eps = members.get(c.id, [])

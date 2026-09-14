@@ -212,7 +212,6 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
 
     for c in model.components:
         add(_ref(c.id, "component", c.source, "source"))
-        add(_ref(c.id, "component", c.entry_point, "entry_point"))
         for f in c.files:
             add(_ref(c.id, "component", f, "files"))
         for ev in c.evidence:

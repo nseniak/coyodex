@@ -18,7 +18,7 @@ from pathlib import Path
 from coyomap.assemble import dump_preserving, load_map_or_fragment
 from coyomap.model import FORMAT, ModelError, to_canonical_json
 
-FRAGMENT = {"components": [{"id": "C1", "name": "X", "purpose": "p", "entry_point": "a.py:1"}],
+FRAGMENT = {"components": [{"id": "C1", "name": "X", "purpose": "p"}],
             "edges": [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:3"}]}
 
 

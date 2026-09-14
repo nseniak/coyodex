@@ -325,7 +325,6 @@ class Component:
     name: str
     subsystem: str | None = None
     purpose: str = ""
-    entry_point: str | None = None   # md link cell
     depends_on: str = ""             # the coarse derived summary text (edge list is the source)
     source: str | None = None        # v2: the canonical source anchor — where the component LIVES
     confidence: str = ""

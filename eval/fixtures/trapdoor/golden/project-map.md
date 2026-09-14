@@ -86,36 +86,36 @@ why: the comment thread from HP3 is what the agent read before deciding
 
 ## T1 — Components
 
-| ID | Component | Subsystem | Purpose | Entry point | Depends on | Conf. | Runs in |
-|---|---|---|---|---|---|---|---|
-| **C1** | Ticket read handlers | S1 | The read side of the HTTP surface: fetch one ticket, list a tenant's queue, list a thread. Every handler authorises, then forwards to the ticket service and renders the result. It owns no collection and issues no store call of its own. | [passthrough_controller.py](src/api/passthrough_controller.py:24) |  | verified | api, standalone |
-| **C2** | Ticket write handlers | S1 | The mutating HTTP surface: transition a ticket, append a comment, claim a lock. It calls .save() through the service, which is exactly why it reads like the system of record without being one. | [record_controller.py](src/api/record_controller.py:23) |  | verified | api, standalone |
-| **C3** | Ticket service | S1 | Application logic for the ticket lifecycle: tenant-scoped fetch, listing, transition-and-announce, comment append, and lock acquisition. The component that really holds the repository and the publisher. |  |  | verified | api, worker, standalone |
-| **C4** | Ticket repository | S1 | The system of record for tickets, comments and attachments. It issues every document-store call in the fixture: the ticket upsert, the secondary search-index write, and the advisory lock rows. |  |  | verified | api, worker, standalone |
-| **C5** | Authorisation gate | S4 | Decides whether a principal may read or write a tenant's tickets. The write check composes scope, tenant and lifecycle state into one predicate and raises far below its own header. |  |  | verified | api, standalone |
-| **C6** | Lifecycle table | S4 | The declared ticket states and the transition table between them, plus the guard that refuses an illegal move. The one lifecycle in this tree that a states machine may cite. |  |  | verified | api, worker, standalone |
-| **C7** | Escalation policy | S4 | Counts breaches against a retry budget and decides whether to page. Its docstring describes a five-phase lifecycle that no code implements. |  |  | verified | worker |
-| **C8** | Event publisher | S2 | Publishes three named channels through an injected transport. Because the transport is a seam, this component names no broker library anywhere in its own code. |  |  | verified | api, worker, standalone |
-| **C9** | Comment consumer | S2 | The only consumer in the tree: a continuous loop that drains the comment channel and fans each message out to registered handlers. |  |  | verified | worker |
-| **C10** | Worker template | S4 | The abstract template method every background worker follows: prepare, do the subclass work, record. It is never deployed on its own. |  |  | verified |  |
-| **C11** | Report worker | S4 | The one concrete worker: sweeps each tenant's tickets on a cron schedule and produces a resolved-ticket rollup. |  |  | verified | worker |
-| **C12** | Client factory | S4 | Reads configuration and hands back configured analytics and error-sink handles. Constructing a client opens no socket and sends nothing. |  |  | verified | api, worker, standalone |
-| **C13** | Retry policy | S4 | Exponential backoff with a ceiling, plus the retry header it produces. Imports two types it never uses. |  |  | verified | api, worker, standalone |
-| **C14** | HTTP process entry | S4 | The api unit's process entry point: a minimal route table whose six registrations are the whole external HTTP surface. | [http.py](src/entrypoints/http.py:34) |  | verified | api, standalone |
-| **C15** | Worker process entry | S4 | The worker unit's process entry point: builds the consumer, reads the cron schedule and supervises worker passes. Self-activated only. |  |  | verified | worker |
-| **C16** | Slack plugin | S3 | Reacts to the Slack notification channel and forwards a shaped payload to the analytics sink. |  |  | verified | worker |
-| **C17** | Teams plugin | S3 | Reacts to the Microsoft Teams notification channel and forwards a shaped payload to the analytics sink. |  |  | verified | worker |
-| **C18** | Audit plugin | S3 | Reacts to the ticket state-change channel, under the hyphenated spelling of the same channel name the publisher declares with dots. |  |  | verified | worker |
-| **C19** | Email digest plugin | S3 | Reacts to the email notification channel and forwards a shaped payload to the analytics sink. |  |  | verified | worker |
-| **C20** | Outbound webhook plugin | S3 | Reacts to the webhook notification channel and forwards a shaped payload to the analytics sink. |  |  | verified | worker |
-| **C21** | Pager rota plugin | S3 | Reacts to the pager notification channel and forwards a shaped payload to the analytics sink. |  |  | verified | worker |
-| **C22** | Metrics rollup plugin | S3 | Reacts to the metrics notification channel and forwards a shaped payload to the analytics sink. |  |  | verified | worker |
-| **C23** | Cold archive plugin | S3 | Reacts to the archive notification channel and forwards a shaped payload to the analytics sink. |  |  | verified | worker |
-| **C24** | Scalar validators | S5 | Validation and normalisation for quantitative value types: currency amounts, durations, percentages and version strings. One of the two cohesive groups the oversized flat folder splits into. |  |  | verified | api, worker, standalone |
-| **C25** | Text validators | S5 | Validation and normalisation for textual value types: email addresses, host names, identifiers, markdown, phone numbers, postcodes, timezones and urls. The second group the flat folder splits into. |  |  | verified | api, worker, standalone |
-| **C26** | Generated wire types | S4 | Machine-emitted message classes carrying an @generated banner. Heavy by weight, one box by judgement: the whole directory is regenerated from a schema and holds no decision a reader needs. |  |  | verified | api, worker, standalone |
-| **C27** | Ticket UI components | S6 | Fourteen tiny presentational components — one file each — rendering the ticket list, a ticket row, the comment thread and the surrounding chrome. |  |  | verified | web-dev |
-| **C28** | Web runtime | S6 | The minimal hyperscript helper every UI component builds its tree with. |  |  | verified | web-dev |
+| ID | Component | Subsystem | Purpose | Depends on | Conf. | Runs in |
+|---|---|---|---|---|---|---|
+| **C1** | Ticket read handlers | S1 | The read side of the HTTP surface: fetch one ticket, list a tenant's queue, list a thread. Every handler authorises, then forwards to the ticket service and renders the result. It owns no collection and issues no store call of its own. |  | verified | api, standalone |
+| **C2** | Ticket write handlers | S1 | The mutating HTTP surface: transition a ticket, append a comment, claim a lock. It calls .save() through the service, which is exactly why it reads like the system of record without being one. |  | verified | api, standalone |
+| **C3** | Ticket service | S1 | Application logic for the ticket lifecycle: tenant-scoped fetch, listing, transition-and-announce, comment append, and lock acquisition. The component that really holds the repository and the publisher. |  | verified | api, worker, standalone |
+| **C4** | Ticket repository | S1 | The system of record for tickets, comments and attachments. It issues every document-store call in the fixture: the ticket upsert, the secondary search-index write, and the advisory lock rows. |  | verified | api, worker, standalone |
+| **C5** | Authorisation gate | S4 | Decides whether a principal may read or write a tenant's tickets. The write check composes scope, tenant and lifecycle state into one predicate and raises far below its own header. |  | verified | api, standalone |
+| **C6** | Lifecycle table | S4 | The declared ticket states and the transition table between them, plus the guard that refuses an illegal move. The one lifecycle in this tree that a states machine may cite. |  | verified | api, worker, standalone |
+| **C7** | Escalation policy | S4 | Counts breaches against a retry budget and decides whether to page. Its docstring describes a five-phase lifecycle that no code implements. |  | verified | worker |
+| **C8** | Event publisher | S2 | Publishes three named channels through an injected transport. Because the transport is a seam, this component names no broker library anywhere in its own code. |  | verified | api, worker, standalone |
+| **C9** | Comment consumer | S2 | The only consumer in the tree: a continuous loop that drains the comment channel and fans each message out to registered handlers. |  | verified | worker |
+| **C10** | Worker template | S4 | The abstract template method every background worker follows: prepare, do the subclass work, record. It is never deployed on its own. |  | verified |  |
+| **C11** | Report worker | S4 | The one concrete worker: sweeps each tenant's tickets on a cron schedule and produces a resolved-ticket rollup. |  | verified | worker |
+| **C12** | Client factory | S4 | Reads configuration and hands back configured analytics and error-sink handles. Constructing a client opens no socket and sends nothing. |  | verified | api, worker, standalone |
+| **C13** | Retry policy | S4 | Exponential backoff with a ceiling, plus the retry header it produces. Imports two types it never uses. |  | verified | api, worker, standalone |
+| **C14** | HTTP process entry | S4 | The api unit's process entry point: a minimal route table whose six registrations are the whole external HTTP surface. |  | verified | api, standalone |
+| **C15** | Worker process entry | S4 | The worker unit's process entry point: builds the consumer, reads the cron schedule and supervises worker passes. Self-activated only. |  | verified | worker |
+| **C16** | Slack plugin | S3 | Reacts to the Slack notification channel and forwards a shaped payload to the analytics sink. |  | verified | worker |
+| **C17** | Teams plugin | S3 | Reacts to the Microsoft Teams notification channel and forwards a shaped payload to the analytics sink. |  | verified | worker |
+| **C18** | Audit plugin | S3 | Reacts to the ticket state-change channel, under the hyphenated spelling of the same channel name the publisher declares with dots. |  | verified | worker |
+| **C19** | Email digest plugin | S3 | Reacts to the email notification channel and forwards a shaped payload to the analytics sink. |  | verified | worker |
+| **C20** | Outbound webhook plugin | S3 | Reacts to the webhook notification channel and forwards a shaped payload to the analytics sink. |  | verified | worker |
+| **C21** | Pager rota plugin | S3 | Reacts to the pager notification channel and forwards a shaped payload to the analytics sink. |  | verified | worker |
+| **C22** | Metrics rollup plugin | S3 | Reacts to the metrics notification channel and forwards a shaped payload to the analytics sink. |  | verified | worker |
+| **C23** | Cold archive plugin | S3 | Reacts to the archive notification channel and forwards a shaped payload to the analytics sink. |  | verified | worker |
+| **C24** | Scalar validators | S5 | Validation and normalisation for quantitative value types: currency amounts, durations, percentages and version strings. One of the two cohesive groups the oversized flat folder splits into. |  | verified | api, worker, standalone |
+| **C25** | Text validators | S5 | Validation and normalisation for textual value types: email addresses, host names, identifiers, markdown, phone numbers, postcodes, timezones and urls. The second group the flat folder splits into. |  | verified | api, worker, standalone |
+| **C26** | Generated wire types | S4 | Machine-emitted message classes carrying an @generated banner. Heavy by weight, one box by judgement: the whole directory is regenerated from a schema and holds no decision a reader needs. |  | verified | api, worker, standalone |
+| **C27** | Ticket UI components | S6 | Fourteen tiny presentational components — one file each — rendering the ticket list, a ticket row, the comment thread and the surrounding chrome. |  | verified | web-dev |
+| **C28** | Web runtime | S6 | The minimal hyperscript helper every UI component builds its tree with. |  | verified | web-dev |
 
 ---
 

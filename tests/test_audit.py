@@ -65,8 +65,8 @@ def make_all_theme_model() -> ProjectModel:
     emits one theme (the earlier version's fixture emitted only `ownership`)."""
     m = ProjectModel(title="T", goal="G")
     m.use_cases = [UseCase(id="UC1", name="Do it")]
-    m.components = [Component(id="C1", name="A", purpose="p", entry_point="src/a.py:1"),
-                    Component(id="C2", name="B", purpose="p", entry_point="src/b.py:1")]
+    m.components = [Component(id="C1", name="A", purpose="p"),
+                    Component(id="C2", name="B", purpose="p")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL")]
     m.entities = [Entity(id="E1", name="Order", source="src/o.py:1",
                          store=Store(dep="D1", container="orders", mode="row")),
@@ -162,7 +162,6 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
       "name": "Viewer",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E1",
       "source": null,
       "confidence": "",
@@ -173,7 +172,6 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
       "name": "Creator",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E1",
       "source": null,
       "confidence": "",
@@ -270,8 +268,7 @@ def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
   "use_cases": [{{"id": "UC1", "name": "View order", "actors": ["R1"], "trigger_outcome": "opens -> sees"}}],
   "happy_path": [{{"id": "HP1", "uc": "UC1", "why": null}}],
   "subsystems": [],
-  "components": [{{"id": "C1", "name": "Viewer", "subsystem": null, "purpose": "x", "entry_point": "f",
-                  "depends_on": "", "source": null, "confidence": "", "extra": {{}}}}],
+  "components": [{{"id": "C1", "name": "Viewer", "subsystem": null, "purpose": "x", "depends_on": "", "source": null, "confidence": "", "extra": {{}}}}],
   "deps": [], "run_commands": [], "entry_points": [], "subdomains": [], "entities": [],
   "non_entity_types": [],
   "flows": [{{"uc": "UC1", "title": "View order", "steps": [
@@ -337,7 +334,6 @@ def make_shared_read_map() -> str:
       "name": "A",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E1",
       "source": null,
       "confidence": "",
@@ -348,7 +344,6 @@ def make_shared_read_map() -> str:
       "name": "B",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E1",
       "source": null,
       "confidence": "",
@@ -359,7 +354,6 @@ def make_shared_read_map() -> str:
       "name": "C",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E1",
       "source": null,
       "confidence": "",
@@ -504,7 +498,6 @@ def make_cc_routed_read_map() -> str:
       "name": "SignIn",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "C3",
       "source": null,
       "confidence": "",
@@ -515,7 +508,6 @@ def make_cc_routed_read_map() -> str:
       "name": "OrgSvc",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E1",
       "source": null,
       "confidence": "",
@@ -526,7 +518,6 @@ def make_cc_routed_read_map() -> str:
       "name": "MemberStore",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E1",
       "source": null,
       "confidence": "",
@@ -655,7 +646,6 @@ def make_backward_whyref_map() -> str:
       "name": "A",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "",
       "source": null,
       "confidence": "",
@@ -740,7 +730,6 @@ def make_read_never_created_map() -> str:
       "name": "Loader",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "E9",
       "source": null,
       "confidence": "",
@@ -842,7 +831,6 @@ def make_whyless_map() -> str:
       "name": "A",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "",
       "source": null,
       "confidence": "",
@@ -921,7 +909,6 @@ def make_l2_map() -> str:
       "name": "Gate",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "C2",
       "source": null,
       "confidence": "",
@@ -932,7 +919,6 @@ def make_l2_map() -> str:
       "name": "Policy",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "f",
       "depends_on": "",
       "source": null,
       "confidence": "",
@@ -1251,9 +1237,8 @@ def make_described_map() -> str:
       "name": "AuthGate",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "src/auth/gate.py:10",
       "depends_on": "",
-      "source": null,
+      "source": "src/auth/gate.py:10",
       "confidence": "",
       "extra": {}
     },
@@ -1262,9 +1247,8 @@ def make_described_map() -> str:
       "name": "PolicyStore",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "src/policy.py:5",
       "depends_on": "",
-      "source": null,
+      "source": "src/policy.py:5",
       "confidence": "",
       "extra": {}
     }
@@ -1920,7 +1904,7 @@ def make_advisory_map() -> ProjectModel:
     m.roles = [Role(id="R1", name="A", kind="human", wants="x", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="Read it", actors=["R1"])]
     m.happy_path = [HappyStep(id="HP1", uc="UC1")]
-    m.components = [Component(id="C1", name="A", purpose="p", entry_point="a.py:1")]
+    m.components = [Component(id="C1", name="A", purpose="p")]
     m.entities = [Entity(id="E1", name="Thing", source="a.py:1")]
     m.edges = [Edge(src="C1", verb="reads", dst="E1", why="w", where="a.py:2")]
     m.flows = [Flow(uc="UC1", title="Read it",
@@ -1976,7 +1960,7 @@ def test_a_recorded_line_silences_one_pair_never_a_family():
     # two flows through one component both land on the first HP step and the ids would not differ.
     m.use_cases.append(UseCase(id="UC2", name="Read again", actors=["R1"]))
     m.happy_path.append(HappyStep(id="HP2", uc="UC2"))
-    m.components.append(Component(id="C2", name="B", purpose="p", entry_point="b.py:1"))
+    m.components.append(Component(id="C2", name="B", purpose="p"))
     m.entities.append(Entity(id="E2", name="Other", source="b.py:1"))
     m.edges.append(Edge(src="C2", verb="reads", dst="E2", why="w", where="b.py:2"))
     m.flows.append(Flow(uc="UC2", title="Read again",

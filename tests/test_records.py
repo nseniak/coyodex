@@ -128,7 +128,7 @@ def test_an_id_in_authored_prose_is_resolved_against_the_MODEL_not_the_diagram()
     m.roles = [Role(id="R1", name="Tracker", kind="human", wants="x", drives="UC1"),
                Role(id="R2", name="Superadmin", kind="human", wants="y", drives="UC2"),
                Role(id="R3", name="Site visitor", kind="human", wants="z", drives="UC3")]
-    m.components = [Component(id="C1", name="Reader", purpose="reads", entry_point="src/r.py:1")]
+    m.components = [Component(id="C1", name="Reader", purpose="reads")]
     m.extras = [ExtraSection(heading="Happy Path coverage", body="R3: no spine position. C1 reads.")]
     refs = model_to_graph(m)["extras"][0]["refs"]
     assert refs["R3"]["name"] == "Site visitor"

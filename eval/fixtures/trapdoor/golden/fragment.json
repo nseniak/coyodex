@@ -160,7 +160,6 @@
       "name": "Ticket read handlers",
       "subsystem": "S1",
       "purpose": "The read side of the HTTP surface: fetch one ticket, list a tenant's queue, list a thread. Every handler authorises, then forwards to the ticket service and renders the result. It owns no collection and issues no store call of its own.",
-      "entry_point": "src/api/passthrough_controller.py:24",
       "source": "src/api/passthrough_controller.py:21",
       "confidence": "verified",
       "runs_in": [
@@ -173,7 +172,6 @@
       "name": "Ticket write handlers",
       "subsystem": "S1",
       "purpose": "The mutating HTTP surface: transition a ticket, append a comment, claim a lock. It calls .save() through the service, which is exactly why it reads like the system of record without being one.",
-      "entry_point": "src/api/record_controller.py:23",
       "source": "src/api/record_controller.py:20",
       "confidence": "verified",
       "runs_in": [
@@ -317,7 +315,6 @@
       "name": "HTTP process entry",
       "subsystem": "S4",
       "purpose": "The api unit's process entry point: a minimal route table whose six registrations are the whole external HTTP surface.",
-      "entry_point": "src/entrypoints/http.py:34",
       "source": "src/entrypoints/http.py:20",
       "confidence": "verified",
       "runs_in": [

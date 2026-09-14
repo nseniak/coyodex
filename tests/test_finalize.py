@@ -28,8 +28,8 @@ MAP = {
     "roles": [{"id": "R1", "name": "A", "kind": "human", "wants": "x", "drives": "UC1"}],
     "use_cases": [{"id": "UC1", "name": "Do it", "actors": ["R1"]}],
     "happy_path": [{"id": "HP1", "uc": "UC1"}],
-    "components": [{"id": "C1", "name": "Front", "purpose": "takes the ask", "entry_point": "src/a.py:1"},
-                   {"id": "C2", "name": "Back", "purpose": "answers it", "entry_point": "src/b.py:1"}],
+    "components": [{"id": "C1", "name": "Front", "purpose": "takes the ask"},
+                   {"id": "C2", "name": "Back", "purpose": "answers it"}],
     "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": "to answer", "where": "src/a.py:2"}],
     "flows": [{"uc": "UC1", "title": "Do it",
                "steps": [{"n": 1, "src": "R1", "dst": "C1", "phrase": "asks"},
@@ -60,8 +60,7 @@ def make_repo(broken: bool = False, components: int = 0) -> tuple[Path, Path]:
     if components:
         # An edgeless map of N components: the isolated-component advisory lists every id, so a
         # truncation (or its absence) is observable.
-        doc["components"] = [{"id": f"C{i}", "name": f"C{i}", "purpose": "p",
-                              "entry_point": "src/a.py:1"} for i in range(1, components + 1)]
+        doc["components"] = [{"id": f"C{i}", "name": f"C{i}", "purpose": "p"} for i in range(1, components + 1)]
         doc["edges"] = []
         doc["flows"] = [{"uc": "UC1", "title": "Do it",
                          "steps": [{"n": 1, "src": "R1", "dst": "C1", "phrase": "asks"},

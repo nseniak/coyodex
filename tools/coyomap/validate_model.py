@@ -6123,7 +6123,6 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
 
     for c in m.components:
         bad_anchor(f"{c.id} source", c.source)
-        bad_file(f"{c.id} entry_point", c.entry_point)
     for el in (*m.entities, *m.components):     # a state machine's declaring line is a file anchor
         if el.states is not None:
             bad_file(f"{el.id} states.source", el.states.source)
@@ -6419,7 +6418,7 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for c in m.components:
         if c.source and not url.match(c.source):
             out.append((f"{c.id} source", c.source))
-        href = c.entry_point or _first_link_of(c, [c.purpose, c.depends_on,
+        href = _first_link_of(c, [c.purpose, c.depends_on,
                                   *(v for v in c.extra.values() if isinstance(v, str))])
         if href and not url.match(href):
             out.append((c.id, href))

@@ -73,7 +73,7 @@ def make_small_model() -> ProjectModel:
     """A minimal model exercising one field of each kind, for the render-CLI smoke test."""
     m = ProjectModel(title="Tiny", goal="A tiny demo.")
     m.components = [Component(id="C1", name="Viewer", subsystem=None, purpose="shows orders",
-                              entry_point="src/v.py:1", depends_on="", source=None,
+                              depends_on="", source=None,
                               confidence="")]
     m.entities = [Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="a customer order",
                          source="src/order.py:1",
@@ -186,7 +186,7 @@ def test_entry_point_activation_authored_wins_else_derived():
     over `kind` — so old maps (no field) still classify without a rebuild."""
     m = ProjectModel(title="Acts", goal="demo")
     m.components = [Component(id="C1", name="Svc", subsystem=None, purpose="p",
-                             entry_point="src/s.py:1", depends_on="", source=None, confidence="")]
+                             depends_on="", source=None, confidence="")]
     m.entry_points = [
         EntryPoint(kind="Background loop", trigger="every 60s", source="src/s.py:1", component="C1"),
         EntryPoint(kind="HTTP route", trigger="GET /x", source="src/s.py:2", component="C1"),
