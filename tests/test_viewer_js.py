@@ -2364,6 +2364,31 @@ def test_a_page_and_its_title_share_one_left_edge() -> None:
         assert block in css, block
     assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
 
+def test_the_card_dodges_the_hand_that_opened_it_and_never_the_one_that_moved_after() -> None:
+    """The card keeps clear of the pointer so it never lands under the hand that just clicked. That is
+    right for the FIRST placement and wrong for every one after it.
+
+    The card is re-placed by things with nothing to do with the reader's hand: the source column
+    sliding open (`codePaneResized` on EVERY frame for 240ms), a camera ease landing 420ms later, a
+    window resize, the deferred dodge two frames on. Each of those read the LIVE pointer, so a card
+    that had settled jumped the moment the reader moved the mouse over where it sat — which is exactly
+    where a reader moves the mouse, onto the thing they just opened.
+
+    Measured with the pointer parked in two places and the same placement forced twice, same map, same
+    selection, same box: x=702 with the pointer away, x=222 with the pointer on the card. Frozen, both
+    are 702."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    place = js[js.index("function placeCardNear(el) {"):
+               js.index("\n}", js.index("function placeCardNear(el) {"))]
+    assert "const hand = handAt" in place, "the hand is the frozen one"
+    assert "pointerAt" not in place, "the live pointer is back in the placement"
+    # …frozen at the ONE place a card is put up for a new selection, so the hand it dodges is the hand
+    # that opened it.
+    sync = js[js.index("function paneSync("): js.index("\n}", js.index("function paneSync("))]
+    assert "handAt = pointerAt ? { ...pointerAt } : null;" in sync
+    assert sync.index("handAt = pointerAt") < sync.index("placeCard();"), "frozen before it is used"
+
+
 def test_a_flow_arrow_opens_the_step_it_names_not_the_pair_it_crosses() -> None:
     """The popup over a flow arrow shows ONE step, and its title opens that step's own page. The page
     was the PAIR's first, and that was the wrong answer to the question asked at a flow arrow: a reader

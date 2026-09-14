@@ -7113,6 +7113,9 @@ function paneSync() {
   // Three places hid the card and only one of them told the line. They all come through here now.
   if (!has) { hideCallout(); return; }
   stampPanelBar();
+  // THE HAND IS FROZEN HERE, for as long as this card is up. See `handAt`: read live, it made the card
+  // chase the pointer on every later re-place.
+  handAt = pointerAt ? { ...pointerAt } : null;
   placeCard();   // …placed, moved out of its element's way, and joined to it
 }
 // The bar carries the ×, so the panel can be put away without hunting for a piece of empty canvas.
@@ -7793,6 +7796,22 @@ const CARD_DIRS = [[1, -1], [1, 0], [0, -1], [1, 1], [-1, -1], [0, 1], [-1, 0], 
 // the card's place belongs to what you have selected, not to the reader. Dragging it writes here, so a
 // card you moved by hand stays where you put it for as long as rules 1 and 2 still allow.
 let lastCardPlace = null;
+// WHERE THE READER'S HAND WAS WHEN THIS CARD APPEARED — frozen, not read live.
+//
+// The card keeps clear of the pointer so it never lands under the hand that just clicked. That is
+// right for the FIRST placement and wrong for every one after it: the card is re-placed by things
+// that have nothing to do with the reader's hand — the source column sliding open (every frame for
+// 240ms), a camera ease landing 420ms later, a window resize, the deferred dodge two frames on — and
+// each of those re-read the LIVE pointer. So a card that had settled would jump the moment the reader
+// moved the mouse over where it sat, which is exactly where a reader moves the mouse: onto the thing
+// they just opened.
+//
+// Measured with the pointer parked in two places and the same placement forced twice: x=702 with the
+// pointer away, x=222 with the pointer on the card. Same map, same selection, same box.
+//
+// Frozen at `paneSync`, which is the one place a card is put up for a new selection, so the hand the
+// card dodges is the hand that opened it and nothing else.
+let handAt = null;
 // THE TWO BOXES AN ARROW JOINS, found from the arrow's own ends rather than from its id. Mermaid names
 // an edge `L_<from>_<to>_<n>` and a node id may itself hold an underscore, so the name cannot be split
 // back into two ids without guessing. The drawn ends can: each sits on the border of the box it leaves.
@@ -7896,9 +7915,9 @@ function placeCardNear(el) {
   const sets = cardKeepSets(el);
   // The reader's own hand is a shape to keep clear of, the same as the thing itself — but the first
   // sets only. By the last one there is barely room for the card at all.
-  const hand = pointerAt
-    ? { left: pointerAt.x - 14, top: pointerAt.y - 14, right: pointerAt.x + 14,
-        bottom: pointerAt.y + 14, width: 28, height: 28 }
+  const hand = handAt
+    ? { left: handAt.x - 14, top: handAt.y - 14, right: handAt.x + 14,
+        bottom: handAt.y + 14, width: 28, height: 28 }
     : null;
   const put = (left, top) => {
     const st = PANEL_HOST.style;
