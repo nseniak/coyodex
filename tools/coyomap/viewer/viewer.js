@@ -2929,6 +2929,13 @@ function nodeDetailBodyHtml(id, noExplain) {
 // story that touches those two boxes answers a question they did not ask. The pair still has its page —
 // `renderLeafPair`, linked from the foot below when there IS more than one step — because on 27 pairs
 // of this map's 131 that IS a real second question, just not the first one.
+// A CAPITAL FIRST LETTER. A step's phrase and its note are authored as fragments ("name a value and
+// mark it a password", "uncommitted until the person accepts it") and each reads as a sentence where
+// it is drawn — at the head of a card, and under it. Done to the TEXT, not with
+// `text-transform: capitalize`, which would raise every word.
+// ONE copy: the step's card and the step's page both draw both, and two copies of a one-line rule is
+// how the card and the page come to disagree about a capital.
+function capFirst(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
 // The words a rendered fragment reads as, for the one slot that takes a NAME rather than prose.
 function textOf(html) {
   const d = document.createElement('div');
@@ -2957,14 +2964,13 @@ function renderFlowStepPage(uc, sn) {
   const ends = (st.srcId && GRAPH.nodes[st.srcId] ? itemPillHtml(st.srcId) : esc(st.src || ''))
     + '<span class="lp-arrow" aria-hidden="true">\u2192</span>'
     + (st.dstId && GRAPH.nodes[st.dstId] ? itemPillHtml(st.dstId) : esc(st.dst || ''));
-  const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
   const hero = pageHeroHtml({
     glyph: itemGlyphSvg('step'), type: 'Step ' + esc(String(st.n)) + ' of ' + all.length,
     // THE ACTION, as plain words. `pageHeroHtml` escapes the name (it is a name, not prose), so the
     // markdown the phrase may carry is stripped rather than rendered — `mdInline` here would print the
     // asterisks. The popup renders it, because there the phrase is the card's own prose line.
     name: st.verb ? capFirst(textOf(mdInline(st.verb))) : 'Step ' + st.n,
-    desc: st.note ? mdInline(st.note) : '', noDesc: false,
+    desc: st.note ? mdInline(capFirst(st.note)) : '', noDesc: false,
     meta: '<span class="page-hero-meta-line lp-ends">' + ends + '</span>' + heroSourceLine(st.where) });
   // THE CALL SITE IS ON THE HERO, not a section of its own: it is one line, and a framed block with a
   // heading over one line is a heading that says nothing. Same reason the use case it belongs to is in
@@ -3886,10 +3892,6 @@ function flowStepInfoHtml(uc, i) {
   // the same way — imperative — so one line serves both, and a step that runs a shared sub-use case says WHAT
   // it runs instead of the empty "runs". No italic: the view's question is the one italic in this app,
   // and a second one stops it meaning anything.
-  // A CAPITAL FIRST LETTER. A step's phrase is authored as an imperative fragment ("name a value and
-  // mark it a password") and reads as a sentence here, at the head of its own card. Done to the TEXT,
-  // not with `text-transform: capitalize`, which would raise every word.
-  const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
   // THE TITLE IS A DOOR TO THIS STEP'S OWN PAGE. The popup is the right size for one step and the
   // page is where a shared link points; the words are the same words, so the click goes where the
   // reader is already looking.
@@ -3909,7 +3911,7 @@ function flowStepInfoHtml(uc, i) {
     : '<button type="button" class="pane-title-link" data-drill=\'' + esc(JSON.stringify(mine)) + '\''
       + ' title="Open this step\u2019s page">' + action + '</button>';
   const facts = [];
-  if (st.note) facts.push(['Note', mdInline(st.note), true]);
+  if (st.note) facts.push(['Note', mdInline(capFirst(st.note)), true]);
   // NO CALL SITE ON THIS CARD. It is on the step's own page, which the title opens, and the card is a
   // glance at what the step does — a `SOURCE path:line` row was the only line on it a reader could not
   // read as a sentence.
