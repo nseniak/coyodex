@@ -9,8 +9,23 @@ mistake in its own words: shared state belongs in the contract every agent reads
 per-slice option, because a per-slice option gets omitted from one slice — and it records a build
 that passed a shared block to 12 of 14 slices, missed two, and shipped one of the omissions.
 
-Fill the «angle-bracket» slots. There are exactly SEVEN — «COYOMAP_HOME», «REPO», «AGENT_ID»,
-«USE_CASES», «SF_RANGE», «LEGEND», «WHERE_TO_LOOK» — each spelled the same way everywhere.
+Fill the «angle-bracket» slots. There are exactly EIGHT — «COYOMAP_HOME», «REPO», «AGENT_ID»,
+«USE_CASES», «SF_RANGE», «LEGEND», «WHERE_TO_LOOK», «your-fragment» — each spelled the same way
+everywhere. `coyomap contract trace --slots` prints them with a line each on what goes in them, so
+this list is a cross-check and never the thing you type from.
+
+**The doors half rides ON this brief, and it must be FILLED.** Appending `contract doors` with `>>`
+walks around every check `--fill` makes — 9 of 10 trace briefs on one build reached their agent
+still carrying nine literal slot names, and each of those agents then ran one `lint-fragment --repo
+«REPO» …` that could not run. The two contracts do NOT share a slot set, so the composed brief needs
+doors' «FLOWS», «MAP» and «SURFACES» as well:
+
+```
+coyomap contract trace --from-slots <slots-dir> --out-dir <briefs-dir> --append doors
+```
+
+That is also the batch form: one slots file per agent, one process, every file checked before any
+brief is written.
 
 - **«USE_CASES»** — the `UCn` ids this agent owns, with each one's name, `Trigger → Outcome` **and
   its declared `actors`**, copied from the map. Always whole use cases: **never split one use case's

@@ -1480,6 +1480,18 @@
         "claims_live_challenged": {
           "type": "integer"
         },
+        "closer_upheld": {
+          "type": "integer"
+        },
+        "closer_rejected": {
+          "type": "integer"
+        },
+        "closer_unsure": {
+          "type": "integer"
+        },
+        "closer_disputed": {
+          "type": "integer"
+        },
         "note": {
           "type": "string"
         }

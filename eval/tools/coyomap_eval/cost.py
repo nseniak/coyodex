@@ -43,7 +43,7 @@ import re
 import statistics
 import sys
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -108,22 +108,136 @@ class Actor:
     name: str
     role: str
     turns: tuple[Turn, ...]
+    #: The build's own stretch of clock, set by `read_run` when `--from-turn`/`--to-turn` bound the
+    #: run. Every TIME this actor reports is measured inside it; every TOKEN it reports is not.
+    #: `None` on an unbounded run, where every record is the build's by definition.
+    #:
+    #: THE TWO EDGES ARE NOT SYMMETRIC, and each half was decided on its own evidence.
+    #:
+    #: TRAILING EDGE (`--to-turn`): the bill is kept WHOLE. Everything the build spawned, the build
+    #: pays for, however late the last call lands. The argument is not the size of the difference
+    #: ($1.05 on the build this was measured from): it is that a reader comparing two builds'
+    #: dollars must be comparing the same quantity, and "dollars, except the ones a straggler spent
+    #: after the commit" is a quantity nobody can reason about. The clock still stops at the bound,
+    #: because a flag named `--to-turn` is a statement about the clock.
+    #:
+    #: LEADING EDGE (`--from-turn`, and only when the operator passed one — see `bill_from`):
+    #: the bill is CUT at the bound. Spend that finished before the
+    #: window opened was not this build's to begin with, so keeping it whole is not conservatism,
+    #: it is attributing another run's invoice to this one. Measured on the reminderrepo build at
+    #: `--from-turn 500`: charging every call gave the SAME $352.10 as the unbounded run, to the
+    #: cent, while the clock had fallen from 71.6 to 37.7 wall minutes — a bill that ignores its
+    #: own window entirely. The documented use of `--from-turn` (skip an archive step BEFORE the
+    #: build) never straddles an agent, so that use is unaffected either way; what this fixes is
+    #: the undocumented one, a bound landing mid-build.
+    #:
+    #: WHY NOT ONE RULE FOR BOTH. Cutting the trailing edge would drop spend the build caused;
+    #: keeping the leading edge whole adds spend the build did not cause. Neither edge's answer
+    #: makes the other's mistake, so there is no single rule that is right twice.
+    #:
+    #: An agent that did ANY of its work inside the window is this build's agent: its clock is
+    #: clipped to the window and its bill runs from the window's opening to its own last call. One
+    #: whose work lies entirely outside is dropped whole, time and tokens together
+    #: (`bounded_agents`): it belongs to whatever the session did before the build began or after it
+    #: finished. Work in the window, never "started inside it" — `bounded_agents` says what that
+    #: mistake cost.
+    window: tuple[float, float] | None = None
+    #: Where this actor's BILL starts, when the operator asked for a leading bound. `None` leaves
+    #: the bill whole, which is right for every run nobody bounded at the front.
+    #:
+    #: SEPARATE FROM `window` ON PURPOSE, because the two lows mean different things. A `--to-turn`
+    #: run has `from_turn` 0 and still gets a window, whose low is just where the LEAD happened to
+    #: start — not a boundary anybody stated. Billing from it deletes the calls of an agent that
+    #: began moments before the lead's first turn: on one measured transcript, an agent starting
+    #: 1 second early lost a call it plainly made for this build. The clock still clips there, and
+    #: should, because the build's time cannot start before the build did.
+    bill_from: float | None = None
 
     @property
-    def stamps(self) -> tuple[float, ...]:
+    def timed_turns(self) -> tuple[Turn, ...]:
+        """The turns whose CLOCK belongs to the build — all of them when the run is unbounded.
+
+        `--to-turn` bounds the lead by turn index, and a sub-agent has no index in that numbering,
+        so its span ran on to its last record whatever the bound said. An agent that started a
+        background command is woken again when the command completes, which can be long after the
+        build committed: on one measured build that put an agent's last record 12.9 minutes past
+        the commit, and the fan-out table charged the whole 14.6-minute gap as straggler waste —
+        22.3 minutes of it, on a build whose lead ran 42.0 minutes end to end. Bounding the agent
+        by the same window as the lead is what makes the two numbers describe one build.
+
+        THE BILL IS BOUNDED ONLY AT THE LEADING EDGE — `requests` applies the window's low bound
+        and never its high one. Past the trailing bound the build still pays; before the leading
+        bound it never owed. See `window` for why one rule cannot be right at both edges."""
+        if self.window is None:
+            return self.turns
+        low, high = self.window
+        return tuple(t for t in self.turns
+                     if (s := _seconds(t.timestamp)) is None or low <= s <= high)
+
+    @property
+    def _raw_stamps(self) -> tuple[float, ...]:
+        """Every stamp the actor carries, window or no window — the raw material `work_spans`
+        starts from, and what `launched_at` reads."""
         return tuple(s for s in (_seconds(t.timestamp) for t in self.turns) if s is not None)
 
     @property
+    def stamps(self) -> tuple[float, ...]:
+        return tuple(s for s in (_seconds(t.timestamp) for t in self.timed_turns) if s is not None)
+
+    @property
+    def work_spans(self) -> list[tuple[float, float]]:
+        """THE one definition of when this actor was WORKING. Everything timed reads it.
+
+        Its whole span, minus the stretches it sat blocked on its coordinator, intersected with the
+        build's window. Three readings of that one question used to exist side by side — a raw
+        first-to-last span, a blocked-corrected duration, and a window-filtered turn list — and they
+        disagreed in both directions on real transcripts: one agent reported 0 minutes of the 4.56 it
+        worked, and another reported 14.55 busy minutes of a window it worked 4 seconds of. Both
+        were arithmetic between two of the three readings.
+
+        THE WINDOW IS APPLIED LAST, to the working stretches, and that is what makes the two edges
+        come out right without either being special-cased. An actor still working when the window
+        opened has its stretch clipped and so starts at the bound; one that was BLOCKED across the
+        opening has no stretch there at all and starts at its resume; one that answered before the
+        window closed ends at that answer, not at the bound, so a straggler's post-commit wake is
+        cut. The old code needed an explicit clamp and an explicit refusal to clamp for that, and
+        the clamp invented busy time on 305 of one build's 565 possible `--from-turn` values."""
+        stamps = self._raw_stamps
+        if not stamps:
+            return []
+        spans = _subtract((min(stamps), max(stamps)), _union(self._blocked_spans))
+        if self.window is None:
+            return spans
+        low, high = self.window
+        return [(s, e) for s, e in ((max(s, low), min(e, high)) for s, e in spans) if e > s]
+
+    @property
+    def launched_at(self) -> float | None:
+        """This actor's FIRST record, window or no window — when the lead dispatched it.
+
+        Batch clustering and `stagger` read this, never `start`. A window clips `start`, so every
+        actor already running when it opened shares one start and the waves merge into each other:
+        one bounded run reported 4 fan-outs against 5 real, and a dispatch stagger of 179.8 s
+        against a true 81.7 s — on the very number that is printed to stop a reader reaching for
+        the launch-order lever. When an actor was LAUNCHED is a fact about the transcript, and no
+        bound on the report changes it."""
+        return min(self._raw_stamps, default=None)
+
+    @property
     def start(self) -> float | None:
-        return min(self.stamps, default=None)
+        """Where this actor's work begins inside the window."""
+        spans = self.work_spans
+        return spans[0][0] if spans else None
 
     @property
     def end(self) -> float | None:
-        return max(self.stamps, default=None)
+        """Where its work ends inside the window."""
+        spans = self.work_spans
+        return spans[-1][1] if spans else None
 
     @property
     def duration(self) -> float:
-        """First record to last, MINUS any stretch the actor spent blocked on its coordinator.
+        """Time actually spent working, blocked stretches removed and the window applied.
 
         A sub-agent that returns its answer and is then sent a follow-up keeps one transcript, so
         its raw span includes the round trip it had no part in. On a measured build the two
@@ -131,40 +245,65 @@ class Actor:
         that, and the rework after each reply took about a minute: the second agent's headline
         number was more idle than work. Ranking stragglers on the raw span, or charging a batch's
         `waste` with it, measures the LEAD's latency and calls it the agent's."""
-        s, e = self.start, self.end
-        if s is None or e is None:
-            return 0.0
-        return max(0.0, (e - s) - self.blocked_seconds)
+        return sum(e - s for s, e in self.work_spans)
 
     @property
     def span(self) -> float:
-        """First record to last, blocked time included. What a naive file read reports."""
+        """First working moment to last, blocked time included. What a naive file read reports."""
         s, e = self.start, self.end
         return (e - s) if (s is not None and e is not None) else 0.0
 
     @property
-    def blocked_seconds(self) -> float:
-        """Time between this actor finishing an answer and its coordinator's next message.
+    def _blocked_spans(self) -> list[tuple[float, float]]:
+        """Stretches between this actor finishing an answer and its coordinator's next message.
 
         Keyed on the RESUME, never on gap length alone: a slow tool call also leaves a gap, and
         subtracting those would understate real work. The boundary is an assistant turn followed by
         a user turn that is not a tool result — which is what a coordinator follow-up looks like,
-        and what an ordinary tool round trip never does."""
-        total = 0.0
+        and what an ordinary tool round trip never does.
+
+        READ FROM `self.turns`, NEVER `self.timed_turns`. A window filter drops the PAIR whenever
+        one of its two turns falls outside, so a blocked stretch straddling the bound vanishes and
+        the whole gap is then billed as work. Measured on a real build at `--from-turn 525
+        --to-turn 570`: an agent that worked 0.07 of the window's 14.63 minutes reported 14.55
+        minutes busy. The window is applied to the RESULT, in `work_spans`, which is the only place
+        it can be applied without losing the stretch that crosses the edge."""
+        out: list[tuple[float, float]] = []
         previous: "Turn | None" = None
         for turn in self.turns:
             if (previous is not None and previous.role == "assistant" and turn.role == "user"
                     and not turn.tool_results):
                 a, b = _seconds(previous.timestamp), _seconds(turn.timestamp)
                 if a is not None and b is not None and b > a:
-                    total += b - a
+                    out.append((a, b))
             previous = turn
-        return total
+        return out
+
+    @property
+    def blocked_seconds(self) -> float:
+        """How much of the window this actor spent blocked on its coordinator."""
+        spans = _union(self._blocked_spans)
+        if self.window is None:
+            return sum(e - s for s, e in spans)
+        low, high = self.window
+        return sum(max(0.0, min(e, high) - max(s, low)) for s, e in spans)
+
+    @property
+    def _all_requests(self) -> tuple[Turn, ...]:
+        """Every API call this actor ever made, window or no window."""
+        return tuple(t for t in self.turns if t.usage)
 
     @property
     def requests(self) -> tuple[Turn, ...]:
-        """Assistant turns that carry a usage block — one per API call."""
-        return tuple(t for t in self.turns if t.usage)
+        """The API calls this BUILD is billed for — one per assistant turn carrying a usage block.
+
+        Cut at the window's LOW bound and never at its high one; `window` carries the evidence for
+        the asymmetry. A call the clock cannot place is kept, as in `timed_turns`: an unplaceable
+        stamp is a gap in the transcript, and dropping the call would silently shrink the bill."""
+        if self.bill_from is None:
+            return self._all_requests
+        return tuple(t for t in self._all_requests
+                     if (s := _seconds(t.timestamp)) is None or s >= self.bill_from)
 
     def totals(self) -> Usage:
         out = Usage()
@@ -181,8 +320,13 @@ class Actor:
     def base_context(self) -> int:
         """The context of this actor's FIRST request — its fixed per-turn overhead (system prompt,
         tool schemas, connected servers) plus its own brief. Paid again on every later turn, so a
-        rise here multiplies across the whole run."""
-        first = self.requests
+        rise here multiplies across the whole run.
+
+        READ FROM `_all_requests`, so a leading bound does not change it. The overhead is paid at
+        DISPATCH; the first call after a mid-build bound already carries everything the agent had
+        accumulated, and reading that one would report an agent's accumulated context as its fixed
+        cost — the single number this property exists to isolate."""
+        first = self._all_requests
         return first[0].usage.context if first else 0
 
 
@@ -288,6 +432,31 @@ def read_agents(session: Path) -> list[Actor]:
     return agents
 
 
+def bounded_agents(agents: Sequence[Actor], window: tuple[float, float],
+                   *, bill_from: float | None = None) -> list[Actor]:
+    """The agents this BOUNDED build ran, each timed inside the same window as the lead.
+
+    An agent is this build's when its records OVERLAP the window at all. It then keeps every turn
+    and reports its time inside the window — see `Actor.timed_turns` for why the bound cuts the
+    clock and not the bill. Only an agent lying ENTIRELY outside is dropped, time and tokens
+    together: it belongs to whatever the session did before the build began or after it finished.
+
+    DID IT WORK HERE, never "did it start here". Keying the test on the first stamp deleted a whole
+    trace agent — 41 API calls, $4.49 — when `--from-turn` moved by one lead
+    turn across 1.49 seconds of clock: the agent had begun 1.49 seconds before the new bound and
+    then did the rest of its 4.56-minute span inside it. The report went on to say the lead was
+    alone for 6.2 -> 7.4 minutes of a 28.3-minute build, which is time it was demonstrably waiting
+    on that agent.
+
+    The test is `work_spans` being non-empty, so it needs no interval arithmetic of its own and
+    cannot drift from the clock: an actor is this build's exactly when the build's window holds
+    some of its work. One with no timestamps at all is kept — it has tokens to report and no clock
+    to place."""
+    return [w for a in agents
+            if (w := replace(a, window=window, bill_from=bill_from)).start is not None
+            or a.launched_at is None]
+
+
 def read_run(session: Path, *, from_turn: int = 0, to_turn: int | None = None,
              include_sidechains: bool = False) -> tuple[Actor, list[Actor]]:
     """The lead and its sub-agents, bounded to the build.
@@ -296,11 +465,44 @@ def read_run(session: Path, *, from_turn: int = 0, to_turn: int | None = None,
     answering questions after the map lands. `from_turn` / `to_turn` cut those off, so time and
     tokens describe the same stretch. Without them one 68-minute build reads as a 130-minute
     session — the idle exclusion recovers most of that, but only explicit bounds drop the
-    post-build conversation, which is real work and real tokens that simply are not the build."""
+    post-build conversation, which is real work and real tokens that simply are not the build.
+
+    THE BOUND REACHES THE SUB-AGENTS TOO. Turn indices number the lead's own messages and no
+    sub-agent has one, so a bound that only filtered `lead_turns` left every agent free to run its
+    span to its last record — and the wall, the fan-out table and the straggler waste were all read
+    off those spans. `bounded_agents` closes that."""
+    lead = read_lead(session, from_turn=from_turn, to_turn=to_turn,
+                     include_sidechains=include_sidechains)
+    window = build_window(lead, from_turn=from_turn, to_turn=to_turn)
+    agents = read_agents(session)
+    if window is None:
+        return lead, agents
+    return lead, bounded_agents(agents, window,
+                                bill_from=window[0] if from_turn > 0 else None)
+
+
+def read_lead(session: Path, *, from_turn: int = 0, to_turn: int | None = None,
+              include_sidechains: bool = False) -> Actor:
+    """The lead's own turns, cut to `[from_turn, to_turn]`."""
     upper = to_turn if to_turn is not None else 10 ** 9
-    lead_turns = tuple(t for t in read_turns(session, include_sidechains=include_sidechains)
-                       if from_turn <= t.index <= upper)
-    return Actor(name="lead", role="lead", turns=lead_turns), read_agents(session)
+    return Actor(name="lead", role="lead",
+                 turns=tuple(t for t in read_turns(session, include_sidechains=include_sidechains)
+                             if from_turn <= t.index <= upper))
+
+
+def build_window(lead: Actor, *, from_turn: int = 0,
+                 to_turn: int | None = None) -> tuple[float, float] | None:
+    """The stretch of clock a turn bound picks out, or `None` when the run is unbounded.
+
+    PUBLIC so that every command reading one build agrees on where it starts and stops. `cost` and
+    `process` are told by `eval/retro/method.md` to take the same `--to-turn`, and a second
+    derivation in the other command is how they come to mean different things — which they did:
+    the same flag bounded one report and not the other, so a retro compared a bounded wall against
+    unbounded agent durations. A caller outside this module builds its Actors with
+    `Actor(..., window=build_window(read_lead(...), to_turn=...))` and cannot drift from `cost`."""
+    if from_turn <= 0 and to_turn is None:
+        return None
+    return (lead.start, lead.end) if lead.start is not None and lead.end is not None else None
 
 
 # --- timeline --------------------------------------------------------------------------
@@ -330,7 +532,26 @@ class Batch:
 
     @property
     def wall(self) -> float:
-        return self.end - self.start
+        """How long the barrier held, measured on WORK — the basis `mean` is already measured on.
+
+        `waste = wall - mean`, so the two have to be measured the same way, and they were not:
+        `mean` subtracts the stretches an agent sat blocked on its coordinator while this read the
+        raw first-to-last span. `Actor.duration` has said in writing since the day it was written
+        that charging a batch's waste with blocked time "measures the LEAD's latency and calls it
+        the agent's" — the arithmetic here did it anyway.
+
+        What that cost, on the DEFAULT unbounded run of one real build: 14.86 phantom minutes in a
+        single fan-out and 22.35 minutes of straggler waste for a true 7.49. Bounding the run with
+        `--to-turn` happened to hide it, because that build's blocked stretch fell outside the
+        window — so the report was only correct when the operator passed a flag. Measuring on work
+        makes the unbounded run agree with the bounded one instead: 22.35 -> 7.49, and every
+        bounded number unchanged.
+
+        Each agent occupies `duration` seconds of work from where it starts, so the barrier ends
+        when the last of them finishes."""
+        if not self.agents:
+            return self.end - self.start
+        return max(((a.start or self.start) - self.start) + a.duration for a in self.agents)
 
     @property
     def durations(self) -> list[float]:
@@ -356,8 +577,11 @@ class Batch:
         minutes of straggler waste over the same build, which reordering cannot touch at all.
 
         Printed BESIDE `waste` on purpose. Apart, each number invites the wrong reading; together
-        they say plainly that the lever is slice SIZING, not slice order."""
-        starts = [s for s in (a.start for a in self.agents) if s is not None]
+        they say plainly that the lever is slice SIZING, not slice order.
+
+        Reads `launched_at`, never `start`: a bounded run clips `start` to the window's opening, so
+        every agent already running shares one start and this collapses. See `Actor.launched_at`."""
+        starts = [s for s in (a.launched_at for a in self.agents) if s is not None]
         return max(starts) - min(starts) if starts else 0.0
 
     def cost(self, cache_ttl: str) -> float:
@@ -376,14 +600,20 @@ class Batch:
 
 
 def batches(agents: Sequence[Actor], gap: float = 120.0) -> list[Batch]:
-    """Cluster agents into fan-outs: a start more than `gap` after the previous one begins a new
-    batch. The lead spawns one agent per message, so a batch's own starts are minutes apart —
-    hence a gap this wide."""
-    ordered = sorted((a for a in agents if a.start is not None), key=lambda a: a.start or 0.0)
+    """Cluster agents into fan-outs: a LAUNCH more than `gap` after the previous one begins a new
+    batch. The lead spawns one agent per message, so a batch's own launches are minutes apart —
+    hence a gap this wide.
+
+    Clustered on `launched_at`, never on the window-clipped `start`. Clipped starts are equal for
+    every agent already running when the window opened, so consecutive waves fused: one bounded run
+    reported 4 fan-outs where the transcript holds 5. An agent with no working time inside the
+    window is left out — it has no row to contribute."""
+    ordered = sorted((a for a in agents if a.launched_at is not None and a.start is not None),
+                     key=lambda a: a.launched_at or 0.0)
     out: list[Batch] = []
     current: list[Actor] = []
     for agent in ordered:
-        if current and (agent.start or 0.0) - (current[-1].start or 0.0) > gap:
+        if current and (agent.launched_at or 0.0) - (current[-1].launched_at or 0.0) > gap:
             out.append(_batch(len(out), current))
             current = []
         current.append(agent)
@@ -530,7 +760,7 @@ def _tool_seconds(agents: Sequence[Actor]) -> float:
     for agent in agents:
         started: dict[str, float] = {}
         spans: list[tuple[float, float]] = []
-        for turn in agent.turns:
+        for turn in agent.timed_turns:
             for call in turn.tool_calls:
                 stamp = _seconds(call.timestamp) or _seconds(turn.timestamp)
                 if stamp is not None:
@@ -581,8 +811,12 @@ def build_report(session: Path, *, map_path: Path | None = None, from_turn: int 
         raise ValueError(f"no timestamped turns in {session}{hint}")
     wall = max(stamps) - min(stamps)
     idle = sum(b - a for a, b in idle_gaps(lead, agents, idle_threshold))
-    busy = sum(e - s for s, e in _union((a.start, a.end) for a in agents
-                                        if a.start is not None and a.end is not None))
+    # The union of what the agents were WORKING on, not of their first-to-last spans. A span
+    # swallows the stretches an agent sat blocked on the lead, and this figure is printed as a
+    # share of active time right beside "lead alone" — so blocked time read as agent work AND was
+    # subtracted from the lead's own. On the default unbounded run of one real build that put
+    # `agents busy` at 44.88 minutes against a true 30.02, all of the difference one sleeping agent.
+    busy = sum(e - s for s, e in _union(span for a in agents for span in a.work_spans))
 
     usage = Usage()
     cost = 0.0
@@ -796,6 +1030,10 @@ the spend — a reader that opens only the session file measures the lead and mi
                  (an archive step, an unrelated question) before the build began.
   --to-turn N    and after N — a session usually keeps answering questions once the map has
                  landed. Turn numbers come from `coyomap-eval transcript`.
+                 Either bound also stops the SUB-AGENTS' clock at the same moment the lead's
+                 stops, so an agent woken by a background command after the build committed no
+                 longer stretches the wall or the straggler waste. Their TOKENS are untouched:
+                 the build paid for every call it spawned, whenever the call landed.
   --idle-gap S   a lead silence longer than S seconds with NO agent running is operator wait and
                  is excluded from `active` (default 180).
   --cache-ttl    cache-write price multiplier: 1.25x at 5m (default), 2x at 1h.

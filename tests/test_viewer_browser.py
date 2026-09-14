@@ -3889,3 +3889,269 @@ def test_a_tab_left_below_its_top_wears_the_head_path_chevron_and_no_label_moves
         assert [m[0] for m in page.evaluate(marks) if m[1]] == [], "a tab at its overview holds nothing"
         assert page.evaluate(labels) == before
         assert page.js_errors == []
+
+
+# ── Ownership: backed, answered, unanswered, and shared-with-nobody-reaching ─────────────────────
+
+#: The reason two areas share, on ONE recorded line. Every recorded reason that reaches a box on the
+#: three live maps that record anything rides a multi-key line (12 of 12) — that form is why the
+#: record format exists, so an author writes a shared reason once instead of seventeen times. A
+#: fixture with only single-key lines leaves the path production actually uses uncovered.
+_SHARED_REASON = "the rows are written by a discovery loop that no use case narrates, and the walk " \
+                 "that causes them narrates the connect rather than the write"
+
+
+def make_owner_states_map(m: dict) -> None:
+    """One data area in each state the page has to tell apart, on one screen.
+
+      SD1 `Tenancy & access policy`  BACKED      owned by CAP1, and a step of CAP1 reaches a record.
+      SD4 `Tool catalog`             ANSWERED    owned by CAP4, nothing reaches it, reason RECORDED.
+      SD5 `Audit & events`           ANSWERED    owned by CAP6, same — through the SECOND key of the
+                                                 same recorded line, which is the form live maps use.
+      SD3 `Credentials & secrets`    UNANSWERED  owned by CAP5, nothing reaches it, nothing recorded.
+      SD2 `Upstream & transport`     SHARED, and EVERY owner blind — the sibling that drew no mark at
+                                                 all until the gap stopped being asked only of an
+                                                 area with exactly one owner (mcpolis SD3, live).
+
+    The committed fixture draws no data column at all (no entity in it is SAVED), so every one of
+    these has to be built."""
+    subs = {g["id"]: g for g in m["subdomains"]}
+    subs["SD1"]["owners"] = ["CAP1"]
+    subs["SD4"]["owners"] = ["CAP4"]
+    subs["SD5"]["owners"] = ["CAP6"]
+    subs["SD3"]["owners"] = ["CAP5"]
+    subs["SD2"]["owners"] = ["CAP2", "CAP3"]
+    ents = {e["id"]: e for e in m["entities"]}
+    for eid in ("E1", "E26", "E35", "E16", "E10"):
+        ents[eid]["store"] = {"dep": None, "container": "rows", "mode": "collection", "notes": ""}
+    flow = next(f for f in m["flows"] if f["uc"] == "UC1")     # UC1 belongs to CAP1
+    step = dict(flow["steps"][-1])
+    step.update({"n": len(flow["steps"]) + 1, "src": "C15", "dst": "E1",
+                 "phrase": "writes the organization row"})
+    flow["steps"].append(step)
+    # Nothing is added for E26, E35, E16 or E10: no flow of their owners ever reaches them.
+    m["extras"] = list(m.get("extras") or []) + [
+        {"heading": "Data owner exceptions", "body": f"SD4, SD5: {_SHARED_REASON}"}]
+
+
+def _owner_screen(page: Any) -> dict:
+    """Everything the states put on screen, MEASURED rather than read off a class list.
+
+    The CONTRAST is computed from the wire's own stroke blended with its opacity, because a rule that
+    lowers opacity can take a line below the floor of visible while every class assertion still
+    passes — which is how the first version shipped at 1.25:1, fainter than the ordinary wire it was
+    meant to stand out from. `footClipped` is the same kind of guard for the words: a clamped
+    paragraph must keep the whole sentence in the DOM."""
+    return page.evaluate("""() => {
+        const lum = (rgb) => { const p = rgb.match(/\\d+/g).map(Number);
+          const f = (v) => { v /= 255;
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+          return 0.2126 * f(p[0]) + 0.7152 * f(p[1]) + 0.0722 * f(p[2]); };
+        const blend = (rgb, op) => 'rgb(' + rgb.match(/\\d+/g)
+            .map(v => Math.round(Number(v) * op + 255 * (1 - op))).join(', ') + ')';
+        const wire = (sd) => {
+          const p = document.querySelector(`path.story-own[data-sarea="${sd}"]`);
+          if (!p) return null;
+          const cs = getComputedStyle(p);
+          const eff = blend(cs.stroke, Number(cs.opacity));
+          return { dash: cs.strokeDasharray, gap: p.classList.contains('story-own-gap'),
+                   contrast: Math.round((1.05 / (lum(eff) + 0.05)) * 100) / 100 };
+        };
+        const box = (sd) => {
+          const b = document.querySelector(`.story-area[data-sarea="${sd}"]`);
+          const f = b.querySelector('.story-shared, .story-gap');
+          return { owned: b.classList.contains('story-area-owned'),
+                   gap: b.classList.contains('story-area-gap'),
+                   open: b.classList.contains('story-area-gap-open'),
+                   shared: b.classList.contains('story-area-shared'),
+                   border: getComputedStyle(b).borderColor,
+                   foot: f ? f.textContent : '',
+                   footClipped: f ? f.scrollHeight > f.clientHeight + 1 : false };
+        };
+        const ids = ['SD1', 'SD4', 'SD5', 'SD3', 'SD2'];
+        return { wires: Object.fromEntries(ids.map(i => [i, wire(i)])),
+                 boxes: Object.fromEntries(ids.map(i => [i, box(i)])),
+                 pageText: document.body.innerText };
+    }""")
+
+
+def test_a_claim_no_step_reaches_is_marked_whether_or_not_the_map_records_why() -> None:
+    """All the ownership wires used to arrive in the same ink — 12 of the 30 across the four live
+    maps are claims the map cannot back, and a reader had no way to tell which.
+
+    A RECORDED EXCEPTION IS STILL A GAP. It silences `validate`, whose reader is the build lead; the
+    person reading this page never sees the record. Both gap states take the same mark and the WORDS
+    say which — mark only the unrecorded ones and the page goes back to identical wires, because
+    every gap on every live map today is a recorded one (12 of 12)."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=features") as page:
+        _settle(page)
+        w = _owner_screen(page)["wires"]
+        assert w["SD1"]["dash"] == "none" and not w["SD1"]["gap"], w["SD1"]
+        for sd in ("SD4", "SD5", "SD3"):
+            assert w[sd]["gap"] and w[sd]["dash"] != "none", (sd, w[sd])
+        # ONE mark for every gap: no dash code for the reader to learn.
+        assert w["SD4"]["dash"] == w["SD3"]["dash"], w
+        assert w["SD2"] is None, "a shared area draws no ownership wire, recorded or not"
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_line_carrying_the_exception_is_not_the_faintest_thing_on_the_page() -> None:
+    """Measured, not asserted by class. The first version dashed the wire AND dropped it to opacity
+    .45 — rgb(228,230,238) on white, 1.25:1, BELOW the ordinary wire's own 1.45:1. Every class
+    assertion passed and the line carrying the page's one exception was the hardest thing to see."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=features") as page:
+        _settle(page)
+        w = _owner_screen(page)["wires"]
+        for sd in ("SD4", "SD3"):
+            assert w[sd]["contrast"] >= w["SD1"]["contrast"], (sd, w[sd], w["SD1"])
+            assert w[sd]["contrast"] >= 2.0, (sd, w[sd]["contrast"])
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_settled_owned_mark_actually_draws() -> None:
+    """`.story-area-owned { border-color }` sat ~900 lines above `.ibox { border: … }` at the SAME
+    specificity, and `.ibox` wins by order and resets the colour with a shorthand. The rule had never
+    once applied: an owned box computed rgb(220,223,240), byte-identical to every other box. Nothing
+    caught it because the test asserted the CLASS was on the element, never that it drew."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=features") as page:
+        _settle(page)
+        b = _owner_screen(page)["boxes"]
+        assert b["SD1"]["owned"] and not b["SD1"]["gap"], b["SD1"]
+        assert b["SD1"]["border"] != b["SD4"]["border"], b
+        assert b["SD4"]["border"] == b["SD3"]["border"], \
+            "a gap keeps the plain border whether or not it is recorded"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_gap_says_who_looked_and_the_whole_of_what_they_said() -> None:
+    """The reader gets the mark AND the reason: the author's own recorded sentence, WHOLE.
+
+    It was cut to its first sentence, and measured against every real recorded reason on the four
+    live maps that cut lost the load-bearing half on 7 of 12 boxes. There is no other complete copy
+    in the product — a record's area page carries neither the reason nor the gap — so the string is
+    never cut; `.story-gap` clamps the DRAWN height and the sentence stays in the DOM.
+
+    SD5 gets its reason from the SECOND key of the recorded line, which is the form every live
+    recorded reason uses."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=features") as page:
+        _settle(page)
+        b = _owner_screen(page)["boxes"]
+        assert b["SD1"]["foot"] == "", b["SD1"]
+        for sd in ("SD4", "SD5"):
+            foot = b[sd]["foot"]
+            assert foot.startswith("No step of it reaches this data."), (sd, foot)
+            assert _SHARED_REASON in foot, (sd, foot)      # WHOLE, not a first sentence
+            assert not b[sd]["footClipped"], (sd, "the sentence must stay in the DOM")
+            assert b[sd]["gap"] and not b[sd]["open"], (sd, b[sd])
+        un = b["SD3"]["foot"]
+        assert un == "No step of it reaches this data. The map does not say why.", un
+        assert b["SD3"]["open"], b["SD3"]
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_shared_area_no_owner_reaches_is_marked_too() -> None:
+    """The same defect one branch over. The gap used to be asked only of an area with exactly ONE
+    owner, so a SHARED area whose owners are ALL blind — mcpolis `SD3 Plan caps`, two features named,
+    neither reaching a record — drew a plain "Shared by …" foot, a plain border and no mark at all.
+    A shared area draws no wire by design, so the mark and the words both land on the box, and the
+    owners ARE named here because nothing else on the page joins them to it."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=features") as page:
+        _settle(page)
+        b = _owner_screen(page)["boxes"]["SD2"]
+        assert b["shared"] and b["gap"], b
+        assert b["foot"].startswith("Shared by Upstream MCPs, Access control."), b["foot"]
+        assert "No step of any of them reaches this data." in b["foot"], b["foot"]
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_box_does_not_repeat_what_its_own_picture_already_draws() -> None:
+    """The foot opened "Said to exist for <feature>" while the wire in the SAME picture already
+    joined that feature to this box — the case `a box does not repeat its picture` is written for,
+    whose stated reason is literally this page. The new half is what nothing else says: that no step
+    reaches the data. A SHARED area is the exception and keeps its owners' names, because it draws no
+    wire for anything to read them off."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=features") as page:
+        _settle(page)
+        b = _owner_screen(page)["boxes"]
+        # The foot is THERE and says the gap — without this the assertions below pass on a page that
+        # draws no foot at all, which is where this started.
+        assert b["SD4"]["foot"].startswith("No step of it reaches this data."), b["SD4"]["foot"]
+        assert "Said to exist for" not in b["SD4"]["foot"], b["SD4"]["foot"]
+        assert "Tool access via gateway" not in b["SD4"]["foot"], b["SD4"]["foot"]
+        assert "Upstream MCPs" in b["SD2"]["foot"], "a shared area has no wire to name its owners"
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_page_never_speaks_for_a_tool_it_is_not_running() -> None:
+    """The gap label used to claim "`coyomap validate` reports this as an owner with no evidence" —
+    a sentence that is FALSE on all four live maps, because every one of those areas is recorded and
+    `validate` therefore reports nothing at all. The page says what the MAP says.
+
+    The label also has to keep its qualifier: "no step reaches this" is simply false on a box a
+    reference arrow from ANOTHER feature also lands on (mcpolis SD11, live)."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=features") as page:
+        _settle(page)
+        assert "validate" not in _owner_screen(page)["pageText"]
+        labels = page.evaluate("""() => [...document.querySelectorAll('.story-elabel-gap')]
+            .map(l => [l.textContent, l.title])""")
+        assert labels, "a gap wire carries its label"
+        for text, title in labels:
+            assert text == "no step of it reaches this", text
+            assert "validate" not in title, title
+            assert ("The map says why:" in title or "the map does not say why" in title), title
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_records_own_page_says_whether_anything_backs_its_owner() -> None:
+    """The OTHER place the same claim is made. 85 of the 237 records that draw an "Owned by" row
+    across the four live maps sit in an area whose owners no step reaches, and the row said it
+    flatly: `E44 SandboxPersistedRef` reads "Owned by: Hosted stdio MCPs" directly above an "In use
+    cases" row naming a different feature — the contradiction on one screen, unmarked.
+
+    A record carrying `owners` of ITS OWN is left alone: the area's gap says nothing about an answer
+    the record overrode, so the two sets are compared rather than assumed equal."""
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=element&id=E26") as page:
+        _settle(page)
+        got = page.evaluate("""() => {
+            const dt = [...document.querySelectorAll('dt')]
+                .find(d => d.textContent.trim() === 'Owned by');
+            return { row: dt ? dt.nextElementSibling.textContent : '(no row)',
+                     note: document.querySelectorAll('.dv-note-gap').length };
+        }""")
+        assert "Tool access via gateway" in got["row"], got
+        assert "No step of it reaches this data." in got["row"], got
+        assert _SHARED_REASON in got["row"], got
+        assert got["note"] == 1, got
+        assert not page.js_errors, page.js_errors
+    # …and a record whose owner IS backed says nothing extra.
+    with _served_map(make_owner_states_map) as url, _page(url + "#v=element&id=E1") as page:
+        _settle(page)
+        got = page.evaluate("""() => ({
+            row: (() => { const dt = [...document.querySelectorAll('dt')]
+                    .find(d => d.textContent.trim() === 'Owned by');
+                  return dt ? dt.nextElementSibling.textContent : '(no row)'; })(),
+            note: document.querySelectorAll('.dv-note-gap').length })""")
+        assert "No step of" not in got["row"], got
+        assert got["note"] == 0, got
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_pages_own_title_carries_no_glossary_link() -> None:
+    """A page about one element is not decorated with a link to itself. The skip list covered
+    headings, and a page's title is not one — it is a `p`, because the breadcrumb is what names the
+    page — so a title that CONTAINS a glossary term underlined its own words. Here "Tool access via
+    gateway" linked both "Tool" and "Gateway" to their definitions.
+
+    The sentence under the title is prose and keeps its links: this turns off the title, not the
+    glossary."""
+    with _served() as url, _page(url + "#v=capability&cap=CAP4") as page:
+        _settle(page)
+        got = page.evaluate("""() => ({
+            title: (document.querySelector('.page-hero-name') || {}).textContent || '',
+            inTitle: document.querySelectorAll('.page-hero-name .gloss-link').length,
+            onPage: document.querySelectorAll('.gloss-link').length,
+        })""")
+        assert "Tool access via gateway" in got["title"], got
+        assert got["inTitle"] == 0, got
+        assert got["onPage"] > 0, "the page's prose still links its terms"
+        assert not page.js_errors, page.js_errors

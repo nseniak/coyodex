@@ -126,6 +126,15 @@ class MapProfile:
     #: STEPS, not flows, so a half-doored story is visible as a half-doored story. Measured the day
     #: the strict rule landed: mcpolis read 38 with `interface_doors` already at 129.
     crossings_without_a_door: int | None = None
+    #: The same crossings MINUS the ones the map has already answered for — a `UCn/doors: <why>`
+    #: (or sub-flow id) recorded under an 'Interface exceptions' heading, the record `validate`
+    #: itself honours. So this is the count still OPEN, and the two instruments agree on one map.
+    #: Without it the profile read 1 on a map `validate` had nothing left to say about, and
+    #: `eval/retro/method.md` Step 1c, which treats "above 0" as a defect, had no adjudicated state
+    #: to put that in.
+    #: `None`, never 0, on a profile written before the field: 0 is the clean value here, and a
+    #: comparison must be able to tell "not measured" from "measured, and nothing open".
+    crossings_without_a_door_unadjudicated: int | None = None
     interfaces_undecided_deps: int | None = None   # external deps naming neither a surface nor a why
     #: The two counts that make an UNAUTHORED shape visible to the instrument. Without a rebuild to
     #: validate the method text on, these plus `eval/rubric.md` are the only things that will report
@@ -334,12 +343,15 @@ def build_profile(map_text: str, repo_root: Path | None = None,
     return build_profile_from_model(load_model(map_text), repo_root=repo_root, map_path=map_path)
 
 
-def _all_step_lists(m: ProjectModel) -> list[list[FlowStep]]:
-    """Flows AND sub-flows. Both counts below read this one list: `interface_doors` used to count
-    flows only while `crossings_without_a_door` counted both, and `eval/retro/method.md` tells the
-    reader to read the pair together. A map doored entirely inside shared machinery scored 0 and 0,
-    which that page reads as "authored and never put into a story"."""
-    return [f.steps for f in m.flows] + [sf.steps for sf in m.subflows]
+def _all_step_lists(m: ProjectModel) -> list[tuple[str, list[FlowStep]]]:
+    """Flows AND sub-flows, each beside the id its adjudication is keyed on — a flow's USE CASE, a
+    sub-flow's own id, exactly as `validate_model` keys them.
+
+    Both counts below read this one list: `interface_doors` used to count flows only while
+    `crossings_without_a_door` counted both, and `eval/retro/method.md` tells the reader to read the
+    pair together. A map doored entirely inside shared machinery scored 0 and 0, which that page
+    reads as "authored and never put into a story"."""
+    return [(f.uc, f.steps) for f in m.flows] + [(sf.id, sf.steps) for sf in m.subflows]
 
 
 def _door_steps(m: ProjectModel) -> int:
@@ -347,18 +359,40 @@ def _door_steps(m: ProjectModel) -> int:
     naming an undefined `I99` is a dangling reference the validator already blocks, and counting it
     as a door here would have the two instruments disagree about the same step."""
     ids = {i.id for i in m.interfaces}
-    return sum(1 for steps in _all_step_lists(m) for st in steps
+    return sum(1 for _, steps in _all_step_lists(m) for st in steps
                if st.src in ids or st.dst in ids)
 
 
-def _undoored_crossings(m: ProjectModel) -> int:
-    """Every crossing between an actor and the product with no surface between them. Uses the
-    validator's OWN definition of an actor and its OWN predicate, so the instrument and the check can
-    never drift: three copies of "who is an actor" existed once and two of them disagreed."""
+def _undoored_crossings(m: ProjectModel) -> tuple[int, int]:
+    """`(every crossing with no surface between, how many of those nobody has answered for)`.
+
+    Uses the validator's OWN definition of an actor, its OWN predicate and its OWN record reader, so
+    the instrument and the check cannot drift: three copies of "who is an actor" existed once and two
+    of them disagreed.
+
+    TWO NUMBERS, because one could not tell an answered crossing from an unanswered one. The map
+    adjudicates a story's crossings by recording `UCn/doors: <why>` (or the sub-flow's id) under an
+    'Interface exceptions' extras heading, and `validate` honours that. The profile did not, so a map
+    `validate` had nothing left to say about came back reading 1 — and `eval/retro/method.md` Step 1c
+    reads "above 0" as a defect, with no adjudicated state to land in.
+
+    The RAW count keeps the existing name and the existing meaning: it is the drift signal, and the
+    fields around it hold the same line ("Counts are RAW (pre-escape)"), so an adjudication silences
+    the warning and never the trend. The second number is the one still open."""
     roles = validate_model.outside_actor_ids(m)
     ids = {i.id for i in m.interfaces}
-    return sum(1 for steps in _all_step_lists(m) for st in steps
-               if validate_model._is_undoored_crossing(st, roles, ids))
+    excused = validate_model._recorded_ids(
+        m, validate_model.INTERFACE_EXCEPTIONS_HEADING, ("UC", "SF"))
+    raw = still_open = 0
+    for key, steps in _all_step_lists(m):
+        crossings = sum(1 for st in steps
+                        if validate_model._is_undoored_crossing(st, roles, ids))
+        raw += crossings
+        # A bare `UCn` excuses the whole family, `UCn/doors` this gate alone — the two tokens
+        # `validate`'s own `_excused` honours, read here rather than re-derived.
+        if not {key, f"{key}/doors"} & excused:
+            still_open += crossings
+    return raw, still_open
 
 
 def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
@@ -425,6 +459,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
     for i in m.interfaces:
         k = grammar.canonical_interface_kind(i.kind) or "unknown"
         kinds[k] = kinds.get(k, 0) + 1
+    undoored_raw, undoored_open = _undoored_crossings(m)
     n_components = len({c.id for c in m.components})
     n_edges = len(m.edges)
     root_fanout, max_fanout, in_band_pct, depth = balance_lib.fanout_summary(m)
@@ -500,7 +535,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
         security_surfaces=len(surfaces),
         interfaces=len(m.interfaces),
         interface_doors=_door_steps(m),
-        crossings_without_a_door=_undoored_crossings(m),
+        crossings_without_a_door=undoored_raw,
+        crossings_without_a_door_unadjudicated=undoored_open,
         interfaces_undecided_deps=sum(
             1 for d in m.deps
             if grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM

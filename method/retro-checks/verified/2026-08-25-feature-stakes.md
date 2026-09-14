@@ -32,3 +32,5 @@ regressing on most multi-role features), run the eval before accepting the map.
    and running servers, the member's about signing into an upstream.
    regression sign: stakes that restate the feature's purpose sentence (all actors of a feature
    carrying near-identical text), which hides the other roles exactly as the purpose alone did.
+
+verified in reminderrepo build of 2026-09-13 23:03

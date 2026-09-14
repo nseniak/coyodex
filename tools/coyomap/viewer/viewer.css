@@ -1992,10 +1992,28 @@ svg.story-wires path { fill: none; stroke: #c3c8d9; stroke-width: 1.4; opacity: 
    before the diagram had told them anything. Hover and pin treat every wire identically. */
 svg.story-wires path.story-ref { stroke-width: 1.2; opacity: .6; }
 /* An OWNERSHIP wire — the map's authored answer to "this area exists for that feature" — carries the
-   `story-own` class so the wire is identifiable, and takes NO styling of its own: at rest it is the
-   same grey line as an actor's, and hover/pin light it the same way. Ownership was drawn as a bold
-   coloured line for one round and pulled back: at rest the diagram is for CHOOSING, and a line that
-   shouts before the reader has picked anything spends the page's one loud voice on it. */
+   `story-own` class so the wire is identifiable, and, WHERE THE MAP CAN BACK IT, takes no styling of
+   its own: at rest it is the same grey line as an actor's, and hover/pin light it the same way.
+   Ownership was drawn as a bold coloured line for one round and pulled back: at rest the diagram is
+   for CHOOSING, and a line that shouts before the reader has picked anything spends the page's one
+   loud voice on it. The one exception is the claim no step reaches, immediately below: it is DARKER
+   than the rest rather than brighter — a different weight of the same grey, never a second colour,
+   so it reads as a line drawn differently and not as an alarm. */
+/* A CLAIM NO STEP REACHES. The map names a feature as the reason an area exists, and no step of that
+   feature reaches a single record in it. Until this it arrived in exactly the same ink as the claims
+   the map CAN back: 12 of the 30 ownership wires across the four live maps — reminderrepo 5 of 9,
+   coyomap's own map 5 of 8, mcpolis 2 of 7.
+   ONE mark for both gap states, the recorded and the unrecorded, so there is no dash code to learn:
+   the line says "not backed", and the box it lands on says which kind and why in words
+   (`.story-gap` below). Those words are the only legend.
+   DASHED AND DARKER, not faded. It was `2 4` at opacity .45, which computes rgb(228,230,238) on
+   white — 1.25:1, BELOW the plain wire's own 1.45:1. A line carrying the page's one exception cannot
+   be the faintest thing on it; measured, this one is 2.55:1, so it reads as deliberate. Darker grey
+   and not a second HUE: a colour here would read as a second kind of thing, and the page's one loud
+   voice belongs to the card the reader picks.
+   This narrows the "both lines SOLID" rule above and does not drop it: an actor's wire and a
+   reference arrow stay solid, because neither is a defect. */
+svg.story-wires path.story-own-gap { stroke: #9aa2b8; opacity: 1; stroke-dasharray: 4 3; }
 svg.story-wires path.story-hot { stroke: #4f46e5; stroke-width: 2.2; opacity: 1; }
 svg.story-wires path.story-ref.story-hot { stroke-width: 1.8; }
 /* The ONE wire a hovered label names, picked out of the bundle its card lit. Heavier and haloed
@@ -2110,10 +2128,10 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                 display: none; z-index: 5;
                 box-shadow: 0 2px 8px rgba(30,34,53,.20); cursor: default; }
 .story-elabel.story-lab-on { display: block; }
-/* The label of an ownership wire whose owner no walk reaches. Not a colour of its own — the
-   page has no red and this is a map defect, not an error state — but italic and quieter, so
-   it reads as an absence rather than as a list of records. */
-.story-elabel-noev { font-style: italic; opacity: .85; }
+/* The label of an ownership wire no step of the owner reaches. Not a colour of its own — the page
+   has no red and this is a gap in the map, not an error state — but italic and quieter, so it reads
+   as an absence rather than as a list of records. */
+.story-elabel-gap { font-style: italic; opacity: .85; }
 /* A record NAME inside a reference arrow's label is a door of its own (show it in context). It rides
    the pill's own type and colour — it is the label's text, not a control bolted onto it — and says
    it is a door the way every other name-door here does: an underline on hover. */
@@ -2128,8 +2146,31 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    wire can carry "these two, deliberately", and no border can either. A dashed border was tried and
    removed: dashed already means "a container, open it" on every diagram in this viewer (a
    subsystem, a sub-domain frame, a collapsed group), so it said the wrong thing loudly. */
-.story-area-owned { border-color: #b7afee; }
-.story-shared { margin: 3px 0 0; font-size: 10.5px; line-height: 1.35; color: #6b7280; }
+/* `.ibox` QUALIFIED, and that is the whole fix: `.ibox { border: 1.5px solid var(--ibox-rest) }` sits
+   ~900 lines below at the same specificity, and a SHORTHAND, so it reset this colour and an owned box
+   computed rgb(220,223,240) — byte-identical to every other box. The rule had never once applied.
+   Found while checking whether the gap box "loses the settled mark": it had nothing to lose. */
+.ibox.story-area-owned { border-color: #b7afee; }
+/* A GAP BOX keeps the plain border on purpose: the firm one says "the box and the line that reaches
+   it are one statement", which is the one thing a claim no step reaches cannot make. The two gap
+   classes are markers for the DOM and take no look of their own; the WORDS below are what is read. */
+/* The two feet a data area can carry, and they are the same kind of sentence: what the wire into this
+   box could not say. Shared names the owners; a gap names the owner, what is missing, and then either
+   the author's own recorded reason or the fact that there is none. Italic on the gap, the way the
+   wire's own label already marks an absence. */
+.story-shared, .story-gap { margin: 3px 0 0; font-size: 10.5px; line-height: 1.35; color: #6b7280; }
+/* CLAMPED BY CSS, never by the string. A recorded reason is printed WHOLE — it is the only complete
+   copy in the product, so a cut string loses the point of the sentence for good — and the drawn
+   height is capped here instead. The text stays in the DOM: selected, searched, copied and read
+   aloud in full. Eight lines is what the longest live reason (192 characters, keying five areas on
+   reminderrepo) needs in this 270px column, so today nothing is actually hidden; the cap is there so
+   one runaway record cannot push the column's other boxes off the screen. */
+.story-gap { font-style: italic; display: -webkit-box; -webkit-box-orient: vertical;
+             -webkit-line-clamp: 8; overflow: hidden; }
+/* The note on a record's own page, where the same ownership claim is made a second time. It rides
+   the `dv-note` the row already uses for "shared, deliberately" — same voice, same size — and takes
+   italic for the reason every gap sentence does: it marks an absence. */
+.dv-note-gap { font-style: italic; }
 
 /* ── the actor page's JOURNEY LINE ─────────────────────────────────────────────────────────────────
    One box per feature (tinted by featureTint — the one hue that feature gets anywhere), each box

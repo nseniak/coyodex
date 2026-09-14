@@ -19,3 +19,5 @@ Escalation: none on its own.
 2. expect: an UNANSWERED row (a `grounding.note` that does not state the count its advisory is
    about) is either answered in the note before the commit or named as UNANSWERED in the message.
    regression sign: UNANSWERED rows described as "carried" or "no escape".
+
+verified in reminderrepo build of 2026-09-13 23:03

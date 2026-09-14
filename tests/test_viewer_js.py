@@ -4184,8 +4184,22 @@ def test_the_data_column_never_invents_an_owner() -> None:
     design was measured out of. One inbound arrow is not ownership."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = _story_fn(js, "storyAreaCardHtml")
-    assert "a.owners" in card, "the authored answer is what the box may state"
+    own = _story_fn(js, "storyAreaOwner")
+    # ONE place works the answer out, and the box and the wire both read it — the two used to carry
+    # a copy each and disagreed on screen. The helper is where the never-invent rule lives now:
+    # the OWNER comes off `a.owners` alone, and `touchedBy` only ever answers "is there evidence".
+    assert "const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);" in own
+    assert "const sole = owners.length === 1 ? owners[0] : null;" in own
+    assert "const touch = sole ? touched.find((x) => x.feature === sole) : null;" in own
+    assert "const touched = a.touchedBy || [];" in own
+    # `touched` may only ever answer "does one of the AUTHORED owners reach this", never supply one.
+    tail = own.split("const touched")[1]
+    assert "owners.some((c) => touched.some((x) => x.feature === c))" in tail
+    assert "touched[0]" not in tail and "touched.map" not in tail, \
+        "an owner is never read off the arrows landing on the box"
+    assert "storyAreaOwner(a)" in card, "the box asks the one derivation, it does not redo it"
     assert "touchedBy" not in card, "an owner is never read off the arrows landing on the box"
+    assert "a.owners" not in card, "the box reads the authored answer through the shared helper"
     assert "data-sarea=" in card
     assert 'go({ kind: \'domsub\', sd });' in _story_fn(js, "bindStoryDiagram")
 
@@ -4198,7 +4212,8 @@ def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -
     the same data."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    assert "const sole = owners.length === 1 ? owners[0] : null;" in bind
+    assert "const o = storyAreaOwner(a);" in bind, "the wire asks the same one derivation the box does"
+    assert "const sole = o.sole;" in bind
     assert "if (sole && featEl[sole])" in bind
     assert "if (!from || t.feature === sole) continue;" in bind, \
         "the owning pair draws ONE line, not two"
@@ -4214,19 +4229,148 @@ def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -
     # pill that reads as a rendering fault rather than as the defect it is. The screen must not be
     # the one place `validate`'s "owner with no evidence" hides; the change's own retro-check calls
     # that a regression.
-    assert "'no journey reaches this'" in bind
-    assert "story-elabel-noev" in bind and ".story-elabel-noev" in css
+    assert "'no step of it reaches this'" in bind
+    assert "'no step reaches this'" not in bind, \
+        "the qualifier is load-bearing: another feature's arrow may reach this box"
+    # ONE NAME FOR ONE THING. The box's foot and this label are the same thing seen twice on one
+    # screen; they said it with two different nouns until the words were made to match.
+    assert "no journey reaches this" not in js
+    # ONE WRITER for the sentence, because it is said on the Features page and again on a record's
+    # own page, and two copies drift the moment the first is edited.
+    assert "function storyGapSentence(o, plural) {" in js
+    assert "' reaches this data.'" in js, "the box and the label say it in the same words"
+    assert "story-elabel-gap" in bind and ".story-elabel-gap" in css
+    # THE PAGE NEVER SPEAKS FOR THE VALIDATOR. This label used to claim "`coyomap validate` reports
+    # this as an owner with no evidence" — false on all four live maps, because every one of those
+    # areas is recorded and `validate` reports nothing. Say what the MAP says.
+    code = "\n".join(l for l in bind.splitlines() if not l.lstrip().startswith("//"))
+    assert "coyomap validate" not in code
     # A SHARED area draws no ownership wire and says its owners in WORDS instead. No dashed border:
     # dashed already means "a container, open it" on every diagram in this viewer.
-    assert ".story-shared {" in css, "a shared area says its owners in words"
-    assert "border-style: dashed" not in css[css.index(".story-area-owned"):
+    # The two feet a data area can carry ride ONE rule, because they are the same kind of sentence:
+    # what the wire into this box could not say (`Shared by …` / `Said to exist for …`).
+    assert ".story-shared, .story-gap {" in css, "a shared area says its owners in words"
+    assert "border-style: dashed" not in css[css.index(".ibox.story-area-owned"):
                                              css.index(".story-shared")]
-    # Both lines SOLID: at rest the gutter speaks one visual language, and a reader should not have
-    # to learn a dash code before the diagram has told them anything. Scoped to the story wires —
-    # other diagrams on other screens use a dash for their own reasons.
+    # The two NORMAL lines stay SOLID: at rest the gutter speaks one visual language, and a reader
+    # should not have to learn a dash code before the diagram has told them anything. Scoped to the
+    # story wires — other diagrams on other screens use a dash for their own reasons.
+    # EXACTLY ONE EXCEPTION, and it is not a category the reader has to learn: the unevidenced
+    # ownership claim (its own test below), which the box it lands on explains in words.
     wires = [l for l in css.splitlines() if l.startswith("svg.story-wires path")]
-    assert not [l for l in wires if "dasharray" in l], f"a story wire is dashed: {wires}"
+    dashed = [l for l in wires if "dasharray" in l]
+    assert [l.split("{")[0].strip() for l in dashed] == ["svg.story-wires path.story-own-gap"], \
+        f"a story wire is dashed for some other reason: {wires}"
 
+
+
+def test_a_claim_no_step_reaches_is_marked_whether_or_not_the_map_records_why() -> None:
+    """12 of the 30 ownership wires across the four live maps are claims the map cannot back: a
+    feature named as the reason a data area exists, with no step of that feature reaching a single
+    record in it. reminderrepo 5 of 9, coyomap's own map 5 of 8, mcpolis 2 of 7, argus 0 of 6. They
+    reached the page in exactly the same ink as the ones the map CAN back.
+
+    THREE STATES, and a RECORDED EXCEPTION IS STILL A GAP. The record silences `validate`, whose
+    reader is the build lead; the person reading this page never sees it. So both gap states take
+    the SAME mark — one line style, no dash code to learn — and the WORDS say which and why. Marking
+    only the unrecorded ones would take the page back to identical wires, because every gap on every
+    live map today is a recorded one (12 of 12).
+
+    The visible half of this is measured in tests/test_viewer_browser.py, not here: a source string
+    cannot see a line that renders fainter than the one it stands out from."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    own = _story_fn(js, "storyAreaOwner")
+    # A GAP IS ABOUT THE OWNERS, not about how many there are — it was `!!sole && !touch`, which
+    # left a SHARED area whose owners are ALL blind (mcpolis SD3, live) with no mark at all.
+    assert "const gap = owners.length > 0 " \
+           "&& !owners.some((c) => touched.some((x) => x.feature === c));" in own
+    assert "answered: gap && !!why" in own and "unanswered: gap && !why" in own
+    # The recorded reason is READ, never derived, and it is never evidence: it says who looked.
+    assert "(FEATURES.ownerRecords || {})[a.id]" in own
+
+    # THE WIRE: one mark for both gap states.
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const ownCls = 'story-own' + (o.gap ? ' story-own-gap' : '');" in bind
+    assert "wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, ownCls, 'sfeat', 'sarea')" in bind
+    rule = css[css.index("svg.story-wires path.story-own-gap {"):]
+    rule = rule[:rule.index("}")]
+    assert "stroke-dasharray" in rule
+    assert "opacity: 1" in rule, "a faded exception is the one thing this line must not be"
+
+    # THE BOX: the settled mark only where the map can back it, and the words for both gap states.
+    card = _story_fn(js, "storyAreaCardHtml")
+    assert "(own.sole && own.touch ? ' story-area-owned' : '')" in card
+    assert "(own.gap ? ' story-area-gap' : '')" in card
+    assert "(own.unanswered ? ' story-area-gap-open' : '')" in card
+    # THE OWNER IS NOT NAMED where a wire in the same picture already joins it — `a box does not
+    # repeat its picture`, whose stated reason is this page. A SHARED area has no wire, so it names
+    # its owners and adds the gap sentence after them.
+    assert "Said to exist for" not in card, "the wire in this picture already says whose it is"
+    assert "storyGapSentence(own, false)" in card and "storyGapSentence(own, true)" in card
+    gapfn = _story_fn(js, "storyGapSentence")
+    assert "'No step of ' + (plural ? 'any of them' : 'it') + ' reaches this data.'" in gapfn
+    assert "The map says why: ' + mdInline(o.why)" in gapfn, \
+        "the reason is a prose field like every other, so a backtick renders"
+    assert "' The map does not say why.'" in gapfn
+    assert "esc(own.why)" not in card and "esc(o.why)" not in gapfn
+    assert "{ foot: foot," in card
+    # THE REASON IS PRINTED WHOLE, and clamped by CSS instead. It was cut to its first sentence,
+    # which on the four live maps lost the load-bearing half on 7 of 12 boxes: reminderrepo's five
+    # kept a restatement of the finding and dropped the actual reason, and mcpolis's two ended
+    # mid-clause on a dangling determiner. The page holds the only complete copy in the product —
+    # a record's area page carries neither the reason nor the gap — so a cut string loses it for good.
+    assert "firstSentence(own.why)" not in card
+    clamp = css[css.index("\n.story-gap {"):]
+    clamp = clamp[:clamp.index("}")]
+    assert "-webkit-line-clamp" in clamp and "overflow: hidden" in clamp, \
+        "the DRAWN height is capped; the sentence stays in the DOM"
+    # A RECORD'S OWN PAGE says the same thing, through the same sentence and the same derivation:
+    # 85 of the 237 "Owned by" rows across the four live maps sit in an area no owner's step reaches,
+    # and the row used to state the claim flatly. A record carrying `owners` of its own is left
+    # alone — the area's gap says nothing about an answer that record overrode.
+    owned = _story_fn(js, "ownedByHtml")
+    assert "storyAreaOfRecord(id)" in owned and "storyAreaOwner(area)" in owned
+    assert "storyGapSentence(o, own.length > 1)" in owned
+    assert "const inherited = !!o && o.owners.length === own.length" in owned
+    assert "dv-note-gap" in owned and ".dv-note-gap" in css
+    assert ".story-shared, .story-gap {" in css and "\n.story-gap {" in css
+    italic = css[css.index("\n.story-gap {"):]
+    assert "font-style: italic" in italic[:italic.index("}")]
+
+
+def test_the_recorded_reasons_are_parsed_once_where_every_other_reader_parses_them() -> None:
+    """A `<key>: <why>` line is read by ONE module, after four separate parsers each silently
+    over-suppressed in its own way. The page needs those lines, so they are parsed server-side
+    through that module and shipped as data — a fifth parser, in JavaScript, would be the fifth scar.
+    Same heading and same key vocabulary as the validator's own skip, so the two can never disagree
+    about which areas are answered."""
+    gen = (VIEWER_DIR / "gen_viewer.py").read_text()
+    assert "def owner_records(m: ProjectModel) -> dict[str, str]:" in gen
+    assert "records.spec_of(DATA_OWNER_EXCEPTIONS_HEADING)" in gen
+    assert "records.lines(m, DATA_OWNER_EXCEPTIONS_HEADING)" in gen
+    assert "records.why_of(DATA_OWNER_EXCEPTIONS_HEADING, line)" in gen
+    assert "records.keys_on_line(line, spec.key, spec.seps, spec.lead, spec.strict_multi)" in gen
+    assert 'feature_block["ownerRecords"] = owner_records(model)' in gen
+    # No second parser in the browser: the page reads the shipped answer and nothing else.
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "Data owner exceptions" not in js, "the heading is parsed server-side, never here"
+
+
+def test_a_page_s_own_title_is_never_linked_to_the_glossary() -> None:
+    """A page about one element is not decorated with a link to itself. `glossSubjectKey` covers the
+    case where the WHOLE title is one term ("Contact"); it cannot cover a title that merely CONTAINS
+    one, and the headings skip could not either — a page's title is drawn as a `p`, because the
+    breadcrumb is what names the page. So the feature page for "Activities and schedules" underlined
+    both halves of its own name, the actor page for "Reminder owner" underlined its first word, and
+    the rule "Named person or group" underlined its last. Measured in the live DOM: 2, 1 and 1."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    skip = js[js.index("const GLOSS_SKIP ="): js.index(";", js.index("const GLOSS_SKIP ="))]
+    assert ".page-hero-name" in skip, "a page's own title is not a link to itself"
+    # The title lives inside it, so skipping the row covers the kind word and the subject at once.
+    assert 'class="page-hero-name"' in js and 'class="page-hero-subject"' in js
+    # And ONLY the title: the hero's sentence is prose and keeps its links.
+    assert ".page-hero-purpose" not in skip and ".page-hero-meta" not in skip
 
 def test_the_arrow_head_sits_at_the_line_end_and_takes_the_line_s_colour() -> None:
     """Two faults in one marker, both seen on screen.

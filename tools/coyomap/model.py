@@ -815,6 +815,38 @@ class Grounding:
     #: bound on the live claims with no verdict rather than the exact figure.
     claims_live_challenged: int = 0
 
+    #: WHAT THE CLOSER DECIDED, which until now the map kept nothing of. A closer is a second
+    #: fresh-context reader, denied the map, that re-reads every refutation the skeptics cast and
+    #: returns `uphold` (the refutation stands), `reject` (the skeptic misread the code) or `unsure`.
+    #: Its answers decide what the map ends up saying — on one build 22 of 24 refutation judgements
+    #: were applied on the strength of a sentence in a chat no later reader can open, and on the
+    #: 2026-09-13 reminderrepo build two REJECTED refutations are why the map still carries two
+    #: claims its own skeptics disproved. A reader of the shipped map could see the refutations and
+    #: not the appeal, which reads as two unfixed defects rather than two settled questions.
+    #:
+    #: THEY ARE NOT VOTES, and this is the reason they are three fields of their own rather than a
+    #: shift in the five counts above. Folded into the tally, one `reject` turns a 1-0 refutation
+    #: into a 1-1 tie — measured: `claims_refuted 1 → 0, claims_unverifiable 0 → 1` — and every gate
+    #: that reads a tie as "not refuted" then reports the claim as cleared. The five counts keep
+    #: saying what the SKEPTICS decided about the pinned worklist, which is the arithmetic
+    #: `validate` blocks on; these three say what the appeal did to it.
+    #:
+    #: All three zero means no appeal was heard. `closer_rejected` is the only one that changes what
+    #: the refutation gate blocks on (see `grounding.surviving_refutations`): an `uphold` leaves the
+    #: refutation standing and an `unsure` leaves it unsettled, and both still need the lead.
+    #: The three are ROW counts — a claim re-heard in a second wave is two rows on purpose, and
+    #: `validate`'s advisory tie to the closer's own files counts them the same way so the two
+    #: cannot drift.
+    closer_upheld: int = 0
+    closer_rejected: int = 0
+    closer_unsure: int = 0
+
+    #: CLAIMS whose appeals DISAGREE — one `uphold` and one `reject` on the same refutation. No row
+    #: count can say this: read as rows it is "2 refutations went to appeal, 1 rejected, so the map
+    #: keeps the claim", which asserts a settlement at the same moment the gate is refusing one.
+    #: A dispute settles nothing, so the refutation still stands and the lead still has to act.
+    closer_disputed: int = 0
+
     note: str = ""                   # how claims were triaged when coverage is partial
 
 

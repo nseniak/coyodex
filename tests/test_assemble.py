@@ -11,13 +11,15 @@ import json
 import subprocess
 import sys
 import tempfile
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
+from typing import get_args, get_type_hints
 
-from coyomap import assemble
+from coyomap import assemble, prose
 from coyomap.assemble import (_infer_ce_verb, ensure_fragments_ignored, load_fragment,
                               load_fragment_paths, merge_fragments)
-from coyomap.model import (ExtraSection, ModelError, ProjectModel, load_model,
-                           to_canonical_json)
+from coyomap.model import (ConfigRow, ExtraSection, ModelError, ObservabilityRow,
+                           ProjectModel, load_model, to_canonical_json)
 
 ASSEMBLE = [sys.executable, "-m", "coyomap.assemble"]
 
@@ -606,6 +608,320 @@ def test_merging_does_not_mutate_the_input_fragments():
     assert parts[0][1].messaging[0].publishers == ["C1"], "the input fragment was mutated"
     second, _ = merge_fragments(parts, {})
     assert second.messaging[0].publishers == pubs_first
+
+
+# --- the keyed sections: config + observability ---------------------------------------------------
+#
+# THE LIVE DEFECT. Three harvest slices each saw part of `DATABASE_URL` and each wrote a row for it,
+# and nothing deduped `config`, so the reminderrepo map's Config screen answered one question three
+# ways at once: 47 rows, 29 distinct keys, 16 keys duplicated — with three contradicting defaults on
+# `DATABASE_URL` alone. `observability` carried the same defect smaller (12 rows, 11 signals).
+# Neither section has an id to collide on or an anchor to pin, so no other check could see it.
+
+
+def make_config_fragment(*rows: dict) -> str:
+    return json.dumps({"config": list(rows)})
+
+
+def make_observability_fragment(*rows: dict) -> str:
+    return json.dumps({"observability": list(rows)})
+
+
+def merge_two(a: str, b: str, c: str | None = None) -> tuple[ProjectModel, list[str], dict[str, int],
+                                                             list[str]]:
+    """Merge two or three fragment bodies, returning (model, problems, stats, notes)."""
+    bodies = [x for x in (a, b, c) if x is not None]
+    parts = [(f"f{n}.json", load_fragment(body, f"f{n}.json")) for n, body in enumerate(bodies)]
+    stats: dict[str, int] = {}
+    notes: list[str] = []
+    model, problems = merge_fragments(parts, stats, notes)
+    return model, problems, stats, notes
+
+
+DATABASE_URL_SLICES = (
+    {"key": "DATABASE_URL", "purpose": "Address of the database.",
+     "default": "No default.", "per_env": ""},
+    {"key": "DATABASE_URL", "purpose": "Full address of the database.",
+     "default": "a local development database on port 5435",
+     "per_env": "one address per environment"},
+    {"key": "DATABASE_URL", "purpose": "Which database to open.",
+     "default": "No default; the deploy builds it.", "per_env": "Yes, one per environment."},
+)
+
+
+def test_three_slices_describing_one_setting_become_one_config_row():
+    """The reminderrepo `DATABASE_URL`, verbatim: three rows, three contradicting defaults, all
+    three shipped. One key is one setting, so the map must show one row."""
+    model, problems, stats, _notes = merge_two(*[make_config_fragment(r)
+                                                 for r in DATABASE_URL_SLICES])
+    assert problems == [], problems
+    assert len(model.config) == 1, [r.default for r in model.config]
+    assert stats["config_rows_merged"] == 2
+
+
+def test_the_merged_cell_states_every_answer_rather_than_picking_one():
+    """THE REVIEW FINDING. Keeping "the first row" made the survivor depend on
+    `sorted(dir.glob("*.json"))` — codepoint order of fragment FILENAMES — and the map then asserted
+    one answer, confidently, with the others gone. That is worse than the defect it replaced: before
+    it, a reader saw three answers and could tell something was wrong.
+
+    There is also no better answer to pick. Across the four live maps 191 fields disagree and a
+    plurality rule finds a winner on 14, because agents paraphrase and the rest are 1-1-1 ties."""
+    model, _problems, _stats, _notes = merge_two(*[make_config_fragment(r)
+                                                   for r in DATABASE_URL_SLICES])
+    default = model.config[0].default
+    assert default.startswith("more than one answer was found: "), default
+    for slice_row in DATABASE_URL_SLICES:               # nothing any slice found left the map
+        assert slice_row["default"] in default, default
+
+
+def test_a_field_only_one_slice_answered_is_stated_plainly():
+    """Merging ADDS content, and this is the half a reader would otherwise never see: a field only
+    one slice filled needs no marker, because nothing disagrees. 31 facts arrive this way across the
+    live maps, 6 on reminderrepo and 25 on mcpolis — the live `GEO_APIFY_API_KEY` gains the
+    `per_env` the other slice never wrote, while its two different defaults stay unsettled."""
+    a = make_config_fragment({"key": "GEO_APIFY_API_KEY", "purpose": "Key for the lookup service.",
+                              "default": "Empty. The service is still called, and refuses.",
+                              "per_env": ""})
+    b = make_config_fragment({"key": "GEO_APIFY_API_KEY", "purpose": "Holds the key.",
+                              "default": "`none`",
+                              "per_env": "No, both environments share one key."})
+    model, _problems, _stats, _notes = merge_two(a, b)
+    row = model.config[0]
+    assert row.per_env == "No, both environments share one key."     # one answer, stated plainly
+    assert "more than one answer" not in row.per_env
+    assert "more than one answer" in row.default                     # two answers, marked
+
+
+def test_the_merged_table_is_the_same_under_every_fragment_order():
+    """THE REGRESSION GUARD for the review finding, and the exact attack it used: merge the same
+    slices sorted, reversed and shuffled. The old merge produced a different table for 16 of
+    reminderrepo's 29 keys, 59 of mcpolis's 98 and 4 of coyomap's 14, and six random shuffles gave
+    six different tables. Every field is now computed from the whole group by content, so no
+    permutation can move the output — verified on all four live maps at ten orders each.
+
+    The last order leak was subtler than the first: two answers that differ only in SPACING fold to
+    one, and keeping the first-seen spelling still let row order decide which spelling shipped. Two
+    mcpolis keys moved on exactly that until `_distinct_answers` began keeping the smallest."""
+    rows = [*DATABASE_URL_SLICES,
+            {"key": "PORT", "purpose": "The  port.", "default": "3001", "per_env": ""},
+            {"key": "PORT", "purpose": "The port.", "default": "3000 in production",
+             "per_env": "Yes."},
+            {"key": "LOG_LEVEL", "purpose": "How much is logged.", "default": "info"}]
+    assert len(rows) == 6, "the permutations below index exactly these six rows"
+    tables = set()
+    for order in (rows, list(reversed(rows)), [rows[i] for i in (3, 0, 5, 2, 1, 4)],
+                  [rows[i] for i in (5, 2, 4, 1, 3, 0)], [rows[i] for i in (1, 5, 0, 4, 2, 3)]):
+        parts = [(f"f{n}.json", load_fragment(make_config_fragment(r), f"f{n}.json"))
+                 for n, r in enumerate(order)]
+        model, _ = merge_fragments(parts)
+        # NOT sorted before comparing. An earlier version of this test sorted by key, which made it
+        # blind to exactly half the bug: every row's CONTENT was settled while the rows themselves
+        # still came out in fragment order, and a second reviewer got ten different tables from ten
+        # orders on all four live maps. `views` and the viewer render this array in order, so the
+        # position is part of the output.
+        tables.add(json.dumps([[r.key, r.purpose, r.default, r.per_env] for r in model.config]))
+    assert len(tables) == 1, f"{len(tables)} different config tables from 5 fragment orders"
+    assert [r.key for r in model.config] == ["DATABASE_URL", "LOG_LEVEL", "PORT"]
+
+
+def test_contradicting_config_rows_are_reported_but_never_block_the_build():
+    """`_merge_duplicate_messaging` makes its contradiction a merge PROBLEM, which fails the
+    assemble and writes nothing. The same rule here would have failed THREE of the four live builds
+    (16 conflicting keys on reminderrepo, 59 on mcpolis, 4 on coyomap), so the finding rides the
+    non-blocking channel instead: a warning naming the key and the fields."""
+    a = make_config_fragment({"key": "PORT", "purpose": "The port.", "default": "3001"})
+    b = make_config_fragment({"key": "PORT", "purpose": "The port.",
+                              "default": "3000 in production and 3001 in staging"})
+    model, problems, stats, notes = merge_two(a, b)
+    assert problems == [], "a contradiction must not fail the assemble"
+    assert len(model.config) == 1
+    assert stats["keyed_row_contradictions"] == 1
+    assert len(notes) == 1, notes
+    assert notes[0].startswith("WARNING:")
+    assert "PORT (default)" in notes[0], notes[0]
+    assert "purpose" not in notes[0], "only the field that actually disagreed is named"
+
+
+def test_identical_duplicate_config_rows_merge_with_no_contradiction_reported():
+    """An exact duplicate is a tidy-up, not a disagreement — it must not spend a warning.
+
+    Worth pinning even though no live map contains one: across all four, EVERY duplicated key
+    disagrees on at least one field (16 · 0 · 59 · 4), so this path is the one the real builds never
+    take and a change could break unnoticed."""
+    row = {"key": "LOG_LEVEL", "purpose": "How much is logged.", "default": "info"}
+    model, problems, stats, notes = merge_two(make_config_fragment(row),
+                                              make_config_fragment(dict(row)))
+    assert problems == [] and notes == []
+    assert len(model.config) == 1
+    assert stats["config_rows_merged"] == 1 and stats["keyed_row_contradictions"] == 0
+
+
+def test_a_reworded_answer_is_not_a_contradiction():
+    """Identity and answers both fold whitespace and case, so `Empty` and `empty` are one answer.
+    A warning that fired on capitalisation would be the noise that gets the check switched off."""
+    model, _problems, stats, notes = merge_two(
+        make_config_fragment({"key": "SENTRY_DSN", "purpose": "Where crashes go.", "default": "empty"}),
+        make_config_fragment({"key": "SENTRY_DSN", "purpose": "Where  crashes   go.",
+                              "default": "Empty"}))
+    assert len(model.config) == 1 and notes == []
+    assert stats["keyed_row_contradictions"] == 0
+    # And the spelling that ships is the smallest, not the first seen — the last place fragment
+    # order could decide an answer, which two mcpolis keys were still losing to.
+    assert model.config[0].default == "Empty"
+
+
+def test_two_different_settings_are_never_merged():
+    """The negative control: identity is the key, and two keys are two settings."""
+    model, _problems, stats, _notes = merge_two(
+        make_config_fragment({"key": "PORT", "default": "3001"}),
+        make_config_fragment({"key": "HOST", "default": "0.0.0.0"}))
+    assert len(model.config) == 2
+    assert stats["config_rows_merged"] == 0
+
+
+def test_two_settings_whose_keys_differ_only_in_case_stay_two_settings():
+    """A config key is a case-sensitive IDENTIFIER — an environment variable, a YAML field — so
+    `PORT` and `port` are two settings, not one spelled twice. Identity folded case for a while,
+    justified as free because no live map holds such a pair (0 of 29 · 0 of 47 · 0 of 98 · 0 of 14).
+    That is a measurement about maps that already exist, and what it permitted destroys data: the
+    two rows below merged into ONE keyed `PORT` whose purpose, default and per_env all read
+    `more than one answer was found: …`, with a warning telling the lead to leave one answer in the
+    fragments. The map knew both settings cleanly and would have asserted confusion about one."""
+    model, _problems, stats, notes = merge_two(
+        make_config_fragment({"key": "PORT", "purpose": "The port the API server listens on.",
+                              "default": "3000"}),
+        make_config_fragment({"key": "port", "purpose": "The port field of the connection block.",
+                              "default": "5432"}))
+    assert [r.key for r in model.config] == ["PORT", "port"], [r.key for r in model.config]
+    assert [r.default for r in model.config] == ["3000", "5432"]
+    assert stats["config_rows_merged"] == 0 and notes == []
+    # Whitespace still folds, because a run of spaces in an identifier is a typo, not a distinction.
+    spaced, _p, spaced_stats, _n = merge_two(
+        make_config_fragment({"key": "MY  KEY", "default": "a"}),
+        make_config_fragment({"key": "MY KEY", "per_env": "b"}))
+    assert len(spaced.config) == 1 and spaced_stats["config_rows_merged"] == 1
+    assert spaced.config[0].default == "a" and spaced.config[0].per_env == "b"
+
+
+def test_a_config_row_with_no_key_keeps_its_own_place():
+    """`_dep_identity` / `_component_identity`'s rule: an unidentifiable row is never folded into a
+    neighbour. Two keyless rows are two rows, not one."""
+    model, _problems, _stats, _notes = merge_two(
+        make_config_fragment({"key": "", "purpose": "Something unnamed."}),
+        make_config_fragment({"key": "", "purpose": "Something else unnamed."}))
+    assert len(model.config) == 2, [r.purpose for r in model.config]
+
+
+def test_observability_rows_for_one_signal_merge_the_same_way():
+    """The live reminderrepo row: `Container health check` twice, with different `where_emitted`,
+    `where_viewed` and `alerts`."""
+    a = make_observability_fragment({"signal": "Container health check",
+                                     "where_emitted": "The compose healthcheck.",
+                                     "where_viewed": "docker ps", "alerts": "None."})
+    b = make_observability_fragment({"signal": "Container health check",
+                                     "where_emitted": "The API's own /health route.",
+                                     "where_viewed": "The deploy dashboard.",
+                                     "alerts": "The deploy restarts the container."})
+    model, problems, stats, notes = merge_two(a, b)
+    assert problems == []
+    assert len(model.observability) == 1
+    viewed = model.observability[0].where_viewed
+    assert "docker ps" in viewed and "The deploy dashboard." in viewed, viewed
+    assert stats["observability_rows_merged"] == 1
+    assert any("observability signal" in n and "Container health check" in n for n in notes), notes
+
+
+def test_merging_keyed_rows_does_not_mutate_the_input_fragments():
+    """The `_merge_duplicate_messaging` lesson: `merge_fragments` extends the FRAGMENTS' own lists
+    into the output, so writing a merged value through one of them would edit the caller's objects
+    and make a second merge of the same parts produce a different map."""
+    a = make_config_fragment({"key": "DATABASE_URL", "purpose": "The database.", "per_env": ""})
+    b = make_config_fragment({"key": "DATABASE_URL", "purpose": "The database.",
+                              "per_env": "One per environment."})
+    parts = [("a.json", load_fragment(a, "a.json")), ("b.json", load_fragment(b, "b.json"))]
+    first, _ = merge_fragments(parts, {})
+    assert first.config[0].per_env == "One per environment."
+    assert parts[0][1].config[0].per_env == "", "the input fragment was mutated"
+    second, _ = merge_fragments(parts, {})
+    assert second.config[0].per_env == first.config[0].per_env
+
+
+def test_every_keyed_section_names_a_real_array_and_a_real_key_field():
+    """`_merge_keyed_rows` writes the merged list back with `setattr`, and `ProjectModel` is a plain
+    dataclass — so a typo in the section table would create a NEW attribute, leave the real array
+    untouched, and disable the merge in silence. The same typo in the key field would make every row
+    unidentifiable and merge nothing, equally quietly."""
+    hints = get_type_hints(ProjectModel)
+    for section in assemble._KEYED_SECTIONS:
+        assert section.attr in hints, f"{section.attr} is not a ProjectModel field"
+        assert isinstance(getattr(ProjectModel(), section.attr), list), \
+            f"{section.attr} is not an array"
+        row_cls = get_args(hints[section.attr])[0]          # list[ConfigRow] -> ConfigRow
+        names = {f.name for f in dataclass_fields(row_cls)}
+        assert section.key_field in names, \
+            f"{section.attr} rows have no '{section.key_field}' field — the merge would see no key"
+        # `_distinct_answers` reads STRING answers and skips anything else, so a non-string field
+        # added to one of these rows would merge to empty in silence. Two all-string row classes is
+        # the assumption the merge rests on; say so here rather than discovering it in a map.
+        for f in dataclass_fields(row_cls):
+            assert get_type_hints(row_cls)[f.name] is str, (
+                f"{row_cls.__name__}.{f.name} is not a str — `_distinct_answers` would drop it; "
+                f"teach the merge how to combine that type before adding it")
+
+
+def test_the_readability_walk_still_does_not_read_config_or_observability():
+    """A TRIPWIRE on another module, deliberately. Stating every answer in a merged cell is only
+    affordable because `prose.iter_prose_fields` does not walk these two sections — measured, the
+    same answers under an unregistered extras heading take mcpolis from 39 readability findings to
+    171. Nothing in `assemble` would notice if that walk were widened, so the cost of the merge
+    would silently land on the advisory and on the audit's paid reading fan-out.
+
+    If this fails, the widening may well be right — but re-cost the decision in `_UNSETTLED_LEAD`'s
+    comment first, rather than deleting this test."""
+    m = ProjectModel(
+        config=[ConfigRow(key="DATABASE_URL", purpose="A sentence only this row holds.",
+                                   default="Another sentence only this row holds.",
+                                   per_env="A third sentence only this row holds.")],
+        observability=[ObservabilityRow(signal="Container health check",
+                                                 where_emitted="A fourth unique sentence.",
+                                                 where_viewed="A fifth unique sentence.",
+                                                 alerts="A sixth unique sentence.")])
+    seen = [f"{where} :: {text}" for where, text in prose.iter_prose_fields(m)]
+    for unique in ("A sentence only this row holds.", "Another sentence only this row holds.",
+                   "A third sentence only this row holds.", "A fourth unique sentence.",
+                   "A fifth unique sentence.", "A sixth unique sentence."):
+        assert not any(unique in s for s in seen), (
+            f"the readability walk now reads {unique!r} — config/observability prose has entered "
+            f"`iter_prose_fields`, so a merged cell that states every answer is no longer free. "
+            f"Re-cost the joining decision (see `_UNSETTLED_LEAD` in assemble.py) before changing "
+            f"this test.")
+
+
+def test_the_config_merge_and_its_contradictions_reach_the_operator():
+    """End to end through the real CLI: the warning names the key on stderr and the digest carries
+    the counts, so a build whose warning has scrolled away can still see what the merge chose."""
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "header.json").write_text(make_header_fragment())
+        (d / "a.json").write_text(make_config_fragment(
+            {"key": "DATABASE_URL", "purpose": "The database.", "default": "No default."}))
+        (d / "b.json").write_text(make_config_fragment(
+            {"key": "DATABASE_URL", "purpose": "The database.", "default": "Port 5435 locally."}))
+        out = d / "out"
+        proc = subprocess.run(ASSEMBLE + [str(d / "header.json"), str(d / "a.json"),
+                                          str(d / "b.json"), "--out", str(out)],
+                              capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr        # reports, never blocks
+        assert "DATABASE_URL (default)" in proc.stderr, proc.stderr
+        assert "config rows merged 1" in proc.stdout, proc.stdout
+        assert "keys left unsettled (every answer kept) 1" in proc.stdout, proc.stdout
+        written = json.loads((out / "project-map.json").read_text())
+        assert len(written["config"]) == 1, written["config"]
+        # The written MAP carries the finding too, which neither the warning nor the digest does:
+        # both answers are in the cell a reader meets, so nothing downstream has to be told.
+        assert "No default." in written["config"][0]["default"], written["config"][0]
+        assert "Port 5435 locally." in written["config"][0]["default"], written["config"][0]
 
 
 # --- the fragment-reading loop (`load_fragment_paths`) --------------------------------------------

@@ -69,7 +69,17 @@ DEFAULT_BANDS: dict[str, float] = {
     # (`test_the_rule_fields_are_report_only_by_default`). The shipped `eval/thresholds.json` bands
     # both at 0.30, shrink-only: rules went 102 -> 79 -> 95 -> 88 across four mcpolis builds with
     # nothing watching, and every block of the last one came back on the contract's ceiling.
+    # They are listed in `OPTIONAL_BANDS` below, so leaving them out is SAID rather than silent.
 }
+
+#: Band keys the shipped `eval/thresholds.json` carries and `DEFAULT_BANDS` deliberately does not.
+#: Keeping them out of the code defaults is right (see the note above), and it was also INVISIBLE: a
+#: caller that passes no `--thresholds` falls back to `DEFAULT_BANDS`, both metrics vanish from the
+#: band table, and nothing says a word. `eval/retro/method.md` ran exactly that command, so no
+#: retrospective's band table could ever have carried `rules` or `rule_sites` — the one thing the
+#: 2026-09-08 decision to band them was for. A metric named here is reported as UNBANDED whenever
+#: the maps actually carry a count for it and no band is in force.
+OPTIONAL_BANDS: tuple[str, ...] = ("rules_shrink_pct", "rule_sites_shrink_pct")
 
 # Judge bands are DROP-only (asymmetric): a rise in faithfulness/coverage is good, only a fall is a
 # concern. Values are allowed ABSOLUTE drops in the metric's own units (pass-rate 0..1, scores 0..4).
@@ -189,9 +199,73 @@ class DeltaReport:
     tool_delta: str | None = None  # set when the two maps were built by different coyomap builds.
     # Its own field, not a note: notes print last, and this one changes how everything above it is
     # read — a delta that spans a tool change is not evidence about the method.
+    #: Profile metrics both maps carry a count for that NO band in force watches (`OPTIONAL_BANDS`).
+    #: Its own field for the same reason `tool_delta` has one, and printed at the TOP and the BOTTOM
+    #: of the report: a reader who `head`s the output and a reader who `tail`s it must both see that
+    #: the band table is short of these rows. A silent skip is what kept `rules` out of every
+    #: retrospective's band table since the day it was banded.
+    unbanded: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
+
+
+def _metric_of(key: str) -> tuple[str, bool]:
+    """The profile field a band key names, and whether the band is shrink-only.
+
+    One reader for the key grammar, because two callers need it: the band loop, which applies the
+    band, and the unbanded check, which has to name the same metric a band WOULD have watched."""
+    if key.endswith("_shrink_pct"):
+        return key[: -len("_shrink_pct")], True
+    if key.endswith("_pct"):
+        return key[: -len("_pct")], False
+    return key, False
+
+
+def _numeric(value: object) -> float | None:
+    """`value` as a number, or None when it is not a comparable metric.
+
+    None covers a ratio with a 0 denominator, a field a profile predates, and a `bool` — which is an
+    `int` in Python and must never be banded as one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _unbanded_metrics(baseline: MapProfile, candidate: MapProfile,
+                      t: Thresholds) -> list[str]:
+    """The `OPTIONAL_BANDS` metrics BOTH these maps carry a count for and no band in force watches.
+
+    Matched on the METRIC, never on the band key. The band loop resolves `rules_shrink_pct` and
+    `rules_pct` to the same field through `_metric_of`, so a thresholds file spelling the band the
+    other way is still watching `rules` — and a key-level test printed `[ok] rules: 88 -> 88` and
+    "no band in force watches it" in one report.
+
+    BOTH sides must carry a number, and the reason is that the line PRESCRIBES a remedy. When one
+    side is None the band it tells you to turn on is demoted to a note anyway ("not a numeric
+    profile metric on both sides"), so the advice would not produce the row it promises. The
+    non-zero test keeps the quiet that leaving these out of `DEFAULT_BANDS` bought: a map with no
+    rules layer reads 0 or None on both sides and hears nothing about them."""
+    watched = {_metric_of(k)[0] for k in t.bands}
+    out: list[str] = []
+    for key in OPTIONAL_BANDS:
+        metric, _ = _metric_of(key)
+        if metric in watched:
+            continue
+        b = _numeric(getattr(baseline, metric, None))
+        c = _numeric(getattr(candidate, metric, None))
+        if b is not None and c is not None and (b or c):
+            out.append(metric)
+    return out
+
+
+def _unbanded_line(metrics: list[str]) -> str:
+    """The one sentence that names the missing rows. ONE writer, printed twice — the top copy and
+    the bottom copy must not drift into two different claims."""
+    return (f"NOT BANDED — {', '.join(metrics)}: both maps carry a count and no band in force "
+            f"watches it, so nothing in this report would catch a collapse. Re-run with "
+            f"`--thresholds eval/thresholds.json`, which bands them shrink-only; the built-in "
+            f"defaults leave them out because the layer they measure is optional.")
 
 
 def _band(metric: str, b_val: float, c_val: float, allowed: float,
@@ -460,20 +534,29 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
 
     bands: list[BandResult] = []
     for key in sorted(t.bands):
-        if key.endswith("_shrink_pct"):
-            metric, shrink_only = key[: -len("_shrink_pct")], True
-        elif key.endswith("_pct"):
-            metric, shrink_only = key[: -len("_pct")], False
-        else:
-            metric, shrink_only = key, False
-        b_val, c_val = getattr(baseline, metric, None), getattr(candidate, metric, None)
-        if not isinstance(b_val, (int, float)) or isinstance(b_val, bool) or \
-           not isinstance(c_val, (int, float)) or isinstance(c_val, bool):
+        metric, shrink_only = _metric_of(key)
+        b_val = _numeric(getattr(baseline, metric, None))
+        c_val = _numeric(getattr(candidate, metric, None))
+        if b_val is None or c_val is None:
             # Also hit by a None ratio (0-denominator, or a baseline profile written before the field
             # existed) — degrade to a note, never crash or fake a 0.
-            notes.append(f"band '{key}' skipped — '{metric}' is not a numeric profile metric on both sides")
+            note = f"band '{key}' skipped — '{metric}' is not a numeric profile metric on both sides"
+            if b_val is not None and c_val is None:
+                # THE DIRECTION MATTERS, and the generic wording hid it. An adoption-dependent count
+                # is written `len(...) or None`, so a layer that VANISHES reads None rather than 0 —
+                # the band is demoted to this note and the verdict stays PASS. A shrink band catches
+                # `88 rules -> 20`; it cannot see `88 rules -> the section is gone`, which is the
+                # worse of the two. Naming the direction is all this note can do: it does not gate.
+                note += (f". The BASELINE carried {b_val:g} and the candidate carries nothing, so "
+                         f"this may be the whole layer disappearing rather than a field the profile "
+                         f"predates — no band can see that, and the verdict does not move on it")
+            notes.append(note)
             continue
-        bands.append(_band(metric, float(b_val), float(c_val), t.bands[key], shrink_only))
+        bands.append(_band(metric, b_val, c_val, t.bands[key], shrink_only))
+    # A band the thresholds in force do not carry at all was skipped in SILENCE, which is a
+    # different failure from the note above: nothing named the metric, so nothing told a reader the
+    # table was short a row. `unbanded` is printed at both ends of the report.
+    unbanded = _unbanded_metrics(baseline, candidate, t)
 
     jbands = _compare_judge(baseline_judge, candidate_judge, t) \
         if baseline_judge is not None and candidate_judge is not None else []
@@ -516,7 +599,7 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         verdict = DRIFT
     else:
         verdict = PASS
-    return DeltaReport(verdict, gates, bands, notes, jbands, granularity, tool_delta)
+    return DeltaReport(verdict, gates, bands, notes, jbands, granularity, tool_delta, unbanded)
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -740,6 +823,13 @@ def _auth_site_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
 def format_report(report: DeltaReport) -> str:
     # Judge/quality deltas lead; the raw structural counts come last — they are the noisiest signal.
     out = [f"Comparison verdict: {report.verdict}", ""]
+    # TOP COPY. The bottom copy is the last line of the report, and both are wanted: a reader who
+    # pipes this through `head` and a reader who pipes it through `tail` must each be told that the
+    # band table below is missing rows. A skip that only whispers in the notes is what let `rules`
+    # go unwatched through every retrospective since it was banded.
+    if report.unbanded:
+        out.append(_unbanded_line(report.unbanded))
+        out.append("")
     if report.tool_delta:
         out.append(f"COYOMAP BUILD — {report.tool_delta}.")
         out.append("A delta below may belong to the tool rather than the method. Rule the tool out "
@@ -776,6 +866,9 @@ def format_report(report: DeltaReport) -> str:
         out.append("\nNotes:")
         for n in report.notes:
             out.append(f"  - {n}")
+    if report.unbanded:
+        out.append("")
+        out.append(_unbanded_line(report.unbanded))   # BOTTOM COPY — see the top one
     return "\n".join(out)
 
 

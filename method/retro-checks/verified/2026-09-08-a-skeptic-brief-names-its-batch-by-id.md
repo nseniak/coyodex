@@ -17,3 +17,5 @@ Escalation: none on its own.
 2. expect: the refusal, when it fires, costs the lead one turn — the message names the slot and
    the shape wanted (`backbone-1`).
    regression sign: two or more fill attempts on the same brief.
+
+verified in reminderrepo build of 2026-09-13 23:03

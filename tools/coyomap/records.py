@@ -65,6 +65,15 @@ DIR_KEY_STRICT = r"[\w./-]*[./][\w./-]*"
 #: families key on whatever id their finding's location names — `BR7`, `SF12`, `HP1`).
 ANY_ID_KEY = r"[A-Z]+\d+"
 
+#: The 'Naming exceptions' vocabulary: `ANY_ID_KEY` plus the `/scope` suffix every id-keyed family
+#: uses when ONE id is the subject of two different checks. This heading adjudicates two questions
+#: about one label — the leading article, and a name spelled like code — and with the bare id alone
+#: the second had no key of its own: answering "yes, it really is called *The Gateway*" would also
+#: have silenced "this name is a class name" on that element, which is the family escape the method
+#: forbids. Its own constant rather than widening `ANY_ID_KEY`, for the reason `OWNER_KEY` states:
+#: widening the shared one lets the audit family read a scope it honours no check for.
+NAMING_KEY = ANY_ID_KEY + r"(?:/[a-z-]+)?"
+
 # The 'Data owner exceptions' vocabulary: a data AREA (`SDn`) or the one saved record whose override
 # is being adjudicated (`En`). Its own key rather than `ID_KEY`, which has no `SD` — widening the
 # shared one would quietly let every other family adjudicate a sub-domain it has no check for.
@@ -114,6 +123,15 @@ class HeadingSpec:
     load-bearing: the repeated-reason advisory used to tell EVERY family to merge its records onto
     one line, and on the seven families that cannot read a bare list, following that instruction
     destroyed the record silently — the tool causing the exact failure this module exists to prevent.
+    `scopes` is the CLOSED set of `/scope` words this heading's checks actually honour, when the
+    heading declares one. A scoped key is how one id answers one of several checks sharing a heading
+    (`UC4/doors`, `E2/embedded`) — but the pattern that reads it accepts any word, so `C1/article`
+    parses into a perfectly valid key, silences nothing, and looks answered. Declaring the set is
+    what lets `validate` say so by name. EMPTY MEANS UNCHECKED, and that is the safe default twice
+    over: a family whose scopes are not yet enumerated keeps working exactly as before, and the two
+    PATH-keyed headings must never be read this way at all — a `src/app/` key is a directory, not an
+    id with a scope, and reading its slash as one would report every coverage record as inert.
+
     `lead` is what precedes the list (only the audit family has one: its check name).
     `value` is the VALUE WORD a family's template puts between the key and the why, as a regex
     alternation — `<kind>: complete — <how>` under "Entry-point coverage", `security-granularity:
@@ -123,7 +141,8 @@ class HeadingSpec:
 
     def __init__(self, heading: str, maintenance: bool, key: str | None = None,
                  seps: str = SEP_ID, lead: str = "", strict_multi: str = "",
-                 merged_form: str = "", value: str = "") -> None:
+                 merged_form: str = "", value: str = "",
+                 scopes: tuple[str, ...] = ()) -> None:
         self.heading = heading
         self.maintenance = maintenance
         self.key = key
@@ -132,6 +151,7 @@ class HeadingSpec:
         self.strict_multi = strict_multi
         self.merged_form = merged_form or "<id>, <id>, <id>: <why>"
         self.value = value
+        self.scopes = scopes
 
 
 HEADINGS: tuple[HeadingSpec, ...] = (
@@ -172,7 +192,11 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # belongs to no surface). One heading, because an operator deciding "that is fine" is making the
     # same kind of decision in both cases.
     HeadingSpec("Interface exceptions", True, IFACE_KEY),
-    HeadingSpec("Naming exceptions", True, ANY_ID_KEY),
+    # The one heading whose scope vocabulary is enumerated, because it is the one with a scope that
+    # an operator would plausibly invent: the bare `In` answers the leading article, so somebody
+    # answering the OTHER question here reaches for `In/article` — which parses, silences nothing,
+    # and reads as answered. The others are listed in `validate`'s follow-up, not guessed at here.
+    HeadingSpec("Naming exceptions", True, NAMING_KEY, scopes=("code-name",)),
     # Keyed by a repo PATH, not an id — the thing being adjudicated is a file that used to hold an
     # access rule and no longer does. It had been pointed at "Audit exceptions", whose key
     # vocabulary is `[A-Z]+\d+`: a path can never be a key there, so twenty records written on one
@@ -383,6 +407,26 @@ def recorded_keys(m: ProjectModel, heading: str, key: str | None = None,
     for ln in lines(m, heading):
         out.update(keys_on_line(ln, k, sp, lead, strict))
     return out
+
+
+def scope_of(key: str) -> str:
+    """The `/scope` word of a recorded key, or "" when it carries none."""
+    return key.partition("/")[2]
+
+
+def inert_scoped_keys(m: ProjectModel, heading: str) -> list[str]:
+    """Keys under `heading` whose `/scope` word no check there honours — recorded, well formed,
+    and silencing nothing.
+
+    Only for a heading that DECLARES its scope vocabulary; a heading that does not is left alone,
+    because the failure this catches is cheap and the failure of guessing the set is not: one
+    missing word would report a working record as dead, and an operator who deletes it on that
+    advice loses a real adjudication."""
+    spec = spec_of(heading)
+    if spec is None or not spec.scopes:
+        return []
+    return sorted(k for k in recorded_keys(m, heading)
+                  if (s := scope_of(k)) and s not in spec.scopes)
 
 
 def records_key(recorded: list[str], key: str) -> bool:

@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from dataclasses import MISSING, dataclass, fields, is_dataclass
+from dataclasses import MISSING, dataclass, fields, is_dataclass, replace
 from pathlib import Path
 from typing import get_args, get_origin, get_type_hints
 
@@ -30,6 +30,7 @@ from coyomap.model import (
     FORMAT,
     ID_ARRAYS,
     ID_SHAPE,
+    ConfigRow,
     Edge,
     EntryPoint,
     ExtraSection,
@@ -37,6 +38,7 @@ from coyomap.model import (
     FlowStep,
     MessagingRow,
     ModelError,
+    ObservabilityRow,
     ProjectModel,
     guard_wrong_map,
     resolve_map_path,
@@ -361,14 +363,20 @@ def dump_preserving(m: ProjectModel, present_keys: frozenset[str] | None) -> str
 
 
 def merge_fragments(parts: list[tuple[str, ProjectModel]],
-                    stats: dict[str, int] | None = None) -> tuple[ProjectModel, list[str]]:
+                    stats: dict[str, int] | None = None,
+                    notes: list[str] | None = None) -> tuple[ProjectModel, list[str]]:
     """Merge validated fragments into one model. Returns (model, problems); problems are merge
     conflicts (duplicate IDs across fragments, a singleton stated twice with different values) —
     each names both fragments, so the lead re-pings the right agent instead of hand-fixing JSON.
 
     Pass a `stats` dict to receive the auto-clean pass counts (actor-endpoint edges stripped,
     duplicate components merged, duplicate edges collapsed) — `main` reports them; test callers that
-    omit it are unaffected."""
+    omit it are unaffected.
+
+    Pass a `notes` list to receive the NON-blocking merge findings as ready-to-print lines — today
+    the keyed-row contradictions (see `_merge_keyed_rows`), which must reach the operator without
+    failing the assemble. An out-parameter, exactly like `expand_directories`' own `notes`, so the
+    two callers that take neither (`fix`, `reconcile_build`) keep working unchanged."""
     out = ProjectModel()
     problems: list[str] = []
     id_owner: dict[str, str] = {}
@@ -410,6 +418,16 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
     comp_merged = _merge_duplicate_components(out)     # same module harvested by two slices → one
     chan_merged = _merge_duplicate_messaging(out, problems)   # two agents, same example row
     rules_merged = _merge_duplicate_rules(out)         # two block agents, same decision + same lines
+    # The sections with no id and no anchor — several slices each describing one setting or one
+    # signal. Reports rather than blocks; see `_merge_keyed_rows` for why.
+    keyed_merged: dict[str, int] = {}
+    keyed_conflicts = 0
+    for section in _KEYED_SECTIONS:
+        collapsed, conflicts = _merge_keyed_rows(out, section)
+        keyed_merged[section.attr] = collapsed
+        keyed_conflicts += len(conflicts)
+        if conflicts and notes is not None:
+            notes.append(_keyed_conflict_note(section, conflicts))
     edges_before_dup = len(out.edges)
     _merge_duplicate_edges(out)  # LAST: dep-merge / actor-strip / component re-point can create exact dups
     eps_before_dup = len(out.entry_points)
@@ -420,6 +438,9 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
         stats["actor_edges_stripped"] = actor_stripped
         stats["components_merged"] = comp_merged
         stats["messaging_rows_collapsed"] = chan_merged
+        stats["config_rows_merged"] = keyed_merged["config"]
+        stats["observability_rows_merged"] = keyed_merged["observability"]
+        stats["keyed_row_contradictions"] = keyed_conflicts
         stats["duplicate_rules_collapsed"] = rules_merged
         stats["duplicate_edges_collapsed"] = edges_before_dup - len(out.edges)
         stats["duplicate_entry_points_collapsed"] = eps_before_dup - len(out.entry_points)
@@ -577,6 +598,302 @@ def _merge_duplicate_messaging(m: ProjectModel, problems: list[str]) -> int:
                                       ("kind", "broker", "payload", "source")}))
     m.messaging = merged
     return collapsed
+
+
+@dataclass(frozen=True)
+class _KeyedSection:
+    """One raw-merging array: which `ProjectModel` field it is, which of its row fields IS the row's
+    identity, and what to call one of those keys in a message."""
+    attr: str
+    key_field: str
+    noun: str
+
+
+_KeyedRow = ConfigRow | ObservabilityRow
+
+#: The two top-level arrays whose rows are identified by the VALUE OF ONE FIELD and by nothing else:
+#: no id to collide on, no anchor to pin them, and no cross-reference pointing in. `config` and
+#: `observability` were the last sections in the model that merged RAW — every other array either
+#: carries authored ids (caught by the duplicate-id check), or has a dedup pass of its own
+#: (`_merge_duplicate_deps`/`_components`/`_messaging`/`_rules`/`_edges`, `_mint_entry_point_ids`),
+#: or is blocked downstream by `validate` (a duplicate `deployment[].unit` name).
+#:
+#: MEASURED BEFORE CHOOSING, on the four live maps (reminderrepo · argus · mcpolis · coyomap), and
+#: the measurement is what kept the list at two. Rows merged away per map:
+#:
+#:   config (by `key`)             18 · 0 · 106 · 8      ← reminderrepo shipped `DATABASE_URL`
+#:                                                         THREE times, with three contradicting
+#:                                                         defaults; mcpolis shipped one setting
+#:                                                         five times
+#:   observability (by `signal`)    1 · 0 ·   3 · 0      ← the same defect, smaller
+#:
+#: And the sections deliberately NOT here, each with the count that ruled it out:
+#:
+#:   run_commands  0 · 0 · 0 · 0 by `action`. By `command` there are 11/0/2/2, but one command
+#:                 legitimately serves two actions, so `action` is the identity and it never repeats.
+#:   tests         0 · 0 · 0 · 0 by (`targets`, `label`). By `targets` alone 0/0/1/3 — the label is
+#:                 what separates two assessments of one element, so those are two real rows.
+#:   deployment    0 everywhere, and `validate` already BLOCKS a duplicate `unit` (it is a `runs_in`
+#:                 target, so ambiguity there is a broken view reference, not a reading annoyance).
+#:   security      0 rows authored in all four maps, and `duplicate_security_warnings` +
+#:                 `coyomap fix dedup-security` already own that shape.
+#:   glossary · non_entity_types · environments · subdomains   0 everywhere.
+_KEYED_SECTIONS: tuple[_KeyedSection, ...] = (
+    _KeyedSection(attr="config", key_field="key", noun="config key"),
+    _KeyedSection(attr="observability", key_field="signal", noun="observability signal"),
+)
+
+
+def _keyed_identity(row: _KeyedRow, key_field: str) -> str:
+    """A keyed row's identity: its key field, whitespace-folded. CASE IS SIGNIFICANT. Empty → none.
+
+    THIS IS THE ONE PLACE THE `_dep_identity` / `_entry_point_identity` CASE-FOLDING RULE DOES NOT
+    APPLY, and the difference is the whole point. A dep's name and an entry point's trigger are
+    prose; a config key is a case-sensitive IDENTIFIER — an environment variable, a YAML field —
+    and `PORT` and `port` are routinely two different settings:
+
+        {"key": "PORT", "purpose": "The port the API server listens on.",  "default": "3000"}
+        {"key": "port", "purpose": "The port field of the connection block.", "default": "5432"}
+
+    Folded, those become ONE row keyed `PORT` whose purpose, default and per_env all read
+    `more than one answer was found: …`, plus a warning telling the lead to leave one answer in the
+    fragments — which would delete a real setting. The map knew both answers cleanly and would have
+    asserted confusion about one. Folding was justified here as "free, because no live map has such
+    a pair" (still true: 0 of 29, 0 of 47, 0 of 98, 0 of 14), but that is a measurement about maps
+    that exist, and the failure it permits destroys data rather than merely reading oddly.
+
+    Whitespace still folds, because a run of spaces in an identifier is a typo and never a
+    distinction. Case-folding stays where it belongs — on the ANSWER fields, in `_distinct_answers`,
+    where `empty` and `Empty` really are one answer."""
+    return " ".join(str(getattr(row, key_field, "") or "").split())
+
+
+#: What a merged cell says when the slices gave more than one answer. Plain words, because a map
+#: reader meets this sentence in the Config table and owes nothing to coyomap's vocabulary. It is
+#: the whole point of the design: the cell states that the map is unsure INSTEAD of picking.
+_UNSETTLED_LEAD = "more than one answer was found: "
+
+#: Between the answers. ` · ` is already the house cell separator in `views` (the security table
+#: joins its anchors with it), and it avoids `|`, which `views._esc` would have to backslash-escape
+#: inside a markdown table cell.
+_ANSWER_SEP = " · "
+
+# WHY PUTTING EVERY ANSWER IN THE CELL IS AFFORDABLE AT ALL, which is load-bearing for the whole
+# design and is the first thing a reader will doubt. `config` and `observability` are among the
+# arrays `prose.iter_prose_fields` does NOT walk (checked on all four live maps: no field label or
+# value from either section appears in the walk), so a joined cell costs the readability advisory
+# and the audit's PAID reading fan-out exactly nothing. If that walk is ever widened to reach these
+# two sections, THIS is the decision that has to be re-costed — nothing else here would notice.
+# Every other home for these answers does cost today: recording the same content under an
+# UNREGISTERED extras heading was measured at 39 → 171 readability findings on mcpolis as a bullet
+# list, and still 39 → 81 flattened into one block (reminderrepo 31 → 66). A registered heading
+# would be cheap again, because `records.why_of` strips the grammar — but registering one means a
+# `HeadingSpec` in `records.py`, and the cell already carries the facts, so that would buy a
+# `validate` check rather than rescue content.
+#
+# The sizes say the same thing. Of the 191 disagreeing fields across the four maps, 112 have exactly
+# two answers, 50 have three, 21 have four and 8 have five. MEASURED ON THE FINISHED CELL, lead
+# included, because the cell is what ships: median 165 characters, longest 536
+# (`MCPOLIS_TEST_SAFE_HTTP_ALLOW_LOOPBACK.purpose`), and 23 of the 191 over 300. An earlier revision
+# of this comment said 133 and 504 — it had measured the joined answers and forgotten the 32
+# characters of `_UNSETTLED_LEAD` standing in front of them. The five-paraphrase case that reads
+# badly is 4% of the total, and it was the case this design was first rejected on.
+
+
+def _blank(value: object) -> bool:
+    return not (value.strip() if isinstance(value, str) else value)
+
+
+def _distinct_answers(rows: list[_KeyedRow], field_name: str) -> list[str]:
+    """Every DIFFERENT non-empty answer the rows give for one field, ordered by content.
+
+    DO NOT SIMPLIFY THIS BACK TO PICKING A SURVIVOR. It returns a LIST, and keeping every answer
+    looks like over-engineering until you have the measurement, so this is the function the next
+    reader will want to collapse into "take the best one". There is no best one, and that is
+    measured rather than assumed:
+
+        Across the four live maps, 191 fields disagree. A PLURALITY rule — the only principled
+        tie-break available, since independent agreement between two agents really is evidence —
+        finds a winner on 14 of them. The other 177 are 1-1-1 ties, because agents paraphrase and
+        no two write the same sentence.
+
+    That one number kills every "pick one" design at once, the deterministic ones included: with
+    177 of 191 fields tied, any survivor rule is a coin flip, and a REPRODUCIBLE coin flip is still
+    a coin flip. It is also not a hypothetical — the revision this replaced kept the first row, and
+    an adversarial reader showed the winner was really decided by `sorted(dir.glob("*.json"))`,
+    codepoint order of fragment FILENAMES.
+
+    Three things then make this the whole order-independence fix. Duplicates fold on the normalized
+    form, so `empty` and `Empty` are one answer and four slices that agree spend one slot. The
+    result is sorted by that same normalized form. And where several spellings fold together, the
+    SMALLEST is the one kept, never the first one seen — which is the last place order could still
+    leak in, and it did: with `setdefault` here, two mcpolis keys (`MCPOLIS_TEST_MODE` and
+    `MCPOLIS_TEST_SAFE_HTTP_ALLOW_LOOPBACK`) still produced four different tables across ten
+    fragment orders, because two of their answers differ only in spacing. That leak is invisible to
+    a table-level test that only compares whole rows for equality, so it is pinned separately.
+
+    With all three, the answer list — and therefore the merged row's CONTENT — is a function of the
+    SET of rows and not of the order they arrived in. (Row ORDER is the other half, and it is
+    `_merge_keyed_rows` that settles it, by sorting.)
+
+    TWO CONSEQUENCES THAT ARE CORRECT BUT SURPRISING, stated so nobody reads them as bugs:
+
+      * "Smallest spelling" is codepoint order, so the UGLIER spelling can win: `NO DEFAULT` beats
+        `No default`, and `a  b` beats `a b`. Both are deterministic, which is the property being
+        bought; neither is a judgement about which reads better, and there is no basis for one.
+      * Re-merging a cell that ALREADY holds an answer set nests the lead
+        (`more than one answer was found: more than one answer was found: …`). It needs two rows
+        that both carry a lead and disagree, so it is reachable only by feeding an assembled map
+        back in as a fragment — operator error, and left unguarded rather than papered over."""
+    by_norm: dict[str, str] = {}
+    for row in rows:
+        value = getattr(row, field_name, "")
+        if not isinstance(value, str) or _blank(value):
+            continue
+        norm = " ".join(value.split()).lower()
+        text = value.strip()
+        prev = by_norm.get(norm)
+        by_norm[norm] = text if prev is None else min(prev, text)
+    return [by_norm[k] for k in sorted(by_norm)]
+
+
+def _merge_keyed_rows(m: ProjectModel, section: _KeyedSection) -> tuple[int, list[str]]:
+    """Collapse the rows of ONE keyed section that describe the same thing into one row, keeping the
+    first. Returns `(rows merged away, the keys whose rows disagreed)`.
+
+    THE DEFECT THIS EXISTS FOR. Several harvest slices each see part of one setting and each author
+    a row for it, and nothing deduped them, so a live map's Config screen answered one question three
+    different ways: `DATABASE_URL` shipped with `No default`, `a local development database on port
+    5435 when nothing is set`, and `No default; the deploy builds it from the database name, account
+    and password`, all three at once, with nothing marking them as one setting. A reader has no way
+    to tell which is true, and no other check could see it — config rows carry no id to collide on
+    and no anchor to pin, so neither the duplicate-id check nor `validate` had anything to read.
+
+    THE IDENTITY IS THE KEY ALONE, and that is stronger than the identities the other five passes
+    use, not weaker: `DATABASE_URL` names one setting whatever three agents wrote about it, the same
+    way `deployment[].unit` names one unit (which `validate` already blocks on). There is no second
+    field that could make two rows with one key into two different things, so there is no `(name,
+    broker)` half to add — `_merge_duplicate_messaging` needs one because two brokers really can
+    carry a channel of the same name.
+
+    A ROW WITH NO KEY IS NEVER MERGED — the `_dep_identity` / `_component_identity` rule: an
+    unidentifiable row keeps its own place rather than being folded into a neighbour.
+
+    THE MERGED ROW IS A FUNCTION OF THE SET OF ROWS, NEVER OF THEIR ORDER, and that is the whole
+    design. An earlier revision kept "the first row" and dropped the rest, which an adversarial
+    reader broke in one run: the order that decides a build is `sorted(dir.glob("*.json"))` —
+    codepoint order of FRAGMENT FILENAMES, which bears no relation to which agent read the
+    authoritative code. Merging each live map's fragments in reversed order changed the answer on 16
+    of reminderrepo's 29 config keys, 59 of mcpolis's 98 and 4 of coyomap's 14, and six random
+    shuffles produced six different tables. That is worse than the defect it replaced: before it, a
+    reader saw three contradicting answers and could tell something was wrong; after it, the map
+    asserted ONE, confidently, chosen by `sorted()`. So every field is now computed from the whole
+    group by `_distinct_answers`, and no permutation can move a merged row's CONTENT.
+
+    AND THE ROWS ARE SORTED BY KEY, which is the second half of that and was missing. Content
+    stability is not order stability: the surviving rows still came out in fragment order, so a
+    second reviewer built one fragment per live config row and got TEN different tables from ten
+    orders — 29 of reminderrepo's 29 row positions moved under a single reversal, 46 of argus's 47,
+    97 of mcpolis's 98, 14 of coyomap's 14. `views` and the viewer both render `m.config` in array
+    order, so the committed JSON and the on-screen table moved with it. Sorting here is what makes
+    "no output depends on fragment order" a true sentence rather than a nearly-true one, and an
+    alphabetical Config table is the better one to read anyway.
+
+    WHAT EACH FIELD BECOMES, from the distinct answers the slices gave:
+
+      * NONE → empty, exactly as before.
+      * ONE → that answer, whichever row wrote it. This is the inheritance `_merge_duplicate_rules`
+        does, and it is why merging ADDS content: a field only one slice filled is a fact the old
+        map could not show beside its siblings. 31 facts arrive this way across the live maps, 6 on
+        reminderrepo and 25 on mcpolis.
+      * TWO OR MORE → all of them, behind `_UNSETTLED_LEAD`. The cell says the map is unsure rather
+        than picking, so nothing the slices found leaves the map and nothing false is asserted.
+
+    WHY ALL OF THEM, RATHER THAN THE BEST ONE: because no best one exists — `_distinct_answers`
+    carries that measurement, and it is the one to read before changing any of this. WHY KEEPING
+    ALL OF THEM IS AFFORDABLE: the comment on `_UNSETTLED_LEAD`, which measures what every other
+    home for these answers would cost instead.
+
+    IT REPORTS, IT DOES NOT BLOCK, and the measurement is the argument. `_merge_duplicate_messaging`
+    makes its contradiction a merge PROBLEM, which fails the assemble and writes nothing; the same
+    rule here would have failed THREE of the four live builds (16 disagreeing config keys on
+    reminderrepo, 59 on mcpolis, 4 on coyomap — only argus is clean). A gate that fires on nearly
+    every real build teaches the lead to route around it, which is strictly worse than the defect.
+    So the finding rides the same non-blocking channel `actor_edges_stripped` uses: a WARNING on
+    stderr naming the keys, plus a counter in the assemble digest — and, unlike either of those, the
+    MAP now carries the finding too, in the cell itself, where a reader meets it.
+
+    Rows are REBUILT, never mutated: `merge_fragments` extends the FRAGMENTS' own lists into the
+    output, so writing a merged value through one of them would edit the caller's fragment objects
+    and make a second merge of the same parts produce a different map."""
+    rows: list[_KeyedRow] = list(getattr(m, section.attr))
+    if not rows:
+        return 0, []
+    order: list[str] = []
+    groups: dict[str, list[_KeyedRow]] = {}
+    for n, row in enumerate(rows):
+        ident = _keyed_identity(row, section.key_field)
+        key = ident or f"\0{n}"          # no key → its own group, so it can never absorb a neighbour
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(row)
+    merged: list[_KeyedRow] = []
+    collapsed = 0
+    conflicts: list[str] = []
+    for key in order:
+        group = groups[key]
+        if len(group) == 1:
+            merged.append(group[0])
+            continue
+        collapsed += len(group) - 1
+        # Every row in a group shares this key up to a run of whitespace (identity does NOT fold
+        # case — see `_keyed_identity`), so the spellings differ only in spacing and the smallest is
+        # a deterministic, order-free choice among equals. Deliberately NOT `_distinct_answers`,
+        # which case-folds: reaching for it here is how the key came to be folded in the first place.
+        key_spellings = sorted({str(getattr(r, section.key_field, "") or "").strip()
+                                for r in group} - {""})
+        values: dict[str, object] = {section.key_field: key_spellings[0] if key_spellings else ""}
+        unsettled: list[str] = []
+        for f in fields(type(group[0])):
+            if f.name == section.key_field:
+                continue
+            answers = _distinct_answers(group, f.name)
+            if len(answers) > 1:
+                unsettled.append(f.name)
+                values[f.name] = _UNSETTLED_LEAD + _ANSWER_SEP.join(answers)
+            else:
+                values[f.name] = answers[0] if answers else ""
+        merged.append(replace(group[0], **values))
+        if unsettled:
+            conflicts.append(f"{values[section.key_field]} ({', '.join(unsettled)})")
+    # ROW ORDER, the second half of order-independence. Until this sort the rows came out in
+    # fragment order, so ten fragment orders gave ten different tables even with every row's
+    # CONTENT settled. Keyless rows have nothing to sort on, so they keep their authored order and
+    # go last — the `_mint_entry_point_ids` rule, and for the same reason: letting an unidentifiable
+    # row take a low position would shuffle the real ones around it.
+    keyed = sorted((r for r in merged if _keyed_identity(r, section.key_field)),
+                   key=lambda r: _keyed_identity(r, section.key_field))
+    setattr(m, section.attr, keyed + [r for r in merged
+                                      if not _keyed_identity(r, section.key_field)])
+    return collapsed, conflicts
+
+
+def _keyed_conflict_note(section: _KeyedSection, conflicts: list[str]) -> str:
+    """The one WARNING line for a section whose rows disagreed. Count first, then a capped sample,
+    then the remedy — `prose.summarize`'s shape, because a build that prints 59 lines prints none a
+    reader gets to. Truncation goes through `reporting.shown` so whole-list mode still shows all.
+
+    It says the map KEPT both answers, because it did. An earlier wording said the first answer was
+    kept and the rest were gone, which was true of an earlier merge and is the behaviour an
+    adversarial reader broke: this line is what a lead reads to decide whether to act, so it must
+    describe the map that was actually written."""
+    return (f"WARNING: {len(conflicts)} {section.noun}(s) were described more than once, and the "
+            f"descriptions disagree. The map states EVERY answer in the field named in brackets, "
+            f"so the reader sees that it is unsettled rather than one answer chosen at random: "
+            f"{_shown(conflicts, 6, sep='; ', unit=f'{section.noun}(s)')}. Several harvest slices "
+            f"each described one {section.noun} from the part of the code it could see — re-read the "
+            f"code for the ones that matter and leave ONE answer in the fragments.")
 
 
 def _union_ids(first: list[str], second: list[str]) -> list[str]:
@@ -897,12 +1214,19 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 1
     stats: dict[str, int] = {}
-    model, problems = merge_fragments(parts, stats)
+    merge_notes: list[str] = []
+    model, problems = merge_fragments(parts, stats, merge_notes)
     if problems:
         for pr in problems:
             print(f"ERROR: {pr}", file=sys.stderr)
         print("ASSEMBLY FAILED: merge conflicts above; nothing was written.", file=sys.stderr)
         return 1
+    for note in merge_notes:          # non-blocking merge findings (keyed-row contradictions)
+        print(note, file=sys.stderr)
+    if stats.get("config_rows_merged") or stats.get("observability_rows_merged"):
+        print(f"note: merged {stats.get('config_rows_merged', 0)} duplicate config row(s) and "
+              f"{stats.get('observability_rows_merged', 0)} duplicate observability row(s) "
+              f"(several harvest slices each describing one setting or one signal)")
     if stats.get("actor_edges_stripped"):
         print(f"WARNING: stripped {stats['actor_edges_stripped']} actor-endpoint edge(s) — edges "
               f"connect components/deps/entities only, never actors. This is a trace-prompt defect: "
@@ -1027,6 +1351,13 @@ _STATS_LABELS: tuple[tuple[str, str], ...] = (
     ("duplicate_entry_points_collapsed", "dup-entry-points collapsed"),
     ("entity_edges_derived", "C→E edges derived"),
     ("messaging_rows_collapsed", "messaging rows collapsed"),
+    ("config_rows_merged", "config rows merged"),
+    ("observability_rows_merged", "observability rows merged"),
+    # The number that matters most of the three: keys whose slices disagreed, so the merged cell
+    # states every answer instead of one. The two counts above it are the tidy-up; this one is the
+    # map's own honesty, and it rides the digest because the digest is the line a transcript audit
+    # reads when the warning above has scrolled away.
+    ("keyed_row_contradictions", "config/observability keys left unsettled (every answer kept)"),
     ("extras_sections_merged", "extras sections merged"),
 )
 

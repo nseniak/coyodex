@@ -27,9 +27,11 @@ evidence or priming?") is in the backlog, owner: one wave on the new contract.
    mapped repo's code inside the contract's own text (the claims list may, the rule text may not).
    regression sign: 1 or more.
 
-2. expect: the dev-stub guard's rule site (`dev_stub_oauth_provider.py`, if the map still carries
-   it) gets a verdict from voters whose transcripts show the call-site read, whichever way it goes.
-   regression sign: 3-of-3 agreement with no call-site read in any voter's transcript.
+2. expect: a GUARD RULE SITE on the map under review — any rule whose truth lives at its callers —
+   gets a verdict from voters whose transcripts show the call-site read, whichever way it goes.
+   (This item used to name `dev_stub_oauth_provider.py`, which armed on mcpolis alone; the rule it
+   tests is repo-independent, so pick the map's own highest-risk guard.)
+   regression sign: unanimous agreement with no call-site read in any voter's transcript.
 
 3. expect: the refutation rate of the security theme does not collapse because the example is
    gone: at least one refutation among the access rules, as on the last four builds.

@@ -11,11 +11,19 @@ as-is, and every build "copied" it by rewriting it. So the instruction is mechan
 3. Change nothing else. If a rule reads wrong for this repo, fix it HERE, once, so the next build
    inherits the fix instead of re-deriving it.
 
-**Two slots need a word about what goes IN them**, since the agent half no longer explains itself:
+**Every slot needs a word about what goes IN it**, since the agent half no longer explains itself.
+`coyomap contract harvest --slots` prints these lines beside the empty values, so this list is what
+a lead actually reads — it is not documentation of the template, it IS the skeleton's help text.
 
 - **«SERVES»** — the UC / CAP / HP / R ids whose behavior runs through these files, one line each
   on what they need from this slice.
 - **«EXPECTED_COMPONENTS»** — the slice's E from the pre-index `granularity.per_dir`.
+- **«SLICE_KIND»** — what this slice IS, as a short phrase in the agent's first sentence ("HTTP
+  routing and config parsing"). Free text, and a real value is a phrase, not a category word.
+- **«FILES»** — the absolute paths this agent owns, as a list it can pass to `ls` and then read
+  one by one. Directories are allowed; the agent is told to list one before reading it.
+- **«BACKGROUND»** — what the lead already learned about this slice, handed down so the agent does
+  not re-derive it: the product in a sentence, the frameworks, the one or two facts that shape it.
 
 **The slot that keeps being left empty is «SERVES».** Structural slices exist to serve the
 behavioral layer. The behavioral draft exists before this fan-out precisely so the slices can be cut

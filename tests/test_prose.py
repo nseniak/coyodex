@@ -96,6 +96,42 @@ def test_a_backticked_literal_is_a_quotation_not_a_code_name() -> None:
     assert prose.code_tokens("The state is `in_progress` until paid.") == []
 
 
+# --- code-shaped NAMES -------------------------------------------------------------------------
+
+def test_a_humped_name_is_code_and_a_sentence_is_never_scanned_for_one() -> None:
+    """The class's own spelling is how a map picks up a code name, and it is a NAME rule only:
+    prose legitimately writes PostgreSQL and NestJS."""
+    assert prose.name_tokens("NotificationSecurityData") == ["NotificationSecurityData"]
+    assert prose.name_tokens("DateGeneratorDaily") == ["DateGeneratorDaily"]
+    assert prose.name_tokens("createUserSchema") == ["createUserSchema"]
+    # the sentence walk must not learn this shape
+    assert prose.code_tokens("Holds the notification security data for one activity.") == []
+    assert prose.code_tokens("Runs on PostgreSQL and NestJS.") == []
+
+
+def test_a_plain_label_and_an_all_caps_product_are_not_code_shaped() -> None:
+    assert prose.name_tokens("Reminder batch") == []
+    assert prose.name_tokens("Who may see a reminder") == []
+    # An acronym run never gets a lower-case tail, which is what keeps the vendors out.
+    for vendor in ("PostgreSQL", "NestJS", "RxJS", "MongoDB", "FastAPI", "LocationIQ", "PyJWT"):
+        assert prose.name_tokens(vendor) == [], vendor
+
+
+def test_a_product_name_the_map_already_knows_is_cleared() -> None:
+    """A component called "MongoDB stores" names a vendor's product, and the map's own dependency
+    list is what knows which words those are. The clearing is exact, never a prefix."""
+    assert prose.name_tokens("MongoDB stores", {"MongoDB"}) == []
+    assert prose.name_tokens("PyMongo", {"PyMongo"}) == []
+    assert prose.name_tokens("MongoClient", {"MongoDB"}) == ["MongoClient"]
+
+
+def test_the_name_table_still_carries_every_sentence_shape() -> None:
+    """One detector, two vocabularies: a name spelled `deploy-production.sh` or `user_prefs` is as
+    much code as a humped one, and those shapes are defined once."""
+    assert prose.name_tokens("deploy-production.sh") == ["deploy-production.sh"]
+    assert prose.name_tokens("user_prefs") == ["user_prefs"]
+
+
 # --- bare pointers ---------------------------------------------------------------------------
 
 def test_a_field_opening_with_a_pointer_word_is_flagged() -> None:

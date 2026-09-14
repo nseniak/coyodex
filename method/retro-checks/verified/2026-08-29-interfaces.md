@@ -80,3 +80,5 @@ The root mistake under both: **a section was scheduled by its INPUTS and never b
    derived, and a fragment that writes one is a build inventing a field the schema does not have —
    `assemble` refuses it, so the sign is an assembly failure naming `interfaces[].actors`, not a bad
    map.
+
+verified in reminderrepo build of 2026-09-13 23:03

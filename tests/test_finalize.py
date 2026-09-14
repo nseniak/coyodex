@@ -1045,6 +1045,35 @@ def test_the_commit_line_omits_a_warrant_that_is_not_there(tmp_path, capsys):
     assert "WARRANT" not in printed, printed
 
 
+# --- the reconcile file was in nobody's commit line (retro 2026-09-13 reminderrepo, T1) ----------
+# `method.md` calls `.coyomap/reconcile.json` the only mechanism that makes a reconcile decision
+# survive a rebuild, and the printed `git add -f` line never named it. Re-assembling that build's
+# COMMITTED fragments without it gives 248 edges against the committed map's 243: the two arrows
+# the closer upheld as false come back, 8 code links revert, 119 directive rows are lost.
+
+def test_the_commit_line_takes_the_reconcile_file(tmp_path, capsys):
+    from coyomap.finalize import _commit_hint
+    map_path = _repo_with_warrant(tmp_path)
+    (map_path.parent / "reconcile.json").write_text('{"set": []}')
+    _commit_hint(map_path)
+    out = capsys.readouterr().out
+    command = next(ln for ln in out.splitlines() if "git add -f" in ln)
+    assert "reconcile.json" in command, command
+    # With the INPUTS, ahead of the two warrant directories the sentence below calls "the last".
+    assert command.index("reconcile.json") < command.index("verify"), command
+
+
+def test_a_build_that_reconciled_nothing_is_asked_not_scolded(tmp_path, capsys):
+    """Absence is legitimate — a build that reconciled nothing has no such file and needs none —
+    so it must not join the `produce them and re-run finalize` arm."""
+    from coyomap.finalize import _commit_hint
+    _commit_hint(_repo_with_warrant(tmp_path))
+    out = capsys.readouterr().out
+    assert "reconcile.json" in out, out
+    assert "no " in out and "reconciled nothing" in out, out
+    assert "NOT in that command" not in out, out
+
+
 # --- the prose leg keys on a convention the method now states (adversarial review, 2026-09-02) ----
 # It shipped keyed on `verdicts-prose-*.json` while nothing asked anyone to write that name, so it
 # was an advisory no build could satisfy except by deleting its own batches.
@@ -1228,6 +1257,27 @@ def test_the_gate_block_carries_the_advisory_disposition_counts():
     assert counted == report.advisory_total, (line, report.advisory_total)
 
 
+def test_the_disposition_reaches_STDOUT_beside_the_verdict_line(capsys):
+    """It was written to the report file and to the gate block, and to nothing a build could see.
+
+    At turn 560 of the 2026-09-13 reminderrepo build the lead grepped `ship`'s stdout for
+    `finalize: ADVISORIES\\|Advisory disposition`; only the count line matched, the count was 14
+    before and after, and the next turn concluded "both mine are answered" while the report beside
+    it said `UNSURE: 1`. The counts move when an advisory is answered; the total does not."""
+    root, p = make_repo(components=3)
+    report = finalize.build_report(p, root, [])
+    assert report.advisory_total, "this fixture must raise advisories or the test proves nothing"
+    finalize.main([str(p), "--repo", str(root)])
+    out = capsys.readouterr().out
+    line = next((ln for ln in out.splitlines() if "Advisory disposition:" in ln), "")
+    assert line, out
+    assert line.startswith("finalize: "), ("it must sit with the other `finalize:` lines a build "
+                                           "greps for:\n" + line)
+    assert any(f"{k}:" in line for k in finalize._DISPOSITION_ORDER), line
+    # The counts, NOT a replacement for the file the guidance sends readers to.
+    assert "finalize-report.md" in line, line
+
+
 # --- the component budgets summed against what shipped (retro 2026-09-08, row 28) ---------------
 
 def _with_budgets(root: Path, budgets: dict[str, int]) -> None:
@@ -1287,3 +1337,70 @@ def test_a_brief_with_no_numeric_budget_is_counted_not_dropped():
     root, p = make_repo(components=10)
     leg, _ = _budget_verdict(root, p, '{"harvest": {"t1": 5, "t2": 5, "t3": null}}')
     assert leg is not None and "1 brief(s) with no numeric budget (t3)" in (leg.note or ""), leg
+
+
+# --- the refutation gate must SAY what it stopped firing on (adversarial review, 2026-09-14) -----
+# A refutation the closer REJECTED leaves `surviving_refutations`, and the report left with it: the
+# same map went `BLOCKED — 1 blocking` to `ADVISORIES — 0 blocking` with "refuted", "appeal" and
+# "closer" appearing nowhere in the report, the gate block or the commit message.
+
+def _map_with_a_refuted_claim(tmp: Path) -> tuple[Path, Path, Path]:
+    """A repo whose one component description is refuted, plus a skeptics file for it."""
+    root, p = make_repo()
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    claim = (f"Component C1 ({doc['components'][0]['name']}) is described as: "
+             f"{doc['components'][0]['purpose']}")
+    verify = root / ".coyomap" / "verify"
+    verify.mkdir(parents=True, exist_ok=True)
+    v = verify / "verdicts-desc-1.json"
+    v.write_text(json.dumps({"grounding": [
+        {"claim": claim, "grounded": False, "evidence": "src/a.py:1", "skeptic": "desc-1",
+         "note": "it does not take the ask"}]}), encoding="utf-8")
+    c = verify / "closer-agent-1.json"
+    c.write_text(json.dumps({"grounding": [
+        {"claim": claim, "verdict": "reject", "grounded": True, "evidence": "src/a.py:2",
+         "skeptic": "closer-1", "note": "line 2 does take the ask; the skeptic read line 1"}]}),
+        encoding="utf-8")
+    return root, p, verify
+
+
+def test_a_refutation_settled_on_appeal_is_disclosed_not_erased(tmp_path):
+    root, p, verify = _map_with_a_refuted_claim(tmp_path)
+    v, c = verify / "verdicts-desc-1.json", verify / "closer-agent-1.json"
+    blocked = finalize.build_report(p, root, [v])
+    assert blocked.blocking_total == 1, "without the appeal the gate must block"
+    passed = finalize.build_report(p, root, [v, c])
+    assert passed.blocking_total == 0, "a closer rejection clears it"
+    leg = next(l for l in passed.legs if l.name == "grounding refutations")
+    assert leg.note is not None and "1 settled on appeal" in leg.note, leg.note
+    text = finalize.format_report(passed) + finalize.gate_block(passed, passed.map_sha256)
+    assert "CLOSER REJECTED" in text, text
+    assert "the skeptic read line 1" in text, text
+    # ...and it is filed as a disclosure, never as an escape nobody took
+    where = {a: d for d, _h, a in finalize.advisory_disposition(p, passed)}
+    appeal = next(a for a in where if "CLOSER REJECTED" in a)
+    assert where[appeal] == "disclosure", where[appeal]
+
+
+def test_the_commit_line_states_what_went_to_appeal(tmp_path):
+    from coyomap.finalize import _grounding_line
+    root, p, _verify = _map_with_a_refuted_claim(tmp_path)
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    doc["grounding"] = {"claims_total": 1, "claims_challenged": 1, "claims_confirmed": 0,
+                        "claims_refuted": 1, "claims_unverifiable": 0,
+                        "closer_rejected": 1, "closer_upheld": 0, "closer_unsure": 0}
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    line = _grounding_line(p)
+    assert "1 appeal row(s)" in line and "1 reject" in line, line
+    assert "an appeal is not a vote" in line.lower(), line
+    assert "disagree" not in line, "no dispute here, so no dispute clause: " + line
+    # A DISPUTED claim must never read as a settlement: one uphold and one reject on ONE refutation
+    # used to print "2 refutation(s) went to appeal — 1 rejected, so the map keeps the claim".
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    doc["grounding"].update({"closer_upheld": 1, "closer_disputed": 1})
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    disputed = _grounding_line(p)
+    assert "2 appeal row(s)" in disputed, disputed
+    assert "refutation(s) went to appeal" not in disputed, disputed
+    assert "1 claim(s) drew appeals that DISAGREE" in disputed, disputed
+    assert "the refutation still stands" in disputed, disputed

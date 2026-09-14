@@ -41,9 +41,10 @@ from coyomap.subverb_help import usage_error
 from coyomap.assemble import load_fragment_paths, merge_fragments
 from coyomap.anchor_drift import (apply_drift_exceptions, drift_findings, drift_records,
                                   load_verdicts)
-from coyomap.audit_model import (EDGE_CLAIM as _EDGE_CLAIM, apply_anchor_corrections,
+from coyomap.audit_model import (EDGE_CLAIM as _EDGE_CLAIM, _move_note, apply_anchor_corrections,
                                  cross_file_refusals,
                                  l2_worklist_model, security_claim as _security_claim)
+from coyomap.impact_git import load_map_extents
 from coyomap.model import ID_ARRAYS, ProjectModel, access_rules
 from coyomap.reconcile import drop_riding, repoint_riding, riding_steps
 
@@ -211,15 +212,27 @@ def apply_drift(argv: list[str]) -> int:
     for n in notes:
         print(n)
     worklist = l2_worklist_model(m)
+    # The SAME symbol table `anchor-drift` reads, from the pre-index committed beside the map. The
+    # two verbs run back-to-back on the same inputs in `ship`, so a correction this one writes must
+    # be exactly the one the report a step earlier said would be written.
+    extents = load_map_extents(Path(map_path))
     # Honour `Drift exceptions` HERE too. Reporting them in `anchor-drift` while the writer stayed
     # blind was worse than having no escape at all: the row vanished from the report and the anchor
     # got overwritten anyway, so the operator lost the warning he was about to be clobbered by.
-    kept, exc_notes = apply_drift_exceptions(m, drift_findings(worklist, grounding, tolerance))
+    kept, exc_notes = apply_drift_exceptions(
+        m, drift_findings(worklist, grounding, tolerance, extents))
     for n in exc_notes:
         print(n, file=sys.stderr)
     keep_claims = {w.claim for w, _d in kept}
-    records = [r for r in drift_records(worklist, grounding, tolerance)
+    records = [r for r in drift_records(worklist, grounding, tolerance, extents)
                if r["claim"] in keep_claims]
+    # REPORTED, NEVER WRITTEN. A drift whose corrected line left the definition the stored anchor
+    # sits in is a re-anchor the operator has to make; applying it moved a live map's Docker-install
+    # link 174 lines onto an unrelated build command. Partitioned before EITHER write path, so a
+    # refused correction reaches neither the map nor the reconcile file's `set_anchors`.
+    refused_moves = [r for r in records if r.get("refusal")]
+    records = [r for r in records if not r.get("refusal")]
+    _report_refused_moves(refused_moves)
     not_applicable: list[tuple[str, str]] = []
     unparseable: list[tuple[str, str]] = []
     corrections: list[tuple[str, str]] = []
@@ -257,7 +270,10 @@ def apply_drift(argv: list[str]) -> int:
         # pick up a fragment edit, and all 14 silently reverted — then re-typed by hand, from the
         # human-readable listing, into two bespoke python scripts. `set_anchors` is read by
         # `assemble --reconcile`, so the correction survives every rebuild.
-        return _anchors_to_reconcile(Path(to_reconcile), corrections, not_applicable, unparseable)
+        return _anchors_to_reconcile(Path(to_reconcile), corrections,
+                                     {r["claim"]: r["stored"] for r in records},
+                                     _unwritten_tail(not_applicable, unparseable, refused_moves,
+                                                     refused))
     counts, notes = apply_anchor_corrections(m, corrections)
     for n in notes:
         # An applied rewrite is indented and is the RESULT (stdout); a skip is a warning (stderr).
@@ -270,14 +286,7 @@ def apply_drift(argv: list[str]) -> int:
                   "cadence": "cadence anchor(s)", "rule_site": "rule site(s)",
                   "lifecycle": "lifecycle anchor(s)"}
     applied = ", ".join(f"{counts[k]} {kind_words.get(k, k)}" for k in counts)
-    stuck = len(not_applicable) + len(unparseable)
-    # The counts ride the LAST line, including the not-applicable one. A live build read this output
-    # with `| tail -12`, so a total that is not on the final line is a total the reader never sees.
-    tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (named above) and still "
-            f"unreconciled." if stuck else "")
-    if refused:
-        tail += (f" {len(refused)} cross-file correction(s) REFUSED (named above): the corrected "
-                 f"file belongs to neither end of its edge.")
+    tail = _unwritten_tail(not_applicable, unparseable, refused_moves, refused)
     # `sum(counts.values())`, not a hand-listed disjunction — `reconcile.py` already does it that
     # way, and the hand-listed one silently stopped writing the file the moment a fourth writer
     # existed: the correction applied in memory, printed, and was never persisted.
@@ -289,6 +298,51 @@ def apply_drift(argv: list[str]) -> int:
         print(f"apply-drift: rewrote nothing — no drifted "
               f"{', '.join(kind_words.get(k, k) for k in counts)} to fix.{tail}")
     return 0
+
+
+def _unwritten_tail(not_applicable: list[tuple[str, str]], unparseable: list[tuple[str, str]],
+                    refused_moves: list[dict], cross_file: list[str]) -> str:
+    """The "and here is what did NOT get written" clause, for the LAST line of either write path.
+
+    A live build read this command's output with `| tail -12`, so a count that is not on the final
+    line is a count the reader never sees. ALL THREE refusal counts live here because there are two
+    write paths and they keep drifting apart: the cross-file clause was appended by the in-place
+    path alone, so `--to-reconcile` — the path `ship` step 3 actually runs — ended its last line
+    without it. Fixing one clause and leaving the next one duplicated is how the first copy got
+    made; every count this command refuses now has exactly one home."""
+    stuck = len(not_applicable) + len(unparseable)
+    tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (named above) and still "
+            f"unreconciled." if stuck else "")
+    if refused_moves:
+        tail += (f" {len(refused_moves)} correction(s) REFUSED as a re-anchor, not a nudge (named "
+                 f"above): the corrected line leaves the definition the stored anchor sits in. The "
+                 f"map still holds the OLD anchor — open both lines and decide by hand.")
+    if cross_file:
+        tail += (f" {len(cross_file)} cross-file correction(s) REFUSED (named above): the corrected "
+                 f"file belongs to neither end of its edge.")
+    return tail
+
+
+def _report_refused_moves(refused_moves: list[dict]) -> None:
+    """Name every correction refused as a relocation, with BOTH anchors and the reason.
+
+    Loud on purpose. The 2026-09-13 reminderrepo build applied a 174-line move inside an unattended
+    `ship`, and the only trace was one line of a drift listing that read exactly like the four small
+    nudges beside it. A reader has to be able to see, from this output alone, that the tool declined
+    to decide something — so the block names the claim, the stored anchor, the corrected anchor and
+    why, and `_unwritten_tail` repeats the COUNT on the command's final line."""
+    if not refused_moves:
+        return
+    print(f"WARNING: {len(refused_moves)} confirmed drift(s) were REFUSED, not written: the "
+          f"skeptics' line is outside the definition the stored anchor sits in, which is a "
+          f"re-anchor decision this command must not make for you. Read both lines, then fix the "
+          f"anchor by hand — or record ``anchor-drift `<the claim, verbatim>`: <why>`` under a "
+          f"'Drift exceptions' extras heading if the stored anchor is right:", file=sys.stderr)
+    for r in refused_moves:
+        print(f"    {r['claim']}\n"
+              f"        stored    {r['stored']}\n"
+              f"        corrected {r.get('corrected') or _NO_CALL_SITE}\n"
+              f"        REFUSED:  {r['refusal']}", file=sys.stderr)
 
 
 def _report_stuck(unparseable: list[tuple[str, str]],
@@ -319,14 +373,22 @@ def _report_stuck(unparseable: list[tuple[str, str]],
 
 
 def _anchors_to_reconcile(rec_path: Path, corrections: list[tuple[str, str]],
-                          not_applicable: list[tuple[str, str]],
-                          unparseable: list[tuple[str, str]]) -> int:
+                          stored_by_claim: dict[str, str], stuck_tail: str) -> int:
     """Record the corrected anchors as `set_anchors` in the reconcile file instead of editing the map.
 
     Keyed by CLAIM, which is what a verdict carries and what `apply_anchor_corrections` matches on,
     so the durable record and the in-place edit cannot drift apart. Re-recording the same claim with
     a different anchor UPDATES it and says so — silently discarding a changed mind is how a durable
-    record ends up asserting what the artifact does not do."""
+    record ends up asserting what the artifact does not do.
+
+    `stored_by_claim` feeds `_move_note`, which is why this path takes it at all. The far-move
+    warning has existed since the 2026-09-02 mcpolis build and fires inside
+    `apply_anchor_corrections` — the IN-PLACE writer. `ship` step 3 runs `--to-reconcile`, so on
+    every real build the warning was dead code: the 2026-09-13 reminderrepo run recorded a 174-line
+    move with no note of any kind. One warning, both write paths.
+
+    `stuck_tail` is `_unwritten_tail`'s clause, built by the caller so BOTH write paths end on the
+    same sentence — this one used to build its own copy, which is how the copies drift."""
     try:
         doc = json.loads(rec_path.read_text(encoding="utf-8")) if rec_path.exists() else {}
     except ValueError as e:
@@ -339,6 +401,7 @@ def _anchors_to_reconcile(rec_path: Path, corrections: list[tuple[str, str]],
         if not corrected:
             print(f"  SKIPPED (no corrected line): {claim}", file=sys.stderr)
             continue
+        note = _move_note(claim, stored_by_claim.get(claim), corrected)
         prior = by_claim.get(claim)
         if prior is None:
             new = {"claim": claim, "corrected": corrected}
@@ -350,9 +413,10 @@ def _anchors_to_reconcile(rec_path: Path, corrections: list[tuple[str, str]],
             print(f"  UPDATED {claim}: {prior.get('corrected')} -> {corrected}")
             prior["corrected"] = corrected
             updated += 1
-    stuck = len(not_applicable) + len(unparseable)
-    stuck_tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (named above) and still "
-                  f"unreconciled." if stuck else "")
+        else:
+            continue                         # already recorded at this line: nothing new to say
+        if note:
+            print(note)
     if not added and not updated and "set_anchors" not in doc:
         # Nothing to record and no prior key: writing would re-serialise (and reformat) a committed
         # artifact to say nothing. The stuck count still rides the last line — it is the half of the
@@ -1871,6 +1935,9 @@ Apply a mechanical reconcile edit to .coyomap/project-map.json IN PLACE. Verbs:
       editing the map, so `assemble --reconcile` re-applies them on every rebuild. Without it the
       edit is lost at the next assemble — a live build corrected 14 anchors, re-assembled for one
       fragment edit, lost all 14, and re-typed them by hand.
+      A correction whose line leaves the definition the stored anchor sits in is REFUSED, named
+      with both anchors, and counted on the last line: moving an anchor onto another function is a
+      re-anchor decision, not a mechanical nudge. Refused drift is reported, never gating.
 
   dedup-edge --map <map> [--repo <root>] [--json]
              (--accept-suggested | --keep <src:verb:dst:path:line> ...) [--to-reconcile <file>]

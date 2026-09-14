@@ -13,16 +13,28 @@ import json
 import re
 import sys
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 
 from coyomap import reporting
 from coyomap.anchors import DriftResult, anchor_drift, parse_anchor
 from coyomap.audit_model import WorkItem, l2_worklist_model
+from coyomap.impact_git import Extents, load_map_extents
+from coyomap.impact_lib import Extent, enclosing_extent
 from coyomap.model import ProjectModel, load_model, resolve_map_path
 from coyomap.validate_analysis import _source_roots
 from coyomap.validate_model import check_operative_lines_model
 
 _DEFAULT_TOLERANCE = 2
+
+#: The backstop for a move the pre-index cannot place inside any definition — a shell script, a
+#: config file, a language with no extractor, or two statements at a file's top level. Distance is
+#: then the ONLY signal there is, so the bound is deliberately generous: 120 lines is the 99th
+#: percentile of definition spans in coyomap's own pre-index (median 8, p90 29, p95 44), i.e. about
+#: as long as the longest functions the tool has ever measured. It is the WEAK half of the check on
+#: purpose — `_move_refusal` below does the real work with the symbol table, and this number only
+#: has to catch a move that has plainly left the part of the file the anchor was authored on.
+_FAR_MOVE = 120
 
 
 def consensus_evidence(stored: str | None, reported: list[str]) -> str | None:
@@ -45,8 +57,77 @@ def consensus_evidence(stored: str | None, reported: list[str]) -> str | None:
     return group_sorted[len(group_sorted) // 2][0]
 
 
-def _confirmed_drifts(worklist: list[WorkItem], grounding: list[dict],
-                      tolerance: int) -> list[tuple[WorkItem, DriftResult, list[str]]]:
+def _named(sym: Extent) -> str:
+    """`name (kind)` for a pre-index definition row — what a refusal message calls it."""
+    return f"{sym[2]} ({sym[3]})"
+
+
+def _nests(outer: Extent, inner: Extent) -> bool:
+    """`inner` lies wholly inside `outer` — so a move between them never left the outer one.
+
+    CONTAINMENT, NOT EQUALITY, and equality was a real refusal on live code. `enclosing_extent`
+    returns the INNERMOST definition holding a line, so a class header and a line inside one of that
+    class's own methods come back as two different extents: on reminderrepo's
+    `firebase-admin.service.ts`, `class FirebaseAuthService (10-40)` → its own `onModuleInit
+    (12-27)`, three lines down, was refused as "leaves FirebaseAuthService for onModuleInit". It
+    never left — it went IN, which is precisely the header-to-operative-line nudge this command
+    exists for and which `_move_refusal` calls "entirely right" two paragraphs below. The same
+    refusal hit `ActivitiesService`, `ContactsService` and `FavoriteLocationsController`."""
+    return outer[0] <= inner[0] and inner[1] <= outer[1]
+
+
+def _move_refusal(stored: str, corrected: str | None, d: DriftResult,
+                  extents: Extents) -> str | None:
+    """Why this correction must not be WRITTEN by `fix apply-drift` — None when it may be.
+
+    THE CUT: a correction is a NUDGE the tool may make when it stays inside the region the stored
+    anchor already names, and a RELOCATION the operator must make when it leaves it. `drifted` is a
+    lower bound only, so before this existed the two were the same thing and the 2026-09-13
+    reminderrepo build moved an edge's `where` 174 lines off the install its `why` describes and
+    onto an unrelated build command — reported, applied, shipped, in one unattended `ship` run.
+
+    THE REGION IS THE ENCLOSING DEFINITION, NOT A LINE COUNT, and that choice is the whole design.
+    An upper distance bound refuses exactly the correction this command exists for: the commonest
+    drift the adversarial pass finds is an anchor parked on a `def` header (44 of 86 findings on one
+    self-map), and moving it onto the operative statement of a 200-line function is a 150-line move
+    that is entirely right. Distance cannot tell that from the reminderrepo relocation; the symbol
+    boundary can, and it costs one lookup in the pre-index already committed beside the map.
+
+    BOTH SIDES MUST BE PLACED before a boundary crossing is asserted. A decorator (`@app.post(...)`)
+    sits outside the function it decorates in most extractors, so "stored has no definition,
+    corrected has one" is the ordinary decorator → operative-line nudge, not a relocation; calling
+    that a crossing would refuse a whole legitimate family. With neither side placed there is no
+    boundary to reason about at all and only `_FAR_MOVE` is left — which is the case that catches
+    the shell script above, since the pre-index carries no extents for `.sh` and both lines are
+    top-level script code.
+
+    A DIFFERENT FILE IS NOT THIS CHECK'S CALL. `audit_model.cross_file_refusals` already judges it
+    against the edge's own `files`, and a cross-file correction is often right (the call site lives
+    in a module one endpoint owns). Two judges over one case would only disagree."""
+    if corrected is None or not d.same_file or d.distance is None:
+        return None
+    s, c = parse_anchor(stored), parse_anchor(corrected)
+    if s is None or c is None or s.lo is None or c.lo is None or s.path != c.path:
+        return None                       # unparseable, or a basename match across two paths
+    rows = extents.get(s.path) or []
+    here, there = enclosing_extent(rows, s.lo), enclosing_extent(rows, c.lo)
+    if here is not None and there is not None:
+        if _nests(here, there) or _nests(there, here):
+            return None                   # one definition, any distance: the nudge this verb is for
+        return (f"the corrected line leaves {_named(here)} for {_named(there)} — a different "
+                f"definition is a re-anchor, not a nudge")
+    # At most one side sits in a definition, so there is no boundary to assert and distance is all
+    # that is left. `_FAR_MOVE` is the backstop, and its note says how weak it knows itself to be.
+    if d.distance > _FAR_MOVE:
+        placed = "neither line" if here is None and there is None else "only one of the two lines"
+        return (f"{d.distance} lines away, and the pre-index places {placed} inside a definition, "
+                f"so nothing here says the two are the same piece of code")
+    return None
+
+
+def _confirmed_drifts(worklist: list[WorkItem], grounding: list[dict], tolerance: int,
+                      extents: Extents | None = None,
+                      ) -> list[tuple[WorkItem, DriftResult, list[str]]]:
     """(work-item, drift, grounded-evidence) for every CONFIRMED claim whose stored anchor drifts from
     the skeptics' reported line. Confirmed = a strict majority of that claim's votes have
     `grounded=True`. The grounded-evidence list is carried out so a consumer can recover the corrected
@@ -57,7 +138,24 @@ def _confirmed_drifts(worklist: list[WorkItem], grounding: list[dict],
     DEFINITION by the domain-card contract, so the WRITE line a skeptic reports is not drift, and
     nudging the anchor onto it would corrupt the card. Those rows are REPORT-ONLY: a refuted one is
     re-authored by hand, never auto-moved. This is a property of the claim, never a text match on
-    its wording. REFUTATION is untouched — only the anchor nudge is suppressed."""
+    its wording. REFUTATION is untouched — only the anchor nudge is suppressed.
+
+    A CLOSER ROW IS NOT A VOTE, and this tally is the ninth reader that has to know it. A closer
+    re-reads ONE refutation in fresh context and returns `uphold`/`reject`/`unsure`; it settles
+    whether that refutation still blocks the gate and it decides nothing about how many skeptics
+    said what. `ship` hands the closer files to step 2 and step 3 through the same `--verdicts`
+    list as the skeptics', so counted as a vote a single `reject` turns a 1-1 tie into a 2-1
+    majority and MINTS an anchor correction — which step 3 then writes into `reconcile.json`, where
+    `assemble --reconcile` replays it on every rebuild. A permanent map edit, produced by a row the
+    design says votes on nothing. Reproduced: two skeptics disagreeing plus one `reject` yields a
+    confirmed drift that is absent without the closer row."""
+    from coyomap.grounding import split_closer_rows  # noqa: PLC0415 — circular at import
+    # LOCAL, and the marker above is the repo's own. `grounding` imports `load_verdicts` from this
+    # module, so a top-level import here closes the cycle; `validate_model` splits closer rows the
+    # same way for the same reason. Importing the real predicate rather than re-spelling
+    # `verdict in (uphold, reject, unsure)` is the point: a second definition of "what a closer row
+    # is" is exactly the drift that produced this bug at the ninth reader.
+    grounding = split_closer_rows(grounding).skeptics
     # NO DEDUPE, deliberately, and the reasoning is worth keeping because a plausible fix was tried
     # and reverted. The tally is a STRICT MAJORITY and always was: a review claimed a split vote was
     # "decided by file-sort order", which is false — 1-grounded/1-refuted is a tie and is not
@@ -92,21 +190,32 @@ def _confirmed_drifts(worklist: list[WorkItem], grounding: list[dict],
         reported = [str(v.get("evidence", "")) for v in grounded if v.get("evidence")]
         d = anchor_drift(w.anchor, reported, tolerance)
         if d is not None and d.drifted:
-            out.append((w, d, reported))
+            # ONE place computes the correction and ONE place judges it, so the human report, the
+            # `--json` payload and `fix apply-drift` can never disagree about which corrections get
+            # written — the same reason `consensus_evidence` is shared rather than recomputed.
+            corrected = consensus_evidence(d.stored, reported)
+            out.append((w, replace(d, refusal=_move_refusal(d.stored, corrected, d, extents or {})),
+                        reported))
     return out
 
 
-def drift_findings(worklist: list[WorkItem], grounding: list[dict],
-                   tolerance: int) -> list[tuple[WorkItem, DriftResult]]:
+def drift_findings(worklist: list[WorkItem], grounding: list[dict], tolerance: int,
+                   extents: Extents | None = None) -> list[tuple[WorkItem, DriftResult]]:
     """(work-item, drift) for every CONFIRMED claim whose stored anchor drifts (the human report's
-    view — evidence dropped)."""
-    return [(w, d) for w, d, _ev in _confirmed_drifts(worklist, grounding, tolerance)]
+    view — evidence dropped).
+
+    `extents` is the pre-index symbol table beside the map (`impact_git.load_map_extents`). Without
+    it every finding is still REPORTED — the drift judgement never needed it — but `_move_refusal`
+    has no definitions to reason with and falls back to `_FAR_MOVE` alone."""
+    return [(w, d) for w, d, _ev in _confirmed_drifts(worklist, grounding, tolerance, extents)]
 
 
-def drift_records(worklist: list[WorkItem], grounding: list[dict], tolerance: int) -> list[dict]:
+def drift_records(worklist: list[WorkItem], grounding: list[dict], tolerance: int,
+                  extents: Extents | None = None) -> list[dict]:
     """Machine-readable drift findings for `--json` and `fix apply-drift`: one dict per confirmed
     drifted claim with the corrected `path:line` already computed. `fix apply-drift` matches `claim`
-    back to its edge and writes `corrected` into the map's `where`."""
+    back to its edge and writes `corrected` into the map's `where` — unless `refusal` is set, in
+    which case the row is reported and the anchor is left alone."""
     return [{
         "claim": w.claim,
         # The claim KIND, carried through so a consumer does not have to guess it back out of the
@@ -120,7 +229,10 @@ def drift_records(worklist: list[WorkItem], grounding: list[dict], tolerance: in
         "corrected": consensus_evidence(d.stored, ev),
         "same_file": d.same_file,
         "distance": d.distance,
-    } for w, d, ev in _confirmed_drifts(worklist, grounding, tolerance)]
+        # Set = REPORT, do not write. A `--json` consumer that ignores it gets the old behaviour on
+        # a wrong anchor, which is why `fix apply-drift` partitions on it before either write path.
+        "refusal": d.refusal,
+    } for w, d, ev in _confirmed_drifts(worklist, grounding, tolerance, extents)]
 
 
 DRIFT_EXCEPTIONS_HEADING = "Drift exceptions"
@@ -250,16 +362,43 @@ def apply_drift_exceptions(m: ProjectModel,
     return kept, notes
 
 
+def _row(w: WorkItem, d: DriftResult) -> str:
+    """One finding, on ONE line, refusal included.
+
+    The refusal rides this line rather than a continuation beneath it because `finalize._drift_leg`
+    harvests the report by taking every line starting with `  - ` into the gate block. A reason on
+    a second line is a reason the committed gate block does not carry — and the gate block is the
+    artifact a reader quotes weeks later."""
+    found = "a different file" if not d.same_file else f"line {d.reported} ({d.distance} off)"
+    tail = f" — NOT APPLIED by `fix apply-drift`: {d.refusal}" if d.refusal else ""
+    return f"  - {w.claim}: stored [{d.stored}] — skeptics found {found}{tail}"
+
+
 def _format(findings: list[tuple[WorkItem, DriftResult]], tolerance: int) -> str:
+    """The human report, written to survive BOTH `| head` and `| tail`.
+
+    A refused correction LEADS the listing (a `head` reader sees it) and is COUNTED on the last line
+    (a `tail` reader sees it). The build that motivated this read `ship` output through both pipes
+    and saw neither the 174-line move nor any sign that something had been decided on its behalf."""
     if not findings:
         return f"anchor-drift: no drift among confirmed claims (tolerance={tolerance})."
+    refused = [(w, d) for w, d in findings if d.refusal]
     lines = [f"anchor-drift: {len(findings)} confirmed claim(s) whose `where` drifts "
              f"(tolerance={tolerance}) — fix each map `where`, the LLM only reported the line. Fix "
              f"it, or record ``anchor-drift `<the claim, verbatim>`: <why>`` under a "
              f"'{DRIFT_EXCEPTIONS_HEADING}' extras heading if the stored anchor is right:"]
-    for w, d in findings:
-        found = "a different file" if not d.same_file else f"line {d.reported} ({d.distance} off)"
-        lines.append(f"  - {w.claim}: stored [{d.stored}] — skeptics found {found}")
+    if refused:
+        lines.append(f"\n  !! {len(refused)} of them will NOT be written by `fix apply-drift` — the "
+                     f"corrected line leaves the definition the stored anchor sits in, which is a "
+                     f"re-anchor decision and not a mechanical nudge. Open both lines and fix each "
+                     f"by hand, or record it:")
+        lines += [_row(w, d) for w, d in refused]
+        lines.append("")
+    lines += [_row(w, d) for w, d in findings if not d.refusal]
+    if refused:
+        lines.append(f"anchor-drift: {len(refused)} of {len(findings)} finding(s) are REFUSED by "
+                     f"`fix apply-drift` (named above) and still need a hand re-anchor; "
+                     f"{len(findings) - len(refused)} can be written mechanically.")
     return "\n".join(lines)
 
 
@@ -346,7 +485,19 @@ def coverage_note(worklist: list[WorkItem], grounding: list[dict]) -> str:
 
     Accumulation alone still passes silently when a build forgets one of thirteen files: a run over
     a third of the claims prints the same "no drift" line as a run over all of them. Naming the
-    unvoted claims is what turns that into something an operator can see."""
+    unvoted claims is what turns that into something an operator can see.
+
+    SKEPTICS ONLY, and the reason is the sentence this number exists to say. A closer row is an
+    APPEAL — it re-reads one refutation and votes on nothing — so a claim whose only row is a
+    closer's was examined by nobody, and counting it makes `challenged N of M` go UP because an
+    appeal was heard. The invariant that saves it (every closer row answers a claim some skeptic
+    already voted on) is enforced NOWHERE: `grounding lint` refuses a `closer-*.json` whose rows
+    carry no verdict word, but it never checks the claim text against what the skeptics saw, so a
+    hand-written appeal, a paraphrased claim, or a claim reworded between the wave and the appeal
+    all put an uncovered row in the pile. `finalize` quotes this line into the committed gate block,
+    which makes it the one place "the gate did not run" must never read as "the gate passed"."""
+    from coyomap.grounding import split_closer_rows  # noqa: PLC0415 — circular at import
+    grounding = split_closer_rows(grounding).skeptics
     voted = {str(r.get("claim", "")) for r in grounding}
     missing = [w.claim for w in worklist if w.claim not in voted]
     head = f"challenged {len(worklist) - len(missing)} of {len(worklist)} worklist claim(s)"
@@ -369,6 +520,9 @@ def main(argv: list[str] | None = None) -> int:
               "cannot be the acting statement (a `def` header, an import, a comment). Needs no\n"
               "skeptics, so a SERIAL build gets the same grounding floor as a parallel one.\n"
               "Informational (non-gating) either way.\n"
+              "A finding whose corrected line leaves the definition the stored anchor sits in is\n"
+              "REPORTED and marked NOT APPLIED — `fix apply-drift` will not write it, because a\n"
+              "move onto another function is a re-anchor decision, not a mechanical nudge.\n"
               "`--with-behavioural` counts coverage over the behavioural tier — the surface a\n"
               "worklist pinned with `audit --with-behavioural` holds — so `challenged N of M`\n"
               "and the audit line count one surface. Drift findings do not move: a behaviour\n"
@@ -406,7 +560,8 @@ def main(argv: list[str] | None = None) -> int:
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
         return 2
-    m = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
+    resolved = resolve_map_path(map_path)   # once: it PRINTS what it resolved, and twice is noise
+    m = load_model(resolved.read_text(encoding="utf-8"))
     if not verdicts_paths:
         # No verdicts → the shape-only pass, so a serial build still gets a grounding floor.
         roots = _source_roots(Path(map_path).resolve(),
@@ -448,9 +603,17 @@ def main(argv: list[str] | None = None) -> int:
     # (`drift_eligible=False`), so the findings are the same at either tier.
     worklist = l2_worklist_model(m, behavioural=behavioural)
     grounding, notes = load_verdicts(verdicts_paths)
+    extents = load_map_extents(resolved)
+    if not extents:
+        # Said out loud, because the check is WEAKER here and silence would hide that. The same
+        # reasoning as the shape-only pass's inert-record note: a reader must be able to tell a
+        # check that ran fully from one that ran on half its inputs.
+        notes.append(f"note: no `preindex.json` beside {resolved.name}, so a correction can only be "
+                     f"judged by line distance — a move onto a different function in the same file "
+                     f"cannot be seen. Re-run `coyomap preindex` beside the map for the full check.")
     coverage = coverage_note(worklist, grounding)
     if as_json:
-        print(json.dumps({"findings": drift_records(worklist, grounding, tolerance),
+        print(json.dumps({"findings": drift_records(worklist, grounding, tolerance, extents),
                           "coverage": coverage, "notes": notes}, indent=2))
     else:
         for n in notes:
@@ -458,7 +621,8 @@ def main(argv: list[str] | None = None) -> int:
             # about the INPUT is exactly what a pipe must not eat.
             print(n, file=sys.stderr)
         print(coverage)
-        kept, exc_notes = apply_drift_exceptions(m, drift_findings(worklist, grounding, tolerance))
+        kept, exc_notes = apply_drift_exceptions(
+            m, drift_findings(worklist, grounding, tolerance, extents))
         for n in exc_notes:
             print(n)
         print(_format(kept, tolerance))

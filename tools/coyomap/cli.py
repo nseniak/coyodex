@@ -171,7 +171,7 @@ def _dispatch(cmd: str, rest: list[str]) -> int:
         from coyomap import audit_model  # stdlib-only
         return audit_model.main(_default_map(rest))
     if cmd == "contract":
-        from coyomap import contract  # stdlib-only; reads the templates, calls no model
+        from coyomap import contract  # stdlib-only; reads the model too, for `closer --from-verdicts`
         return contract.main(rest)
     if cmd == "render":
         from coyomap.viewer import render  # stdlib-only

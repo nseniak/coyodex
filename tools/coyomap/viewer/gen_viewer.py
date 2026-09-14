@@ -41,6 +41,8 @@ from urllib.parse import quote
 from coyomap.viewer.build_graph import DiffDict, GraphDict, build_diff
 from coyomap.features import as_bundle, build_index
 from coyomap.model import ModelError, ProjectModel, load_model
+from coyomap import records
+from coyomap.validate_model import DATA_OWNER_EXCEPTIONS_HEADING
 from coyomap.impact_git import Extents, load_map_extents
 from coyomap import grammar
 from coyomap.grammar import (  # external-dep Kind fold rule + the purpose-bucket grouping axis
@@ -3337,6 +3339,34 @@ class ViewBundle(TypedDict):
                                    # line. `{}` when no model could be read beside the graph.
 
 
+def owner_records(m: ProjectModel) -> dict[str, str]:
+    """Per data area, the reason its author RECORDED for an ownership claim no step reaches.
+
+    THE VIEWER'S READER IS NOT THE VALIDATOR'S. A recorded line silences `validate`, whose audience
+    is the build lead; the person reading the Features page never sees that record and is still shown
+    a claim with nothing behind it. A recorded gap is still a gap — so the page marks it anyway, and
+    this is what lets it also say WHY, in the author's own words, instead of leaving the reader to
+    guess whether anybody has looked.
+
+    Parsed HERE rather than in the browser, through `records` — the module that exists to be the one
+    reader of the `<key>: <why>` line shape, after four separate parsers each silently over-suppressed
+    in their own way. A fifth in JavaScript would be the fifth scar. Same heading and same key
+    vocabulary as `validate`'s own skip, so the two can never disagree about which areas are answered.
+
+    `{}` when the map records nothing, which is most maps."""
+    spec = records.spec_of(DATA_OWNER_EXCEPTIONS_HEADING)
+    if spec is None or spec.key is None:
+        return {}
+    out: dict[str, str] = {}
+    for line in records.lines(m, DATA_OWNER_EXCEPTIONS_HEADING):
+        why = records.why_of(DATA_OWNER_EXCEPTIONS_HEADING, line)
+        if not why:
+            continue
+        for key in records.keys_on_line(line, spec.key, spec.seps, spec.lead, spec.strict_multi):
+            out[key] = why
+    return out
+
+
 def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
                       model: ProjectModel | None = None,
                       extents: Extents | None = None) -> ViewBundle:
@@ -3364,6 +3394,11 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
         except (OSError, ModelError):
             model = None
     feature_block: dict[str, Any] = as_bundle(build_index(model, extents)) if model else {}
+    # The recorded answers ride ALONGSIDE the derivation rather than inside it: `as_bundle` is the
+    # feature-led derivation of the MAP, and a recorded exception is the author's note about the
+    # map's own build record. The Features page joins the two by area id.
+    if model and feature_block:
+        feature_block["ownerRecords"] = owner_records(model)
     diff = build_diff(report) if report and report.exists() else None
     base_mm = gen_mermaid(graph, None)
     diff_mm = gen_mermaid(graph, diff) if diff else base_mm

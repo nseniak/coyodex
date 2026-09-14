@@ -319,7 +319,7 @@ If a previous map exists, score it too and compare:
 
 ```
 coyomap-eval score <archive>/project-map.json --repo . --json > prev-profile.json
-coyomap-eval compare prev-profile.json profile.json
+coyomap-eval compare prev-profile.json profile.json --thresholds eval/thresholds.json
 ```
 
 Record: blocking problems (should be zero), the advisory count and which advisories survived, the
@@ -346,8 +346,8 @@ anyone write it at all". A section with no step sending anyone to author it come
 empty section is the one state most checks are silent about, because they need a row to check.
 
 ```
-interfaces · interface_doors · crossings_without_a_door · interfaces_undecided_deps
-interfaces_without_kind
+interfaces · interface_doors · crossings_without_a_door
+crossings_without_a_door_unadjudicated · interfaces_undecided_deps · interfaces_without_kind
 ```
 
 Read them together:
@@ -364,6 +364,11 @@ Read them together:
   a build that did part of the rule scores as a build that did all of it. It counts STEPS, not flows,
   because a flow counter scores a half-doored story as done. Measured the day the strict rule landed:
   mcpolis read 38 with `interface_doors` already at 129.
+  **Read the UNADJUDICATED count, not the raw one**: a crossing recorded under an extras heading is
+  a decision somebody made, and `validate` is already silent about it, so the raw number can stand
+  above 0 with nothing open. The profile prints both. On the reminderrepo map that was 1 raw and 0
+  unadjudicated — the one crossing (publishing the phone app to the stores) is recorded under two
+  headings. It is a finding only when the unadjudicated half is above 0.
 - **`interfaces_undecided_deps` above 0** — an external dependency naming neither a surface nor a
   reason. That is a decision nobody made, not a decision to exclude.
 - **`interfaces_without_kind` equal to `interfaces`** — the rows were written and their SHAPE was
@@ -447,9 +452,12 @@ coyomap-eval cost <prev-transcript> --map <archive>/project-map.json
 
 Wall time, tokens, and both PER ROW of map produced, plus the straggler waste in each fan-out.
 
-**Append this build's line to the Cost log in `backlog.md`** (decision of 2026-08-27: the backlog
-is the durable home for spend — reports are git-ignored and evaporate). One row: date, project,
-rows, active minutes, $ total, $ per 100 rows, and the per-role split. The log is what makes any
+**PROPOSE this build's line for the Cost log in `backlog.md`, written out ready to paste** —
+the report-only rule covers the backlog, and this step used to say "append", which contradicted it
+twice over (the opening rule and Step 6's). The durability decision of 2026-08-27 stands: the
+backlog is the home for spend, because reports are git-ignored and evaporate — so put the row in
+the report as a finished line and ask for it in Step 6 with the other proposals. One row: date,
+project, rows, active minutes, $ total, $ per 100 rows, and the per-role split. The log is what makes any
 future "did this method change pay?" answerable without re-running `cost` on an old transcript.
 
 **Compare per row, never per build.** Absolute minutes and dollars track how big the map got: over

@@ -27,3 +27,5 @@ Escalation: if check 2 fails (the auth surface shrank), run the eval before acce
    "security", not the sizing or ordering advice.
    regression sign: one oversized entry-points slice becomes the Phase-1 straggler, or launch
    order stops putting the heaviest slices first (L3 assertion 16).
+
+verified in reminderrepo build of 2026-09-13 23:03

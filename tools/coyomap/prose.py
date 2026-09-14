@@ -73,6 +73,24 @@ _CODE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("snake_case name", re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")),
 )
 
+# ONE MORE SHAPE, and only when the text being scanned is a NAME. A humped word — `GroupContact`,
+# `createUserSchema` — is how a class is spelled, and a name is where a map picks one up: on the
+# 2026-09-13 live maps 52 of 59, 50 of 53 and 96 of 100 record names were the class's own spelling
+# while 0 of 126, 0 of 43 and 0 of 114 component names were. The same map's `meaning` sentence beside
+# each was good plain language, so the writer knew what the thing was and named it after the class.
+#
+# NOT in `_CODE_PATTERNS`, so a SENTENCE is never scanned for it: prose legitimately writes
+# PostgreSQL, NestJS and Day.js, and a readability counter that fires on a vendor's own spelling is
+# the noisy check nobody leaves switched on.
+#
+# The hump must be followed by lower-case letters, which is what keeps an all-caps acronym out:
+# `PostgreSQL`, `NestJS`, `RxJS`, `MongoDB`, `FastAPI`, `LocationIQ`, `AnyIO` and `PyJWT` do not
+# match, and the six that do (`PyMongo`, `BeautifulSoup`, `WhatsApp`, `TanStack`, `GitHub`,
+# `jsDelivr`) are all dependency names, which the caller exempts by construction.
+_NAME_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = _CODE_PATTERNS + (
+    ("humped name", re.compile(r"\b[A-Za-z][a-z0-9]*(?:[A-Z][a-z0-9]+)+\b")),
+)
+
 # A field that opens with one of these reads as a fragment once it is shown alone in a box.
 _BARE_POINTERS = ("It", "This", "That", "These", "Those", "They")
 _OPENS_BARE = re.compile(r"^(%s)\b" % "|".join(_BARE_POINTERS))
@@ -126,18 +144,36 @@ def em_dash_count(text: str) -> int:
     return strip_literals(text).count(_EM_DASH)
 
 
-def code_tokens(text: str) -> list[str]:
+def code_tokens(text: str,
+                patterns: tuple[tuple[str, re.Pattern[str]], ...] = _CODE_PATTERNS) -> list[str]:
     """Every code-shaped token in the field, deduplicated, longest form only.
 
     One token often matches two patterns — `cancel_order()` is both a call and a snake_case name —
-    and reporting both reads as two problems where the writer has one word to fix."""
+    and reporting both reads as two problems where the writer has one word to fix.
+
+    `patterns` is what a caller scanning something OTHER than a sentence swaps: `name_tokens` below
+    passes the name table, which adds the humped word. One detector, two vocabularies — a second
+    identifier detector is how two checks end up disagreeing about what code looks like."""
     scanned = strip_literals(text)
     found: list[str] = []
-    for _label, pattern in _CODE_PATTERNS:
+    for _label, pattern in patterns:
         for match in pattern.findall(scanned):
             if match not in found:
                 found.append(match)
     return [t for t in found if not any(t != other and t in other for other in found)]
+
+
+def name_tokens(name: str, known: Iterable[str] = ()) -> list[str]:
+    """The code-shaped tokens in an element NAME — `code_tokens` with the name vocabulary, minus the
+    words this map has already told us are a product's real name.
+
+    `known` is the PRODUCT-NAME list the caller reads off the map (today the dependencies' own
+    names, split into words): a component called "MongoDB stores" is naming a vendor's product, not
+    a class, and the map is the thing that knows which words those are. A word is cleared only when
+    it matches one of them exactly, so `MongoClient` is still a class name on a map that depends on
+    MongoDB."""
+    vendor = {w for w in known if w}
+    return [t for t in code_tokens(name or "", _NAME_PATTERNS) if t not in vendor]
 
 
 def opens_with_bare_pointer(text: str) -> str:

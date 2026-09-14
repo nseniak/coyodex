@@ -22,3 +22,5 @@ Escalation: none on its own.
 
 3. expect: the lint's `agent transcripts:` line names this session's directory on every run.
    regression sign: the citation check reported as skipped.
+
+verified in reminderrepo build of 2026-09-13 23:03

@@ -27,3 +27,5 @@ Escalation: none on its own.
 3. expect: `grounding write`'s NOTE and `ship`'s COVERAGE line in the transcript carry the same
    split as the gate block.
    regression sign: one of the three sentences saying something the other two do not.
+
+verified in reminderrepo build of 2026-09-13 23:03

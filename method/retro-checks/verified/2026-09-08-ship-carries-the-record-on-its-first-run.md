@@ -19,3 +19,5 @@ Escalation: none on its own.
    (`coyomap-eval transcript <t> --commands` lists each `ship` turn; a rewrite shows as an edit of
    the note file between two runs).
    regression sign: two consecutive `ship` runs with the note untouched between them.
+
+verified in reminderrepo build of 2026-09-13 23:03

@@ -776,6 +776,40 @@ def test_a_noop_wait_recognises_the_shapes_a_build_actually_used():
     assert not P._is_noop_wait("")
 
 
+def test_a_noop_wait_does_not_swallow_the_rest_of_an_and_chain():
+    """An `echo` BANNER in front of real work is not a wait.
+
+    Splitting on `;` alone left `echo\\b[^|<>]*` free to run to the end of the command, so an
+    `echo "=== src ===" && git ls-files src && cat README.md` — a build reading the repository,
+    with the banner it prints to label the output — matched as one no-op segment. Six such turns of
+    the 2026-09-13 reminderrepo build were scored as idle waiting at a fan-out."""
+    assert not P._is_noop_wait('echo "=== a ===" && git ls-files x && cat y')
+    assert not P._is_noop_wait('echo "=== README ==="\ncat README.md')
+    assert not P._is_noop_wait("echo start || coyomap validate m.json")
+    # The real waits still read as waits, whichever operator joins them.
+    assert P._is_noop_wait('echo "=== waiting ===" && sleep 30')
+    assert P._is_noop_wait("echo .\nsleep 5")
+
+
+def test_10_does_not_charge_an_idle_turn_to_a_fanout_that_had_not_happened_yet():
+    """A turn BEFORE every fan-out belongs to no fan-out's barrier — there is nothing to wait at.
+
+    `default=fanouts[0]` charged it to the first fan-out anyway. On the reminderrepo build that
+    attributed six pre-harvest turns to a fan-out thirty turns later and reported 5/6."""
+    turns = (make_turn(1, make_bash("sleep 120")),
+             make_turn(2, make_bash("echo .")),
+             make_turn(3, make_bash("sleep 5")),
+             make_turn(4, make_bash('echo "still nothing"')),
+             make_turn(9, make_agent()))
+    a = P.assert_10_idle_turns_at_a_barrier(turns)
+    assert (a.observed, a.of) == (1, 1), a
+    assert a.evidence == (), a.evidence
+    # AFTER the fan-out the same four turns are exactly what the assertion exists to catch.
+    after = (make_turn(1, make_agent()),
+             *[make_turn(2 + i, make_bash("sleep 120")) for i in range(4)])
+    assert P.assert_10_idle_turns_at_a_barrier(after).observed == 0
+
+
 # --- assertions 13-17, added from the 2026-08-01 retro -------------------------------------------
 
 
@@ -1095,6 +1129,90 @@ def test_a18_says_so_when_a_commit_had_no_generated_line_to_check_against():
 GATE_8 = ("Shape: 66 components in 14 subsystems, 55 entities in 8 subdomains, 40 deps, "
           "26 use cases, 365 edges, 36 flows/sub-flows, 281 entry points, 26 security rows.")
 
+#: The first line of the gate block a `ship` build reads back, verdict and counts.
+VERDICT_ADVISORIES = ("Gates: finalize ADVISORIES — 0 blocking, 14 advisory "
+                      "(map sha256 3a755167016c…).\n")
+
+#: The commit `method.md`'s own worked example produces: ONE Bash call that builds the message out
+#: of the live gate block AND commits it.
+SHIP_COMMIT = ('{ echo "docs: add the map"; echo; cat .coyomap/verify/gate-block.md; } '
+               "> $SP/commitmsg.txt\n"
+               "git commit -F $SP/commitmsg.txt 2>&1 | head -5")
+
+
+def make_ship_verdict_then_commit(commit_cmd: str) -> tuple:
+    """A `ship` build's close: read the live gate block, then commit.
+
+    `coyomap ship` runs `finalize` INSIDE ITSELF and emits the gate block to
+    `.coyomap/verify/gate-block.md`, so nothing types `finalize` and nothing types
+    `--emit-gate-block`. A `cat` of that file is the only place the verdict and the shape numbers
+    reach the transcript."""
+    return (make_turn(1, make_bash("cat .coyomap/verify/gate-block.md", uid="g"),
+                      results=(("g", VERDICT_ADVISORIES + GATE_8),)),
+            make_turn(2, make_bash(commit_cmd)))
+
+
+def test_a12_sees_a_commit_that_shares_its_call_with_the_gate_block_read():
+    """One Bash call does both jobs, and an `elif` gave the whole call to the first branch.
+
+    The 2026-09-13 reminderrepo build closed exactly as `method.md`'s example says — it cat-ed
+    `.coyomap/verify/gate-block.md` into the message file and committed it in the same call — and
+    assertion 12 reported `n/a — no git commit captured` over a real commit."""
+    a = P.assert_12_commit_matches_the_finalize_verdict(make_ship_verdict_then_commit(SHIP_COMMIT))
+    assert (a.observed, a.of) == (1, 1), a
+    assert "ADVISORIES" in (a.note or ""), a.note
+
+
+def test_a12_still_catches_a_clean_claim_over_an_advisory_verdict():
+    """The widened branch must not become a blanket pass: a commit that CLAIMS a clean gate over an
+    ADVISORIES verdict is the whole point of the assertion."""
+    lying = ('cat .coyomap/verify/gate-block.md > $SP/m.txt\n'
+             'git commit -m "docs: the map\n\nGates: validate clean, audit clean"')
+    a = P.assert_12_commit_matches_the_finalize_verdict(make_ship_verdict_then_commit(lying))
+    assert (a.observed, a.of) == (0, 1), a
+    assert a.evidence and a.evidence[0].detail["verdict"] == "ADVISORIES", a.evidence
+
+
+def test_a12_examines_the_LAST_commit_that_had_a_verdict_not_the_first():
+    """Two commits in a build is ordinary, and the dishonest one is the close, not the checkpoint.
+
+    Stopping the scan at the first commit with a verdict in force scored a `wip: checkpoint` as
+    honest and never looked at the message that claimed three clean gates fifty turns later."""
+    turns = (make_turn(1, make_bash("cat .coyomap/verify/gate-block.md", uid="g1"),
+                       results=(("g1", VERDICT_ADVISORIES),)),
+             make_turn(2, make_bash('git commit -m "wip: checkpoint"')),
+             make_turn(50, make_bash("cat .coyomap/verify/gate-block.md", uid="g2"),
+                       results=(("g2", VERDICT_ADVISORIES),)),
+             make_turn(51, make_bash('git commit -m "docs: the map\n\n'
+                                     'Gates: validate clean, audit clean, finalize clean"')))
+    a = P.assert_12_commit_matches_the_finalize_verdict(turns)
+    assert (a.observed, a.of) == (0, 1), a
+    assert a.evidence and a.evidence[0].turn == 51, a.evidence
+
+
+def test_a12_gives_no_opportunity_for_a_commit_made_before_any_verdict():
+    """Nothing is in force yet, so there is nothing to compare — `n/a`, not a pass and not a miss.
+
+    Recording the commit anyway is how the old scan came to pair it with a verdict that arrived
+    afterwards."""
+    turns = (make_turn(1, make_bash('git commit -m "chore: scaffolding"')),
+             make_turn(9, make_bash("cat .coyomap/verify/gate-block.md", uid="g"),
+                       results=(("g", VERDICT_ADVISORIES),)))
+    a = P.assert_12_commit_matches_the_finalize_verdict(turns)
+    assert a.of == 0, a
+
+
+def test_a12_does_not_pair_a_commit_with_a_verdict_that_came_after_it():
+    """"The verdict in force AT THIS COMMIT" — a later CLEAN run must not whitewash an earlier
+    dishonest commit. Breaking only the inner loop left the later verdict free to overwrite."""
+    turns = (make_turn(1, make_bash("cat .coyomap/verify/gate-block.md", uid="g1"),
+                       results=(("g1", VERDICT_ADVISORIES),)),
+             make_turn(2, make_bash('git commit -m "docs: map\n\nGates: finalize clean"')),
+             make_turn(3, make_bash("cat .coyomap/verify/gate-block.md", uid="g2"),
+                       results=(("g2", "Gates: finalize CLEAN — 0 blocking, 0 advisory\n"),)))
+    a = P.assert_12_commit_matches_the_finalize_verdict(turns)
+    assert (a.observed, a.of) == (0, 1), a
+
 
 def make_emit_then_commit(commit_cmd: str) -> list:
     """`finalize` emits the gate block, a later turn cats it, then `commit_cmd` commits.
@@ -1149,6 +1267,63 @@ def test_a18_still_catches_a_number_that_drifted_even_when_the_file_is_provable(
     a = P.assert_18_commit_shape_matches_the_map(turns)
     assert (a.observed, a.of) == (1, 2), a
     assert any("416" in str(e.detail) for e in a.evidence), a.evidence
+
+
+def test_a18_scores_a_ship_build_that_never_typed_emit_gate_block():
+    """`ship` emits the gate block ITSELF, so no `--emit-gate-block` is ever typed.
+
+    The 2026-08-18 repair seeded the proof from that typed flag; `ship` landed 2026-08-27 and
+    reopened the blind spot through a different door. On the 2026-09-13 reminderrepo build — whose
+    eight shape numbers were all the tool's own — this printed `n/a 0/0`. The live path needs no
+    flag to prove itself: `finalize` is the only thing that writes it."""
+    a = P.assert_18_commit_shape_matches_the_map(make_ship_verdict_then_commit(SHIP_COMMIT))
+    assert (a.observed, a.of) == (8, 8), a
+    assert "commitmsg.txt" in (a.note or ""), a.note
+
+
+def test_a18_does_not_take_a_hand_written_file_that_merely_wears_the_name():
+    """`gate-block.md` is a NAME any file can wear, and `generated` is a set of names.
+
+    Seeding the live block's basename let a hand-typed `/tmp/sp/gate-block.md` — body claiming 999
+    components against a map holding 66 — be passed to `-F` and certified, with a note explaining
+    that its numbers "cannot diverge". The live block is known by WHERE it sits, so it proves
+    itself as a whole path and never as a name."""
+    forged = (make_turn(1, make_bash("cat .coyomap/verify/gate-block.md", uid="g"),
+                        results=(("g", GATE_8),)),
+              make_turn(2, make_write("/tmp/sp/gate-block.md",
+                                      "docs: the map\n\nShape: 999 components in 14 subsystems")),
+              make_turn(3, make_bash("git commit -F /tmp/sp/gate-block.md")))
+    a = P.assert_18_commit_shape_matches_the_map(forged)
+    assert a.observed == 0, a
+    assert "cannot diverge" not in (a.note or ""), a.note
+    # The real live block passed straight to `-F` is still proof — matched as a path, not a name.
+    honest = (make_turn(1, make_bash("cat .coyomap/verify/gate-block.md", uid="g"),
+                        results=(("g", GATE_8),)),
+              make_turn(2, make_bash("git commit -F .coyomap/verify/gate-block.md")))
+    assert P.assert_18_commit_shape_matches_the_map(honest).observed == 8
+
+
+def test_is_live_gate_block_matches_the_place_not_the_name():
+    """The suffix anchor, on its own."""
+    assert P._is_live_gate_block(".coyomap/verify/gate-block.md")
+    assert P._is_live_gate_block('"/x/y/.coyomap/verify/gate-block.md";')
+    assert P._is_live_gate_block(".coyodex/verify/gate-block.md")
+    assert not P._is_live_gate_block("/tmp/sp/gate-block.md")
+    assert not P._is_live_gate_block("gate-block.md")
+    assert not P._is_live_gate_block("dev-rebuilds/0016/.coyomap/verify/gate-block.md")
+
+
+def test_a18_does_not_take_an_archived_gate_block_as_proof():
+    """A `cat` of a PREVIOUS build's archived block launders another map's numbers into this
+    commit. `_live_gate_block_reads` refuses `dev-rebuilds/`, and the proof chain must inherit
+    that refusal rather than re-deriving a looser one."""
+    archived = (make_turn(1, make_bash("cat .coyomap/verify/gate-block.md", uid="g"),
+                          results=(("g", GATE_8),)),
+                make_turn(2, make_bash(
+                    "cat dev-rebuilds/0016/.coyomap/verify/gate-block.md > $SP/m.txt\n"
+                    "git commit -F $SP/m.txt")))
+    a = P.assert_18_commit_shape_matches_the_map(archived)
+    assert a.of == 0, a
 
 
 def test_a18_matches_a_path_spelled_differently_in_the_two_turns():
@@ -1577,6 +1752,65 @@ def test_a22_reads_single_quoted_keys_in_a_heredoc():
                  "open('.coyomap/build-fragments/beh.json','w'))\nPY")),
              make_turn(2, make_bash("coyomap preindex --out .coyomap/preindex.json")))
     assert P.assert_22_behavioral_draft_precedes_preindex(turns).observed == 1
+
+
+BEHAVIORAL_DRAFT_MD = ("# Behavioral draft (pre-index NOT yet read)\n\n"
+                       "## T0 Goal (draft)\n\nPeople forget what they promised somebody else.\n\n"
+                       "## Roles (draft)\n\n- R1 Reminder owner — human, user.\n\n"
+                       "## Glossary (draft)\n\nActivity · Reminder · Schedule\n\n"
+                       "## Use cases (draft, ranked)\n\n1. Sign up for an account\n")
+
+
+def make_scratchpad_draft(index: int) -> Turn:
+    """The draft written where a harvest brief can point at it, NOT into `build-fragments/`."""
+    return make_turn(index, make_bash("mkdir -p $SP && cat > $SP/behavioral-draft.md <<'EOF'\n"
+                                      + BEHAVIORAL_DRAFT_MD + "EOF"))
+
+
+def test_a22_counts_a_draft_written_outside_the_fragment_directory():
+    """GR1 protects that the layer EXISTS before the slices are cut, not where it is parked.
+
+    Requiring the text to name `build-fragments/` made the detector blind on a build that obeyed
+    the rule: the 2026-09-13 reminderrepo run drafted its goal, roles, glossary and ranked use
+    cases into `<scratchpad>/behavioral-draft.md` twenty-two turns before its harvest, and scored
+    0 — the same 0 as a build that harvested first and drafted 79 turns later."""
+    turns = (make_scratchpad_draft(90),
+             make_turn(92, make_bash("coyomap preindex --report --root . | head -120")),
+             make_turn(112, make_agent(), make_agent()))
+    a = P.assert_22_behavioral_draft_precedes_preindex(turns)
+    assert (a.observed, a.of) == (1, 1), a
+    assert a.note.startswith("behavioral draft at 90"), a.note
+
+
+def test_a22_does_not_take_a_harvest_slot_file_for_the_draft():
+    """The widening must not swallow the run. A slot file names use-case IDS by the dozen and the
+    fragment directory as a VALUE, and it is a brief, not the behavioral layer."""
+    slot = ("python3 - <<'PY'\nimport json\n"
+            'json.dump({"USE_CASES": "UC1, UC2, UC5", "AGENT_ID": "h-domain",\n'
+            '  "your-fragment": "/x/.coyomap/build-fragments/h-domain"},\n'
+            '  open("/tmp/sp/slots/h-domain.json", "w"))\nPY')
+    turns = (make_turn(1, make_bash(slot)),
+             make_turn(2, make_bash("coyomap preindex --out .coyomap/preindex.json")),
+             make_turn(3, make_agent(), make_agent()))
+    assert P.assert_22_behavioral_draft_precedes_preindex(turns).observed == 0
+
+
+def test_a22_needs_a_write_target_and_two_sections_outside_the_fragment_directory():
+    """Both conditions are load-bearing, so each is pinned on its own.
+
+    One section alone is a passing mention — a brief that happens to say "Use cases" — and text
+    with nowhere to land is an `echo` into the void that no agent can be sent to."""
+    one_section = "cat > $SP/notes.md <<'EOF'\n## Use cases\n\n1. Sign in\nEOF"
+    no_target = "echo '## Roles\n## Glossary\n## Use cases'"
+    for command in (one_section, no_target):
+        turns = (make_turn(1, make_bash(command)),
+                 make_turn(2, make_bash("coyomap preindex --out .coyomap/preindex.json")))
+        assert P.assert_22_behavioral_draft_precedes_preindex(turns).observed == 0, command
+    # Inside `build-fragments/` ONE section is still enough — that file IS the behavioral layer.
+    inside = (make_turn(1, make_write(".coyomap/build-fragments/behavioral.json",
+                                      '{"use_cases": [{"id": "UC1"}]}')),
+              make_turn(2, make_bash("coyomap preindex --out .coyomap/preindex.json")))
+    assert P.assert_22_behavioral_draft_precedes_preindex(inside).observed == 1
 
 
 def test_a22_says_which_signal_it_used():
@@ -2019,6 +2253,43 @@ def test_27_counts_a_chained_hand_edit_as_hand_written():
                                "import json;json.dump(m, open('.coyomap/project-map.json','w'))\""),)
     a = P.assert_27_no_hand_script_mutated_the_model(turns)
     assert (a.observed, a.of) == (0, 1)
+
+
+def make_slot_writer(artifact: str, target: str) -> str:
+    """A harvest-slot writer: it MENTIONS `artifact` inside a JSON value and writes only `target`.
+
+    This is the shape a build uses to hand each harvest agent its brief — nine of them per fan-out
+    — and none of them touches the map or a fragment."""
+    return ("python3 - <<'PY'\nimport json\n"
+            'json.dump({"REPO": "/x", "AGENT_ID": "h-domain",\n'
+            f'  "points-at": "/x/.coyomap/{artifact}"' + "},\n"
+            f'  open("{target}", "w"), indent=2)\nPY')
+
+
+def test_27_judges_the_write_target_not_a_path_named_in_the_data():
+    """`json.dump`'s FIRST argument is the DATA, and a dict literal holds no `)` to stop at.
+
+    `json\\.dump\\s*\\([^)]*build-fragments` therefore matched a slot file that only NAMED the
+    fragment directory in a value while writing `$SP/tslots/*.json`. Two turns of the 2026-09-13
+    reminderrepo build were reported as hand-scripted model rewrites that way — one against
+    `build-fragments/`, one against `project-map.json` — so both artifact classes are pinned."""
+    for artifact in ("build-fragments/h-domain", "project-map.json"):
+        turns = (make_bash_turn(1, make_slot_writer(artifact, "/tmp/sp/tslots/h-domain.json")),)
+        a = P.assert_27_no_hand_script_mutated_the_model(turns)
+        assert a.of == 0, (artifact, a)
+    # The same call shape aimed AT the artifact is still the finding it always was.
+    for artifact in ("build-fragments/h-domain.json", "project-map.json"):
+        turns = (make_bash_turn(1, make_slot_writer("scratch.json", f".coyomap/{artifact}")),)
+        a = P.assert_27_no_hand_script_mutated_the_model(turns)
+        assert (a.observed, a.of) == (0, 1), (artifact, a)
+
+
+def test_json_dump_file_args_reads_the_second_argument_only():
+    """The walk, on its own: data in, file out, and a third argument ends the file argument."""
+    assert P._json_dump_file_args('json.dump({"a": "x/build-fragments/y"}, open(P, "w"))') == \
+        [' open(P, "w")']
+    assert P._json_dump_file_args("json.dump(d, open(p,'w'), indent=2)") == [" open(p,'w')"]
+    assert P._json_dump_file_args("json.dump(d)") == []
 
 
 def test_28_prefers_the_record_command_over_a_hand_edit():

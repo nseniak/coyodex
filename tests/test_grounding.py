@@ -1131,3 +1131,495 @@ def test_the_unvoted_reason_splits_pinned_from_minted():
     assert G.unvoted_reason(5, 0) == "They were pinned and never challenged."
     # a delta larger than the unvoted count is a malformed record, not a negative number
     assert G.unvoted_reason(5, 9).startswith("They were minted or reworded")
+
+
+# --- the note gate fired on its own prescribed wording (retro 2026-09-13 reminderrepo, T2) -------
+# `NOTE FACTS` tells the author to quote "N row(s) that added no new claim (usually a re-vote)", and
+# the post-pin check read the `no` in that sentence as "0 claims added since the pin". `ship` died
+# at step 6 of 13 against a record that said 14, and the run after it passed on a pure reword that
+# changed no number.
+
+def test_the_post_pin_check_does_not_fire_on_the_wording_NOTE_FACTS_prescribes():
+    rows = _triple("c1") + _triple("c2")                 # 6 rows, 2 claims -> 4 redundant
+    # The sentence SPELLED OUT, so this fails on the behaviour and not on a missing constant.
+    note = "This pass produced 6 verdict rows, 4 row(s) that added no new claim (usually a re-vote)."
+    assert not _write_with_note(note, rows, ["c1", "c2"], live=["c1", "c2", "c3"])
+    assert G.REDUNDANT_PHRASE.format(n=4) in note, "the block must still prescribe that sentence"
+
+
+def test_the_post_pin_count_it_exists_to_catch_is_still_caught():
+    """The 2026-09-02 mcpolis note said "9 post-pin claims" where its own record said 13."""
+    rows = _triple("c1") + _triple("c2")
+    problems = _write_with_note("9 post-pin claims were never challenged.", rows, ["c1", "c2"],
+                                live=["c1", "c2", "c3"])
+    assert problems and "1 claim(s) added since the pin" in problems[0], problems
+
+
+def test_a_MISQUOTED_note_facts_line_is_now_read_as_the_redundant_count():
+    """Recognising the phrase is not the same as exempting it: a note that retypes it with the
+    wrong number used to be read by nothing at all."""
+    rows = _triple("c1") + _triple("c2")
+    problems = _write_with_note("128 row(s) that added no new claim (usually a re-vote).",
+                                rows, ["c1", "c2"])
+    assert problems and "this pass has 4" in problems[0], problems
+
+
+# --- the note gate never checked the skeptic count (retro 2026-09-13 reminderrepo, T14) ----------
+# The shipped note opened "Twenty-one fresh-context skeptics challenged the pinned worklist" and
+# said "Distinct skeptic labels 38" three sentences later. 38 is right three ways; 21 was the
+# wave-one dispatch, re-pasted. `NOTE FACTS` printed the 38 and nothing read it back.
+
+def test_a_wrong_skeptic_count_is_caught_beside_the_right_one():
+    rows = _triple("c1")                                  # skeptics a, b, c -> 3 labels
+    problems = _write_with_note(
+        "Twenty-one fresh-context skeptics challenged the pinned worklist. "
+        "Distinct skeptic labels 3.", rows, ["c1"])
+    assert problems, "an any-occurrence-clears rule passes the note this check exists for"
+    assert "Twenty-one fresh-context skeptics" in problems[0], problems
+    assert "3 distinct skeptic label(s)" in problems[0], problems
+
+
+def test_the_right_skeptic_count_passes_in_digits_and_in_words():
+    rows = _triple("c1")
+    assert not _write_with_note("Distinct skeptic labels 3.", rows, ["c1"])
+    assert not _write_with_note("Three fresh-context skeptics challenged it.", rows, ["c1"])
+
+
+def test_a_subset_written_as_n_of_the_m_reads_as_m():
+    """The escape the refusal names, so an honest note about part of the wave is not refused."""
+    rows = _triple("c1")
+    assert not _write_with_note("2 of the 3 skeptics dissented.", rows, ["c1"])
+
+
+def test_no_skeptic_saw_them_is_a_quantifier_not_a_count():
+    """The real note says "so no skeptic saw them" about the post-pin claims. That is not a claim
+    that the pass had zero skeptics."""
+    rows = _triple("c1")
+    assert not _write_with_note("They were minted after the pin, so no skeptic saw them.",
+                                rows, ["c1"])
+
+
+# --- an adverse note reached nothing (retro 2026-09-13 reminderrepo, T8) -------------------------
+# Two channels carry what an agent tells the LEAD and no verdict carries. A `grounded: true` row's
+# note reaches no section of the report, because confirmed reads as "nothing to do". And a harvest,
+# trace, gap-fill or test agent writes no verdict file at all, so its ONLY channel is the closing
+# message — where the 2026-09-13 build's unguarded-route finding sat, naming three anchors that
+# appear zero times in the shipped map.
+
+def make_agent_transcript(dir_path: Path, stem: str, task: str, final: str) -> Path:
+    """One agent transcript in the shape the harness writes, plus the `.meta.json` beside it."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps({"message": {"role": "user", "content": [{"type": "text", "text": task}]}}),
+             json.dumps({"message": {"role": "assistant",
+                                     "content": [{"type": "text", "text": final}]}})]
+    path = dir_path / f"{stem}.jsonl"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (dir_path / f"{stem}.meta.json").write_text(json.dumps({"description": task}), encoding="utf-8")
+    return path
+
+
+ROUTE_FINDING = """## [1] Outcome
+
+Done. Fragment written.
+
+## Findings the lead should know
+
+- **Three paths are declared twice, with different guard sets.** `reminder-groups-list` and
+  `reminder-page-invitations-list` appear as a tab child and as a top-level route.
+- **One top-level route carries no guard at all.** `app-routing.module.ts:17`.
+"""
+
+
+def test_the_report_collects_the_closing_section_an_agent_wrote_to_the_lead(tmp_path):
+    agents = tmp_path / "subagents"
+    make_agent_transcript(agents, "agent-aaa", "Harvest Angular pages and routes", ROUTE_FINDING)
+    make_agent_transcript(agents, "agent-bbb", "Harvest deps", "## [1] Outcome\n\nDone.\n")
+    text = G.format_report(["c1"], [{"claim": "c1", "grounded": True, "evidence": "a.py:1"}],
+                           agent_dir=agents)
+    assert "FINDINGS THE AGENTS SENT UP" in text, text
+    assert "Harvest Angular pages and routes" in text, text
+    assert "app-routing.module.ts:17" in text, text
+    assert "Harvest deps" not in text, "an agent with no such section must not be listed:\n" + text
+    # Its own coverage, in `grounding lint`'s shape — this is a heading match over prose.
+    assert "2 agent transcript(s)" in text, text
+
+
+def test_a_missing_transcript_directory_reads_as_NOT_READ_and_never_as_zero(tmp_path):
+    rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1"}]
+    unread = G.format_report(["c1"], rows)
+    assert "AGENT FINDINGS NOT READ" in unread.splitlines()[0], unread.splitlines()[0]
+    assert "AGENT FINDINGS NOT READ" in unread.split("\n\n")[-1], unread
+    agents = tmp_path / "subagents"
+    make_agent_transcript(agents, "agent-aaa", "Harvest deps", "## [1] Outcome\n\nDone.\n")
+    read = G.format_report(["c1"], rows, agent_dir=agents)
+    assert "0 finding(s) sent up by agents" in read, read
+    assert "NOT READ" not in read, read
+
+
+def test_an_upheld_row_whose_note_speaks_to_the_lead_is_listed():
+    """`security-1-c` CONFIRMED a business rule and added that another route reaches the same
+    screen unguarded. The claim stands, so the row landed in no section of this report."""
+    rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "security-1-c",
+             "note": "The rule holds at line 90. Note for the lead: app-routing.module.ts:15 "
+                     "registers a second, unguarded way in."},
+            {"claim": "c2", "grounded": True, "evidence": "b.py:2", "skeptic": "security-1-c",
+             "note": "The rule holds."}]
+    text = G.format_report(["c1", "c2"], rows)
+    assert "NOTES TO THE LEAD ON UPHELD CLAIMS (1)" in text, text
+    assert "app-routing.module.ts:15" in text, text
+    # from the SENTENCE the phrase sits in, so the finding is not cut off mid-clause
+    assert "Note for the lead: app-routing.module.ts:15" in text, text
+    assert "Phrase match over 2 of 2 upheld row(s)" in text, text
+
+
+def test_both_lead_channels_survive_a_head_and_a_tail(tmp_path):
+    """The report runs hundreds of lines and is read through a pipe; two opposite narrowings have
+    already hidden two ends of one section on a real build."""
+    agents = tmp_path / "subagents"
+    make_agent_transcript(agents, "agent-aaa", "Trace groups", ROUTE_FINDING)
+    rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "s",
+             "note": "Holds. Worth flagging: the second route has no guard."}]
+    text = G.format_report(["c1"], rows, agent_dir=agents)
+    head, tail = text.splitlines()[0], text.splitlines()[-3:]
+    assert "1 upheld with a note to the lead" in head and "1 finding(s) sent up" in head, head
+    assert any("TO THE LEAD:" in ln for ln in tail), tail
+
+
+def test_the_report_verb_prints_the_numbers_the_note_must_quote(tmp_path):
+    """`note_facts_block` was printed only by `grounding write` — the run that REFUSES the note — so
+    the first note of every build was written from hand-computed figures. `ship` PREPARE ends on
+    this report; the numbers belong here."""
+    import contextlib, io
+    wl = tmp_path / "wl.json"
+    wl.write_text(json.dumps({"worklist": [{"claim": "c1"}]}), encoding="utf-8")
+    vd = tmp_path / "v.json"
+    vd.write_text(json.dumps({"grounding": _triple("c1")}), encoding="utf-8")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = main(["report", "--worklist", str(wl), "--verdicts", str(vd)], env={})
+    out = buf.getvalue()
+    assert rc == 0, out
+    assert "NOTE FACTS" in out, out
+    assert "distinct skeptic labels 3" in out, out
+    assert "2 row(s) that added no new claim" in out, out
+
+
+# --- the closer's verdicts reach the readers (retro 2026-09-13 reminderrepo, T7 second half) -----
+# `contract closer` now makes the closer WRITE its verdicts to `verify/closer-<agent>.json`, in the
+# skeptics' own shape with `uphold → grounded false`, `reject → true`, `unsure → "unverifiable"`.
+# The map kept nothing of what the closer decided: on the reviewed build two REJECTED refutations
+# still blocked the ship gate and cost five turns to talk past.
+
+def make_closer_row(claim: str, verdict: str, note: str = "read the line in full") -> dict:
+    grounded: object = {"uphold": False, "reject": True, "unsure": "unverifiable"}[verdict]
+    return {"claim": claim, "verdict": verdict, "grounded": grounded, "id": "rule-1#12",
+            "evidence": "a.py:90", "skeptic": "closer-agent-1", "note": note}
+
+
+def make_refuted_map(claim_text: str):
+    """A map whose ONE component description is the claim the skeptics refuted."""
+    from coyomap.model import load_model
+    return load_model(json.dumps({
+        "format": "coyomap-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "components": [{"id": "C1", "name": "Front", "purpose": claim_text,
+                        "entry_point": "a.py:1"}],
+    }))
+
+
+def refuted_claim_of(m) -> str:
+    from coyomap.audit_model import l2_worklist_model
+    return next(w.claim for w in l2_worklist_model(m) if "C1" in w.claim)
+
+
+def test_a_closer_row_is_never_counted_as_a_vote():
+    """An `uphold` would double a refutation's weight and a `reject` would add a confirming vote."""
+    skeptics = [{"claim": "c1", "grounded": False, "evidence": "a.py:1", "skeptic": "sec-a"}]
+    rec_alone, _ = build_record(["c1"], skeptics)
+    rec_with, _ = build_record(["c1"], skeptics + [make_closer_row("c1", "reject")])
+    tally = ("claims_total", "claims_challenged", "claims_confirmed", "claims_refuted",
+             "claims_unverifiable")
+    assert [count(rec_alone, k) for k in tally] == [count(rec_with, k) for k in tally], (
+        "the closer is an appeal, not a third skeptic — a `reject` folded into the tally turns a "
+        f"1-0 refutation into a 1-1 tie:\n{rec_alone}\n{rec_with}")
+    assert count(rec_with, "claims_refuted") == 1 and count(rec_with, "claims_confirmed") == 0
+    # ...and the appeal is RECORDED, so a fresh clone can see the refutation was overturned
+    assert count(rec_with, "closer_rejected") == 1, rec_with
+    assert count(rec_with, "closer_upheld") == 0 and count(rec_with, "closer_unsure") == 0
+    assert count(rec_alone, "closer_rejected") == 0, "no appeal heard reads as zero, not absent"
+
+
+def test_a_closer_is_not_a_skeptic_label_and_not_a_second_voter():
+    skeptics = _triple("c1")
+    rows = skeptics + [make_closer_row("c1", "uphold")]
+    assert G.skeptic_labels(rows) == ["a", "b", "c"], G.skeptic_labels(rows)
+    assert G.multi_vote_agreement(rows) == G.multi_vote_agreement(skeptics)
+    # ...so the note gate this batch added does not start refusing a truthful note
+    assert not _write_with_note("Three fresh-context skeptics challenged it.", rows, ["c1"])
+
+
+def test_a_refutation_the_closer_REJECTED_stops_blocking_the_gate():
+    m = make_refuted_map("takes the ask and answers it")
+    claim = refuted_claim_of(m)
+    skeptics = [{"claim": claim, "grounded": False, "evidence": "a.py:1", "skeptic": "desc-1"}]
+    assert G.surviving_refutations(m, skeptics), "without the appeal it must still block"
+    cleared = G.surviving_refutations(m, skeptics + [make_closer_row(claim, "reject")])
+    assert cleared == [], cleared
+    # ...and it is NAMED, never silently absent
+    text = G.format_refutations(cleared, [], m=m,
+                                grounding_rows=skeptics + [make_closer_row(claim, "reject")])
+    assert "CLOSER REJECTED" in text, text
+    assert "read the line in full" in text, text
+
+
+def test_uphold_and_unsure_keep_blocking():
+    """`unsure` is "nobody settled it". Reading that as cleared is the one way this hides a
+    survivor."""
+    m = make_refuted_map("takes the ask and answers it")
+    claim = refuted_claim_of(m)
+    skeptics = [{"claim": claim, "grounded": False, "evidence": "a.py:1", "skeptic": "desc-1"}]
+    for word in ("uphold", "unsure"):
+        still = G.surviving_refutations(m, skeptics + [make_closer_row(claim, word)])
+        assert len(still) == 1, (word, still)
+        assert still[0].closed == word, still[0]
+
+
+def test_the_report_shows_what_the_closer_decided():
+    rows = [{"claim": "c1", "grounded": False, "evidence": "a.py:1", "skeptic": "sec-a"},
+            make_closer_row("c1", "reject", "line 90 masks the address; the skeptic read line 80")]
+    text = G.format_report(["c1"], rows)
+    assert "CLOSED ON APPEAL (1 appeal row(s))" in text and "reject 1" in text, text
+    assert "the skeptic read line 80" in text, text
+    assert "1 closed on appeal" in text.splitlines()[0], text.splitlines()[0]
+    # the buckets themselves must not have moved
+    assert "REFUTED — reconcile each into the map (1)" in text, text
+
+
+def test_lint_says_when_appeals_are_in_the_pile(tmp_path, capsys):
+    v = tmp_path / "verdicts-rule-1.json"
+    v.write_text(json.dumps({"grounding": [
+        {"claim": "c1", "grounded": False, "evidence": "a.py:1", "skeptic": "sec-a"}]}))
+    c = tmp_path / "closer-agent-1.json"
+    c.write_text(json.dumps({"grounding": [make_closer_row("c1", "reject")]}))
+    rc = main(["lint", "--verdicts", str(v), str(c)], env={})
+    captured = capsys.readouterr()
+    out = captured.out + captured.err
+    assert rc == 0, out
+    assert "1 are CLOSER appeals" in out, out
+
+
+def test_the_agent_transcripts_are_the_MAPS_repos_not_the_working_directorys(tmp_path, monkeypatch):
+    """Run from a coyomap clone against another repo's map, the cwd default read the CLONE's own
+    session — 26 transcripts of coyomap's development — and printed their findings in a report
+    about a different product."""
+    home = tmp_path / "home"
+    mapped = tmp_path / "mapped-repo"
+    elsewhere = tmp_path / "the-clone"
+    (mapped / ".coyomap").mkdir(parents=True)
+    elsewhere.mkdir()
+    sid = "sid-1"
+    from coyomap.provenance import project_slug
+    theirs = home / ".claude" / "projects" / project_slug(mapped) / sid / "subagents"
+    make_agent_transcript(theirs, "agent-right", "Trace groups", ROUTE_FINDING)
+    wrong = home / ".claude" / "projects" / project_slug(elsewhere) / sid / "subagents"
+    make_agent_transcript(wrong, "agent-wrong", "Fix the linter", ROUTE_FINDING)
+    monkeypatch.chdir(elsewhere)            # the clone the command is typed in
+    env = {"CLAUDE_CODE_SESSION_ID": sid}
+    the_map = mapped / ".coyomap" / "project-map.json"
+    worklist = mapped / ".coyomap" / "verify" / "worklist.json"
+    verdicts = mapped / ".coyomap" / "verify" / "verdicts-rule-1.json"
+    # EVERY input these verbs take names the repo, so none of them has to guess from the cwd.
+    for named in (the_map, worklist, verdicts):
+        assert G._repo_of(str(named)) == mapped, named
+        assert G._resolve_agent_dir(None, env, G._repo_of(str(named)), home=home) == str(theirs)
+    # ...and the cwd answer, which is what it used to give, is the OTHER product's agents
+    assert G._repo_of(None) is None
+    assert G._resolve_agent_dir(None, env, None, home=home) == str(wrong)
+
+
+def test_the_appeal_survives_into_the_shipped_map(tmp_path):
+    """The record is a dict `grounding write` emits; whether it reaches a READER of the map is the
+    model's question. Without the three fields the closer's answers stop at the fragment, and a
+    fresh clone still cannot see that a refutation was overturned — the half that made this HIGH."""
+    from coyomap.model import load_model, to_canonical_json
+    skeptics = [{"claim": "c1", "grounded": False, "evidence": "a.py:1", "skeptic": "sec-a"}]
+    record, _ = build_record(["c1"], skeptics + [make_closer_row("c1", "reject")])
+    doc = {"format": "coyomap-map", "title": "T", "goal": "g",
+           "components": [{"id": "C1", "name": "C1", "purpose": "p"}],
+           "grounding": record}
+    m = load_model(json.dumps(doc))
+    assert m.grounding is not None
+    assert m.grounding.closer_rejected == 1, m.grounding
+    assert m.grounding.claims_refuted == 1, "the five counts must not have moved"
+    # ...and it is written back out, so the committed map carries it
+    assert '"closer_rejected": 1' in to_canonical_json(m)
+
+
+def test_a_closer_file_whose_rows_carry_no_verdict_word_is_REFUSED(tmp_path, capsys):
+    """`is_closer_row` decides from one optional string, and nothing checked it. A closer file
+    saying `"verdict": "rejected"` — the natural typo — was read as two extra skeptic VOTES:
+    `claims_refuted 19 → 17, claims_unverifiable 0 → 2, closer_rejected 0`."""
+    v = tmp_path / "verdicts-rule-1.json"
+    v.write_text(json.dumps({"grounding": [
+        {"claim": "c1", "grounded": False, "evidence": "a.py:1", "skeptic": "sec-a"}]}))
+    c = tmp_path / "closer-agent-1.json"
+    c.write_text(json.dumps({"grounding": [
+        {"claim": "c1", "verdict": "rejected", "grounded": True, "evidence": "a.py:9",
+         "skeptic": "closer-1", "note": "n"}]}))
+    rc = main(["lint", "--verdicts", str(v), str(c)], env={})
+    captured = capsys.readouterr()
+    out = captured.out + captured.err
+    assert rc == 1, out
+    assert "unreadable closer verdict word" in out, out
+    assert "'rejected'" in out, out
+    assert "KEEPS BLOCKING" in out, "an unreadable word must never become a vote:\n" + out
+
+
+def test_an_appeal_word_inside_a_SKEPTICS_file_is_refused_too(tmp_path, capsys):
+    """The same hole in the other direction: the row silently leaves the vote tally."""
+    v = tmp_path / "verdicts-rule-1.json"
+    v.write_text(json.dumps({"grounding": [
+        {"claim": "c1", "grounded": False, "evidence": "a.py:1", "skeptic": "sec-a"},
+        {"claim": "c2", "verdict": "reject", "grounded": True, "evidence": "a.py:2",
+         "skeptic": "sec-a"}]}))
+    rc = main(["lint", "--verdicts", str(v)], env={})
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "1 of 2 row(s) carry a `verdict` field" in captured.out + captured.err
+
+
+def test_the_gate_reads_the_closer_WORD_not_its_grounded_translation():
+    """A row saying `{"verdict": "unsure", "grounded": true}` cleared the gate while the record
+    counted an `unsure` and the report said "'uphold' and 'unsure' still need you"."""
+    m = make_refuted_map("takes the ask and answers it")
+    claim = refuted_claim_of(m)
+    skeptics = [{"claim": claim, "grounded": False, "evidence": "a.py:1", "skeptic": "desc-1"}]
+    lying = dict(make_closer_row(claim, "unsure"), grounded=True)
+    still = G.surviving_refutations(m, skeptics + [lying])
+    assert len(still) == 1 and still[0].closed == "unsure", still
+    assert G.settled_on_appeal(m, skeptics + [lying]) == []
+
+
+def test_two_appeals_that_disagree_settle_nothing():
+    """The first version let the alphabetically-last FILE win and called it "the later wave"; closer
+    files are named by random agent id, so which appeal survived was chance."""
+    m = make_refuted_map("takes the ask and answers it")
+    claim = refuted_claim_of(m)
+    skeptics = [{"claim": claim, "grounded": False, "evidence": "a.py:1", "skeptic": "desc-1"}]
+    both = [make_closer_row(claim, "reject"), make_closer_row(claim, "uphold")]
+    assert G.closer_ruling(both) == {claim: G.DISPUTED}
+    still = G.surviving_refutations(m, skeptics + both)
+    assert len(still) == 1 and still[0].closed == G.DISPUTED, still
+    # the marker must not read as a word anyone could write back into a file
+    assert G.DISPUTED not in G._CLOSER_VERDICTS and G.DISPUTED.startswith("(")
+
+
+def test_element_checks_never_counts_an_appeal_as_a_vote():
+    """The ninth reader, reached with appeals in the pile through `ship`'s by-element step and
+    through `grounding refutations`, whose output `finalize` consumes."""
+    m = make_refuted_map("takes the ask and answers it")
+    claim = refuted_claim_of(m)
+    skeptics = [{"claim": claim, "grounded": False, "evidence": "a.py:1", "skeptic": "desc-1"}]
+    alone, _ = G.element_checks(m, [claim], skeptics)
+    with_appeals, _ = G.element_checks(m, [claim], skeptics + [make_closer_row(claim, "reject"),
+                                                               make_closer_row(claim, "reject")])
+    assert [(c.element_id, c.refuted, c.confirmed, c.unverifiable) for c in alone] \
+        == [(c.element_id, c.refuted, c.confirmed, c.unverifiable) for c in with_appeals], \
+        (alone, with_appeals)
+    assert alone[0].refuted == 1, alone
+
+
+def test_the_headline_skeptic_count_is_the_FIRST_one_and_no_word_dodges_it():
+    """Three rules were tried on the four live notes. Every-must-agree caught reminderrepo and
+    REFUSED argus. Some-must-agree passes reminderrepo, which states the right 38 after the wrong
+    21. First-unscoped was defeated by one word: adding `each` to the false headline skipped it as
+    scoped and fell through to the 38."""
+    rows = _triple("c1")                                  # 3 labels
+    # argus's shape: the correct total first, true per-batch sentences after
+    argus_shaped = ("Three fresh-context skeptics challenged all 454 pinned claims. "
+                    "Both batches got three independent skeptics, and the rule theme two.")
+    assert not _write_with_note(argus_shaped, rows, ["c1"])
+    # the defect, and every word that used to dodge it
+    for dodge in ("Twenty-one fresh-context skeptics challenged it.",
+                  "Twenty-one fresh-context skeptics each challenged it.",
+                  "Twenty-one fresh-context skeptics per agent challenged it.",
+                  "Twenty-one fresh-context skeptics in two waves challenged it.",
+                  "Twenty-one fresh-context skeptics across both batches challenged it.",
+                  "One team of twenty-one fresh-context skeptics challenged it."):
+        note = dodge + " Distinct skeptic labels 3."
+        problems = _write_with_note(note, rows, ["c1"])
+        assert problems and "3 distinct skeptic label(s)" in problems[0], (dodge, problems)
+
+
+def test_a_count_inside_a_QUOTATION_is_somebody_elses_words():
+    rows = _triple("c1")
+    assert not _write_with_note('The brief said "dispatch twelve skeptics". '
+                                "Three fresh-context skeptics challenged it.", rows, ["c1"])
+    assert not _write_with_note("The brief said `dispatch twelve skeptics`. "
+                                "Three fresh-context skeptics challenged it.", rows, ["c1"])
+
+
+def test_a_markdown_heading_IS_the_headline_and_is_read():
+    """A heading is where a reader looks first, so a wrong number there is the defect this catches."""
+    rows = _triple("c1")
+    problems = _write_with_note("## 21 skeptics\n\nDistinct skeptic labels 3.", rows, ["c1"])
+    assert problems and "21 skeptics" in problems[0], problems
+    assert not _write_with_note("## 3 skeptics\n\nAll of them challenged it.", rows, ["c1"])
+
+
+def test_a_number_this_reader_cannot_COMPOSE_is_not_read_at_all():
+    """"One hundred and five fresh-context skeptics" matched `five` and read as 5 — a wrong read,
+    which can refuse a truthful note as easily as pass a false one. A miss is the safe failure."""
+    rows = _triple("c1")
+    for unreadable in ("One hundred and five fresh-context skeptics challenged it.",
+                       "A dozen skeptics challenged it.",
+                       "38+ skeptics challenged it.",
+                       "Skeptics: 38 of them."):
+        assert G._headline_skeptic_count(unreadable) is None, unreadable
+        assert not _write_with_note(unreadable, rows, ["c1"]), unreadable
+
+
+def test_a_note_that_opens_on_ANOTHER_runs_figure_is_refused_and_told_how():
+    """A DECISION, not an oversight: no rule over prose separates "the previous build used twelve
+    skeptics" from the reminderrepo note, since both put a wrong number first and the right one
+    later. The refusal is the half with a one-line remedy, and the message carries it."""
+    rows = _triple("c1")
+    problems = _write_with_note("The previous build used twelve skeptics. "
+                                "Three fresh-context skeptics challenged this one.", rows, ["c1"])
+    assert problems, "the first count is read, whoever it is about"
+    assert "Only the FIRST count in the note is read" in problems[0], problems
+    assert "--note-cites-other-runs" in problems[0] or "another run" in problems[0].lower(), problems
+
+
+def test_the_prescribed_wording_is_read_in_words_and_with_verdict_rows():
+    """The skip keys on this match, so a form it misses re-opens the bug — and this codebase's own
+    notes spell small numbers out."""
+    rows = _triple("c1") + _triple("c2")                  # 4 redundant
+    for spelling in ("Four row(s) that added no new claim (usually a re-vote).",
+                     "4 verdict rows that added no new claim, the re-votes.",
+                     "4 row(s) that added no new claim."):
+        assert not _write_with_note(spelling, rows, ["c1", "c2"], live=["c1", "c2", "c3"]), spelling
+
+
+def test_the_headline_rule_against_all_four_live_notes():
+    """The openings of the four shipped maps, verbatim from their `grounding.note`. Two earlier
+    rules were tuned on two of them and were blind or off-target on the other two: mcpolis's only
+    count sentence says "across 19 batches", and coyomap's true opening says "in two waves"."""
+    live = [
+        ("argus", 18, "Eighteen fresh-context skeptics challenged all 454 pinned claims, "
+                      "returning 614 verdict rows across 18 files; the pass was complete."),
+        ("mcpolis", 38, "A partial pass, worked top-down by danger. WHAT WAS CHALLENGED. 842 of "
+                        "the pinned 1,791 claims went to 38 fresh-context skeptics across 19 "
+                        "batches: every access-control claim, every business-rule site."),
+        ("coyomap", 25, "Twenty-five fresh-context skeptics challenged every claim in the pinned "
+                        "worklist, in two waves, with the behavioural theme turned on. This pass "
+                        "has 790 verdict rows over 728 distinct claims, and 25 distinct skeptic "
+                        "labels."),
+        ("reminderrepo", 21, "Twenty-one fresh-context skeptics challenged the pinned worklist "
+                             "top-down by danger. Distinct skeptic labels 38."),
+    ]
+    for name, expected, opening in live:
+        got = G._headline_skeptic_count(opening)
+        assert got is not None, f"{name}: the check must READ this note, not skip it"
+        assert got[0] == expected, (name, got)
+    # ...and only reminderrepo's headline disagrees with its own label count
+    assert G._headline_skeptic_count(live[3][2])[0] != 38

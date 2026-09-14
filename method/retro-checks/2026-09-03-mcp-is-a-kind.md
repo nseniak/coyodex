@@ -33,6 +33,12 @@ carried some other way, which is what coyomap's own skill files are.
 
 ## Checks
 
+**Which repo can settle these.** Items 1, 3 and 4 need an MCP-SHAPED repo — one whose map has at
+least one MCP surface (mcpolis, coyomap's own). On any other project they are **not applicable**,
+not "still open": say `n/a — no MCP surface on this map` and move on, rather than parking them for
+a fourth retro. Item 2 arms on every map, because it watches for a protocol word that should never
+appear.
+
 1. expect: a rebuild of mcpolis authors `mcp` on the Gateway, the Administration MCP, the Operator
    MCP and the Upstream MCP servers, and `agent-tools` on nothing; a rebuild of coyomap authors
    `agent-skill`-backed surfaces as `agent-tools`, NOT `mcp`.

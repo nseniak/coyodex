@@ -414,6 +414,12 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
         return Leg("grounding refutations", FAILED,
                    note=f"it did not return JSON (exit {code}): {(err or out).strip()[:200]}")
     surviving = list(payload.get("surviving_refutations") or [])
+    # WHAT THIS GATE STOPPED FIRING ON. A refutation a closer REJECTED leaves `surviving_refutations`
+    # and, until this line, left the report with it: the same map went `BLOCKED — 1 blocking` to
+    # `ADVISORIES — 0 blocking` with the words "refuted", "appeal" and "closer" appearing nowhere in
+    # the report, the gate block or the commit message. A gate that stops firing without saying what
+    # it stopped firing on is the shape every silent pass in this tool has taken.
+    appealed = list(payload.get("settled_on_appeal") or [])
     stated = list(payload.get("unseen_by_any_skeptic") or [])
     blocking = [f"{s['claim']} — REFUTED by {s['refuted_by']} skeptic(s) and still in the map, "
                 f"unchanged. Correct the claim or drop the row; a reconciled refutation no longer "
@@ -494,10 +500,24 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
             f"called out because of what they claim. Send them to a skeptic, or say in the "
             f"grounding note why they could not be (a rule minted after the worklist was pinned "
             f"is the common honest reason)."))
+    # DISCLOSURE, not a finding: the map is right to keep these claims, and the reader is entitled
+    # to know a named second reader is why. It rides as an advisory so it reaches the report, the
+    # gate block and the disposition table, where `_DISCLOSURE` files it as what it is.
+    if appealed:
+        advisory.insert(0, (
+            f"{len(appealed)} refuted claim(s) are in this map because the CLOSER REJECTED the "
+            f"refutation, not because nobody acted: "
+            + "; ".join(f"{a['claim'][:90]}"
+                        + (f" — closer: {a['note'][:160]}" if a.get("note") else "")
+                        for a in appealed[:4])
+            + (f" … and {len(appealed) - 4} more" if len(appealed) > 4 else "")
+            + ". This is a disclosure of what the refutation gate did NOT block on; the appeals are "
+              "recorded in the map's `grounding.closer_rejected`."))
     return Leg("grounding refutations", RAN if code in (0, 1) else FAILED,
                blocking=blocking, advisory=advisory,
                note=(f"{len(surviving)} refuted claim(s) still in the map, "
-                     f"{len(unchecked)} element(s) no skeptic looked at"))
+                     + (f"{len(appealed)} settled on appeal, " if appealed else "")
+                     + f"{len(unchecked)} element(s) no skeptic looked at"))
 
 
 #: Where a build keeps the skeptics' verdicts. `finalize` looks here when it was given none, so it
@@ -885,6 +905,21 @@ def _grounding_line(map_path: Path) -> str:
     line = (f"Grounding (pinned worklist): {g.claims_challenged} of {g.claims_total} claim(s) "
             f"challenged — {g.claims_confirmed} confirmed, {g.claims_refuted} refuted, "
             f"{g.claims_unverifiable} unverifiable.")
+    # THE APPEAL, in the sentence the commit quotes. These counts are why a map legitimately keeps a
+    # claim its own skeptics refuted, and a commit that states the five counts and not these three
+    # reads as a map with unfixed refutations.
+    heard = g.closer_upheld + g.closer_rejected + g.closer_unsure
+    if heard:
+        # APPEAL ROWS, said as rows. Called refutations, one `uphold` and one `reject` on ONE claim
+        # read as "2 refutations went to appeal, 1 rejected, so the map keeps the claim" — a
+        # settlement asserted at the moment the gate is refusing it, and a number `settled_on_appeal`
+        # correctly lists as 0.
+        line += (f"\nGrounding (closer): {heard} appeal row(s) — {g.closer_rejected} reject, "
+                 f"{g.closer_upheld} uphold, {g.closer_unsure} unsure. A rejection is why a map may "
+                 f"legitimately keep a claim its own skeptics refuted; an appeal is not a vote and "
+                 f"moves none of the counts above."
+                 + (f" {g.closer_disputed} claim(s) drew appeals that DISAGREE — those settle "
+                    f"nothing, and the refutation still stands." if g.closer_disputed else ""))
     live_total = g.claims_total - g.claims_superseded + g.claims_added_since
     if g.claims_live_challenged and g.claims_live_challenged < live_total:
         unvoted = live_total - g.claims_live_challenged
@@ -919,7 +954,10 @@ _ADVISORY_IDS = re.compile(
 #: "a recorded gap is still a gap" family under "handled", which cancelled the disclosure outright.
 _DISCLOSURE = re.compile(
     r"suppressed by (?:a )?recorded|counted as (?:CLAIMED|SWEPT)|and NOT re-nudged|"
-    r"is NOT re-reported above", re.I)
+    r"is NOT re-reported above|"
+    # The refutation gate saying what it did NOT block on. Asking whether that is "recorded under a
+    # heading" is a category error: it reports a thing the map is right to carry.
+    r"disclosure of what the refutation gate did NOT block on", re.I)
 
 
 def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[str, str, str]]:
@@ -1001,6 +1039,30 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
             else:
                 out.append(("UNRECORDED", heading, a))
     return out
+
+
+#: Worst first. An UNANSWERED or UNRECORDED row is an escape nobody took; `recorded` is the only
+#: one that is finished.
+_DISPOSITION_ORDER = ("UNANSWERED", "UNRECORDED", "UNSURE", "carried (no escape)", "disclosure",
+                      "recorded")
+
+
+def disposition_line(map_path: Path, report: FinalizeReport) -> str:
+    """`Advisory disposition: UNSURE: 1 · disclosure: 9 · …`, or "" when there is nothing to say.
+
+    ONE renderer, because this line has to appear in three places and drifting wordings are the
+    defect it exists to prevent: the commit's gate block, the report file, and — since the
+    2026-09-13 reminderrepo build — `finalize`'s own stdout. That build grepped `ship`'s stdout for
+    `finalize: ADVISORIES\\|Advisory disposition`, matched only the count line (14 advisories before
+    and after the fixes), and concluded "both mine are answered" while the report beside it said
+    `UNSURE: 1`. The counts are one line; the verdict line was already on stdout."""
+    disp = advisory_disposition(map_path, report)
+    if not disp:
+        return ""
+    counts = {k: sum(1 for d, _, _ in disp if d == k) for k in _DISPOSITION_ORDER}
+    return ("Advisory disposition: "
+            + " · ".join(f"{k}: {n}" for k, n in counts.items() if n)
+            + ". An UNANSWERED or UNRECORDED row is an escape nobody took, not a carried one.")
 
 
 #: Escapes an advisory can name that are NOT extras headings. `records.KNOWN_HEADINGS` is the only
@@ -1111,7 +1173,7 @@ def _map_field_escape(m: "ProjectModel", advisory: str) -> tuple[str, str, str] 
     return None
 
 
-def gate_block(report: FinalizeReport, map_sha: str) -> str:
+def gate_block(report: FinalizeReport, map_sha: str, disposition: str | None = None) -> str:
     """A copy-pasteable gate summary for the COMMIT MESSAGE, generated from the report.
 
     A live build read its own report, quoted the verdict honestly in chat ("that is not a clean
@@ -1122,7 +1184,11 @@ def gate_block(report: FinalizeReport, map_sha: str) -> str:
 
     That covers the VERDICT. The two other things a commit reliably gets wrong are the map's shape
     and its grounding coverage, for the same reason and with the same fix — see `_shape_line` and
-    `_grounding_line`."""
+    `_grounding_line`.
+
+    `disposition` is `disposition_line`'s answer, when the caller already has it. Working it out
+    re-loads the map, and `main` needs the same sentence for stdout — computing it twice printed
+    `reading <map>` twice in the middle of a `ship` run for no gain."""
     lines = [f"Gates: finalize {report.verdict} — {report.blocking_total} blocking, "
              f"{report.advisory_total} advisory (map sha256 {map_sha[:12]}…)."]
     for leg in report.legs:
@@ -1137,15 +1203,10 @@ def gate_block(report: FinalizeReport, map_sha: str) -> str:
                      "be fixed or carried. State which of the two you did — neither is 'clean'.")
         # The report's own disposition, in the block the commit quotes: a two-way vocabulary here
         # ("recordable / no escape") is how one commit filed two UNANSWERED rows as carried.
-        disp = advisory_disposition(Path(report.map_path), report)
+        disp = (disposition_line(Path(report.map_path), report) if disposition is None
+                else disposition)
         if disp:
-            order = ("UNANSWERED", "UNRECORDED", "UNSURE", "carried (no escape)", "disclosure",
-                     "recorded")
-            counts = {k: sum(1 for d, _, _ in disp if d == k) for k in order}
-            lines.append("Advisory disposition: "
-                         + " · ".join(f"{k}: {n}" for k, n in counts.items() if n)
-                         + ". An UNANSWERED or UNRECORDED row is an escape nobody took, not a "
-                         "carried one.")
+            lines.append(disp)
     for extra in (_shape_line(Path(report.map_path)), _grounding_line(Path(report.map_path))):
         if extra:
             lines.append(extra)
@@ -1163,6 +1224,21 @@ def _commit_hint(map_path: Path) -> None:
                 map_path.parent / "preindex.json", map_path.parent / "provenance.json"]
     present = [p for p in required if p.exists()]
     missing = [p for p in required if not p.exists()]
+    # THE RECONCILE FILE IS AN ASSEMBLE INPUT, and the only mechanism that carries a reconcile
+    # decision across a rebuild (method.md). It was missing from this line entirely — not ignored by
+    # `.coyomap/.gitignore`, just never named — so a commit that followed the printed command
+    # shipped the map WITHOUT the decisions that produced it. Re-assembling the 2026-09-13
+    # reminderrepo build's committed fragments without it gives 248 edges against the committed
+    # map's 243: the two arrows the closer upheld as false come back, 8 code links revert, and 119
+    # directive rows naming 340 element ids are lost.
+    #
+    # With the INPUTS rather than with the WARRANT: `verify/` and `build-fragments/` are the reason
+    # to BELIEVE the map, while this file is one of the things `assemble` READS to produce it —
+    # the same role `preindex.json` plays for the viewer. It is listed last of the inputs, in the
+    # order `assemble` names it.
+    reconcile = map_path.parent / "reconcile.json"
+    if reconcile.exists():
+        present.append(reconcile)
     # THE WARRANT SHIPS WITH THE MAP. The four paths above are the map and its inputs; they are not
     # the reason to BELIEVE it. That lives in `verify/` — the pinned worklist, the claims batches
     # and every skeptic's verdict file — and in the fragments each agent authored. `grounding.note`
@@ -1183,7 +1259,17 @@ def _commit_hint(map_path: Path) -> None:
               "`git add`, and method.md requires the pre-index and provenance to ship with the map.)"
               + (f"\n  The last of those are the map's WARRANT — {counts}. The note cites the "
                  f"verdict rows as the reason to believe the map; without them a fresh clone has "
-                 f"the conclusion and can check no part of it." if warrant else ""))
+                 f"the conclusion and can check no part of it." if warrant else "")
+              + (f"\n  {reconcile.name} rides with them: it is what makes a reconcile decision "
+                 f"survive a rebuild, and an assemble without it silently reverts every one."
+                 if reconcile.exists() else ""))
+    if not reconcile.exists():
+        # NOT in `missing`: that arm says "produce them and re-run", which is the wrong sentence
+        # here. A build that reconciled nothing has no reconcile file and needs none, so absence is
+        # reported as a question rather than as a defect.
+        print(f"finalize: no {reconcile} — right if this build reconciled nothing. If it recorded "
+              f"decisions somewhere else, commit that file too: it is the ONLY thing that carries "
+              f"a reconcile decision into the next rebuild.")
     if missing:
         # NAME what is absent instead of quietly dropping it from the command. The filter above is
         # right — `git add` on a non-existent path fails — but printing the survivors alone turns a
@@ -1315,6 +1401,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: --access-baseline {access_baseline} not found", file=sys.stderr)
         return 1
     report = build_report(map_path, repo, verdicts, access_baseline)
+    # ONCE. Both the gate block and the stdout line below say it, and working it out re-loads the map.
+    disposition = disposition_line(map_path, report)
     json_path = map_path.parent / f"{REPORT_STEM}.json"
     md_path = map_path.parent / f"{REPORT_STEM}.md"
     if no_write:
@@ -1328,7 +1416,8 @@ def main(argv: list[str] | None = None) -> int:
         import hashlib
         sha = hashlib.sha256(map_path.read_bytes()).hexdigest()
         gate_block_path.parent.mkdir(parents=True, exist_ok=True)
-        gate_block_path.write_text(gate_block(report, sha) + "\n", encoding="utf-8")
+        gate_block_path.write_text(gate_block(report, sha, disposition) + "\n",
+                                   encoding="utf-8")
         print(f"finalize: wrote the commit-message gate block to {gate_block_path}")
     _commit_hint(map_path)
     unran = [f"{l.name} ({l.status})" for l in report.legs if not l.ran]
@@ -1338,6 +1427,15 @@ def main(argv: list[str] | None = None) -> int:
           + (". Full findings above — `--no-write` printed the report instead of writing it, so "
              f"{md_path.name} still holds the build's own." if no_write
              else f". Full findings: {md_path}"))
+    # BESIDE THE VERDICT LINE, on stdout. The count alone does not move when an advisory is
+    # answered — 14 before and 14 after, on the run that read it — so a build grepping this output
+    # for its disposition found the count and read it as an answer. The counts do move. The ROWS
+    # still live in the report file, which this line says rather than replaces.
+    if disposition:
+        print(f"finalize: {disposition} Which advisory is which — its text, and the heading it "
+              f"names — is in the `Advisory disposition` table of {md_path.name}"
+              + ("; this run printed that table above instead of writing it." if no_write
+                 else "; this line carries the counts only."))
     if report.verdict == "INCOMPLETE":
         print("finalize: INCOMPLETE — a check that should have run did not, so this run does NOT know "
               "whether the map is clean. Fix the cause above and re-run; do not read the absence of "

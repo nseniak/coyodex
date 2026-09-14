@@ -66,6 +66,17 @@ def test_drift_range_containment_is_not_drift():
     assert drift("a.py:10-20", ["a.py:25"], 2).drifted is True  # 5 past the top bound
 
 
+def test_the_comparator_reports_drift_and_never_decides_whether_to_apply_it():
+    """Two judgements, two owners. `anchor_drift` compares two strings and cannot open the file, so
+    it may say a `where` DRIFTED and must never say the correction is safe to write. Conflating the
+    two is how a 174-line relocation onto an unrelated statement was applied unattended: `drifted`
+    has a lower bound only, so it came out identical to a 4-line nudge. The verdict pass fills
+    `refusal` in, because it can read the pre-index committed beside the map."""
+    assert drift("a.py:10", ["a.py:400"], 2).drifted is True
+    assert drift("a.py:10", ["a.py:400"], 2).refusal is None
+    assert drift("a.py:10", ["a.py:12"], 0).refusal is None
+
+
 def test_drift_not_comparable_returns_none():
     assert anchor_drift(None, ["a.py:1"], 2) is None            # no stored anchor
     assert anchor_drift("a.py", ["a.py:1"], 2) is None          # stored has no line

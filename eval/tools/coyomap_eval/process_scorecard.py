@@ -61,8 +61,15 @@ _NOOP_SEGMENT = re.compile(r"^\s*(?:echo\b[^|<>]*|sleep\s+[\d.]+|true|:)\s*$")
 
 
 def _is_noop_wait(command: str) -> bool:
-    """True when every `;`-separated segment of `command` does nothing observable."""
-    segments = [s for s in command.split(";") if s.strip()]
+    """True when every segment of `command` does nothing observable.
+
+    Split with `_segments`, not on `;` alone. On the semicolon only, `echo\\b[^|<>]*` ran to the end
+    of an `&&` chain: `echo "=== src ===" && git ls-files src && cat README.md` matched as ONE
+    no-op segment, and six real repository-reading turns of the 2026-09-13 reminderrepo build were
+    scored as idle waiting. `_segments` splits on `&&`, `||`, `|` and newlines too — so a
+    multi-line block whose first line is an `echo` no longer swallows the rest — and it strips
+    heredoc bodies, so a script that merely PRINTS reads as work rather than as a wait."""
+    segments = _segments(command)
     return bool(segments) and all(_NOOP_SEGMENT.match(s) for s in segments)
 
 #: Reading `preindex.json` YOURSELF, as opposed to letting `preindex --report` read it.
@@ -339,10 +346,44 @@ def _invokes(command: str, subcommand: str, output: str = "") -> bool:
 #: `json.dump(x, open('…reconcile.json','w'))`, `Path(…).write_text(…)`. The measured builds all
 #: went this way — mee6's `reconcile.json` came out of a 24 KB generator script, so a detector that
 #: only understood `>` redirects reported that mee6 produced no reconcile file at all.
+def _json_dump_file_args(blob: str) -> list[str]:
+    """The FILE argument of every `json.dump(data, file, …)` in the blob — the WRITE TARGET.
+
+    `json.dump`'s first argument is the DATA, and a path is an ordinary string that may sit
+    anywhere inside it. A pattern that only asked "does the artifact appear after `json.dump(`"
+    could not tell the two apart, because a dict literal contains no `)` to stop at: the
+    2026-09-13 reminderrepo build wrote nine harvest slot files into its scratchpad, each carrying
+    `"your-fragment": "…/build-fragments/<agent>"` as a VALUE, and assertion 27 reported the turn
+    as a hand-scripted fragment rewrite.
+
+    So the arguments are walked instead of matched: from `json.dump(`, the first bracket-depth-0
+    comma opens the file argument and the next one — or the call's own closing paren — ends it.
+    Crude on purpose, like `_segments`: the question is only which text names the file."""
+    args: list[str] = []
+    for m in re.finditer(r"json\.dump\s*\(", blob):
+        depth, start, i = 0, -1, m.end()
+        while i < len(blob):
+            ch = blob[i]
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                if depth == 0:
+                    break                      # the `json.dump(` call closed
+                depth -= 1
+            elif ch == "," and depth == 0:
+                if start != -1:
+                    break                      # a third argument: the file argument ended here
+                start = i + 1
+            i += 1
+        if start != -1:
+            args.append(blob[start:i])
+    return args
+
+
 def _python_write(blob: str, needle: str) -> bool:
     esc = re.escape(needle)
     if (re.search(r"open\s*\(\s*[^)]*" + esc + r"[^)]*['\"][wa]", blob)
-            or re.search(r"json\.dump\s*\([^)]*" + esc, blob)
+            or any(re.search(esc, arg) for arg in _json_dump_file_args(blob))
             or re.search(esc + r"[^)\n]*\)\s*\.write_text", blob)):
         return True
     # A FOURTH shape, and the one two measured builds actually used: the path is bound to a
@@ -1040,7 +1081,21 @@ def assert_10_idle_turns_at_a_barrier(turns: Sequence[Turn]) -> Assertion:
         noop = _is_noop_wait(cmd)
         if not (polls_dir or noop):
             continue
-        owner = max((f for f in fanouts if f <= idx), default=fanouts[0])
+        owner = max((f for f in fanouts if f <= idx), default=None)
+        if owner is None:
+            # A turn that PRECEDES every fan-out belongs to no fan-out's barrier: there is nothing
+            # to be waiting at yet. `default=fanouts[0]` charged it to the first fan-out anyway,
+            # and on the 2026-09-13 reminderrepo build that put six pre-harvest turns on a fan-out
+            # 30 turns later and reported 5/6.
+            #
+            # KEEP BOTH THIS AND `_is_noop_wait`'s `_segments` SPLIT. They were found together and
+            # they overlap: every one of those six turns was an `echo` banner in front of real work
+            # AND sat before the first fan-out, so either repair alone returns that build to 6/6.
+            # Neither is therefore load-bearing on the build that produced them, and deleting one
+            # as redundant would leave a real shape uncovered — a banner-led turn AFTER a fan-out
+            # for this half, an idle wait before every fan-out for the other. The synthetic tests
+            # pin them separately for exactly that reason.
+            continue
         idle[owner] += 1
         evidence.append(Evidence(idx, {"after_fanout": owner,
                                        "kind": "fragment-dir poll" if polls_dir else "no-op turn",
@@ -1094,11 +1149,42 @@ def _false_gate_claim(commit_text: str) -> str | None:
 #: gate-block`, a `tee` of a hand-written block, or a `cat` of an ARCHIVED build's block
 #: (`dev-rebuilds/…`) would otherwise launder a verdict, and a review reproduced all three.
 _LIVE_GATE_BLOCK_READ = re.compile(
-    r"\b(?:cat|head|tail|sed|less|more)\b[^|;&>\n]*(?<![\w/.-])\.coyo(?:map|dex)/verify/gate-block\.md\b")
+    r"\b(?:cat|head|tail|sed|less|more)\b[^|;&>\n]*"
+    r"((?<![\w/.-])\.coyo(?:map|dex)/verify/gate-block\.md)\b")
+
+
+def _live_gate_block_reads(command: str) -> list[str]:
+    """Every live gate-block PATH this command reads, in order.
+
+    The PATH, never just a yes/no: assertion 18 leans on this file being tool-generated by
+    construction — `finalize` is its only writer — and what makes that true is WHERE it sits, not
+    what it is called."""
+    if _ARCHIVE_DIR.rstrip("/") in command:
+        return []
+    return _LIVE_GATE_BLOCK_READ.findall(command)
 
 
 def _reads_live_gate_block(command: str) -> bool:
-    return bool(_LIVE_GATE_BLOCK_READ.search(command)) and "dev-rebuilds" not in command
+    return bool(_live_gate_block_reads(command))
+
+
+#: The live gate block as a PATH SUFFIX, for testing one token. Anchored with `$`, and that anchor
+#: is the whole point: `gate-block.md` is a name any file can wear. A review handed
+#: `git commit -F /tmp/sp/gate-block.md` a hand-typed body claiming 999 components against a map
+#: holding 66, and a basename-keyed proof certified all eight numbers as "the tool's own". A
+#: basename is enough for a path the tool was TOLD (`--emit-gate-block "$SC/gate-block.txt"`,
+#: spelled through a shell variable that never expands here); it is never enough for a file the
+#: tool always writes to a known place.
+#: `(?:^|/)` and not `_LIVE_GATE_BLOCK_READ`'s `(?<![\w/.-])`: that one scans a COMMAND, where the
+#: path is preceded by a space, so it rejects a leading `/`. Here the whole token is the path, and
+#: `/Users/x/repo/.coyomap/verify/gate-block.md` is the same file spelled absolutely.
+_LIVE_GATE_BLOCK_PATH = re.compile(r"(?:^|/)\.coyo(?:map|dex)/verify/gate-block\.md$")
+
+
+def _is_live_gate_block(path: str) -> bool:
+    """Is this token the live gate block ITSELF — the file `finalize` is the only writer of?"""
+    clean = path.strip("\"' \t;)&|")
+    return bool(_LIVE_GATE_BLOCK_PATH.search(clean)) and _ARCHIVE_DIR not in clean
 
 
 def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Assertion:
@@ -1121,6 +1207,7 @@ def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Asse
     verdict: str | None = None
     at: int | None = None
     text = ""
+    in_force: str | None = None
     for turn in turns:
         for call in turn.calls_named("Bash"):
             # …or a read of the gate block `finalize` wrote: that file is the verdict's durable
@@ -1131,13 +1218,22 @@ def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Asse
                 hit = _FINALIZE_VERDICT.search(results.get(call.id, ""))
                 if hit:
                     verdict = hit.group(1)
-            elif re.search(r"\bgit\s+commit\b", call.command):
-                # The verdict in force AT THIS COMMIT. Pairing the last commit with the last verdict
-                # overall let a later CLEAN run whitewash an earlier dishonest commit, and failed an
-                # honest one whose CLEAN was superseded afterwards.
-                at, text = turn.index, call.command
-                if verdict is not None:
-                    break
+            # A SEPARATE test, never an `elif`. The commit `method.md`'s own worked example
+            # produces is `{ echo subject; cat .coyomap/verify/gate-block.md; } > msg.txt; git
+            # commit -F msg.txt` — ONE Bash call that both reads the gate block and commits. On an
+            # `elif` the gate-block branch swallowed it, `at` stayed None, and the 2026-09-13
+            # reminderrepo build reported `n/a — no git commit captured` over a real commit.
+            if re.search(r"\bgit\s+commit\b", call.command) and verdict is not None:
+                # THE LAST COMMIT THAT HAD A VERDICT IN FORCE, and the verdict as it stood THEN.
+                # Both halves are a repair:
+                #  * the verdict is frozen here, so a later CLEAN cannot whitewash this commit;
+                #  * the scan runs on, so a later commit is still examined. Stopping at the first
+                #    commit with a verdict scored a `wip: checkpoint` and never looked at the
+                #    dishonest close after it — two commits in a build is ordinary.
+                # A commit made before any verdict is skipped: there is nothing in force to
+                # compare it against, which is "no opportunity", not a pass.
+                at, text, in_force = turn.index, call.command, verdict
+    verdict = in_force
     if verdict is None or at is None:
         return Assertion(12, "commit message matches the finalize verdict", 0, 0, (),
                          "no finalize verdict and/or no git commit captured in this transcript")
@@ -1921,6 +2017,17 @@ def _shell_tokens(command: str) -> list[str]:
     return _shell_only(command).split()
 
 
+def _proof_tokens(command: str) -> list[str]:
+    """The tokens of `command` that may carry gate-block PROOF — every path except an archived one.
+
+    The proof travels on the BASENAME, and `dev-rebuilds/0016/.coyomap/verify/gate-block.md` has
+    the same basename as this build's own live block. `_reads_live_gate_block` already refuses an
+    archived read, because a review reproduced a verdict being laundered that way; the inheritance
+    rule has to refuse it too, or a previous map's shape numbers walk into this commit wearing the
+    current tool's proof."""
+    return [t for t in _shell_tokens(command) if _ARCHIVE_DIR not in t]
+
+
 def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
     """A commit's shape numbers must match the map it describes.
 
@@ -1956,10 +2063,18 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
     concession: what this assertion detects is a shape number diverging from the generated one, and
     `truth` is itself read from that generated line. A message the tool wrote cannot diverge from
     itself, and the failure mode — numbers retyped or carried over from an earlier state — is
-    structurally excluded. The proof required is a chain: `--emit-gate-block <p>` wrote `p`, and the
-    commit either names `p` to `-F` directly, or names it inside the same command that redirects
-    into the file it does pass to `-F`. Anything looser (a `-F` on a file nobody can show came from
-    the tool) still scores nothing, because then the numbers really are unchecked."""
+    structurally excluded. The proof required is a chain: the tool wrote `p`, and the commit either
+    names `p` to `-F` directly, or names it inside the same command that redirects into the file it
+    does pass to `-F`. Anything looser (a `-F` on a file nobody can show came from the tool) still
+    scores nothing, because then the numbers really are unchecked.
+
+    TWO files open that chain, not one. A typed `--emit-gate-block <p>` names `p`; and
+    `<map dir>/verify/gate-block.md` proves itself, because `finalize` is the only thing that
+    writes it. The second was missing, and `coyomap ship` — the prescribed path since 2026-08-27 —
+    runs `finalize` internally and types no flag, so this scored `n/a 0/0` on every `ship` build.
+    An ARCHIVED copy under `dev-rebuilds/` shares that basename and is refused at both ends
+    (`_live_gate_block_reads` and `_proof_tokens`), or a previous map's numbers would inherit the
+    proof."""
     truth: dict[str, int] = {}
     hits: list[Evidence] = []
     good = 0
@@ -1982,9 +2097,27 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
             if call.name == "Bash":
                 cmd = call.command
                 generated.update(_basename(p) for p in _EMIT_GATE_BLOCK.findall(cmd))
-                # A file built from a generated one inherits the proof. `cat gate-block.txt >
-                # commit-msg.txt` is the shape method.md's own worked example produces.
-                if generated and any(_basename(t) in generated for t in _shell_tokens(cmd)):
+                # THE FOURTH THING IT GOT WRONG, and the one that reopened the blind spot through a
+                # different door: `coyomap ship` emits the gate block ITSELF, to
+                # `<map dir>/verify/gate-block.md`, and types no `--emit-gate-block` anywhere. So
+                # the 2026-08-18 repair — which seeds the proof from a TYPED flag — saw nothing on
+                # every `ship` build, and `ship` has been the prescribed path since 2026-08-27.
+                # That live path needs no flag to prove itself: `finalize` is the only thing that
+                # writes it, so a READ of it (`_live_gate_block_reads`, which already refuses an
+                # `echo`, a `tee` of a hand-written block and an archived `dev-rebuilds/` copy) is
+                # the same proof a typed `--emit-gate-block` gives.
+                #
+                # ITS BASENAME IS NEVER ADDED TO `generated`, and that restraint is the fix for a
+                # hole this seeding opened: `generated` is a set of NAMES, and `gate-block.md` is a
+                # name any file can wear. A review hand-typed `/tmp/sp/gate-block.md` claiming 999
+                # components and passed it to `-F`; the basename matched and all eight numbers were
+                # certified as ones that "cannot diverge". A live read proves the CONTENT OF THIS
+                # COMMAND, so only what this command redirects into inherits it.
+                if (_reads_live_gate_block(cmd)
+                        # A file built from a generated one inherits the proof too. `cat
+                        # gate-block.txt > commit-msg.txt` is method.md's own worked example.
+                        or (generated
+                            and any(_basename(t) in generated for t in _proof_tokens(cmd)))):
                     generated.update(_basename(t) for t in _redirect_targets(cmd))
             is_commit = call.name == "Bash" and re.search(r"\bgit\s+commit\b", call.command)
             if not is_commit:
@@ -2007,10 +2140,13 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
                 continue
             # No numbers in the command or its result. If the message file is provably the emitted
             # gate block, every count in it came from `finalize` reading the map — score them.
-            msg_files = [_basename(p) for p in _COMMIT_MESSAGE_FILE.findall(call.command)]
-            proof = next((p for p in msg_files if p in generated), "")
+            # A `-F` on the live gate block ITSELF is proof, matched as a whole path — the one
+            # place a name is not enough, because this file is known by where it sits.
+            msg_paths = _COMMIT_MESSAGE_FILE.findall(call.command)
+            proof = next((_basename(p) for p in msg_paths
+                          if _basename(p) in generated or _is_live_gate_block(p)), "")
             if not proof and generated and any(_basename(t) in generated
-                                               for t in _shell_tokens(call.command)):
+                                               for t in _proof_tokens(call.command)):
                 proof = next(iter(sorted(generated)))
             if proof:
                 good += len(truth)
@@ -2106,6 +2242,72 @@ def assert_40_no_subagent_narrowed_its_own_lint(turns: Sequence[Turn],
 #: protects; see the anchor comment in the body.
 _A22 = "behavioral draft precedes the structural harvest"
 
+#: The behavioral layer's own SECTIONS, in the two spellings a build writes them in.
+#:
+#: `\\?["']` — a tool call's input may arrive JSON-serialised, so a fragment's own keys come back
+#: escaped, and a heredoc may quote them either way.
+_BEHAVIORAL_KEY = re.compile(r"""\\?["'](use_cases|happy_path|roles|glossary)\\?["']""")
+#: The prose spelling: a MARKDOWN HEADING naming one of the same four sections. A draft written for
+#: a human reader has `## Use cases (draft, ranked)`, never `"use_cases"`.
+_BEHAVIORAL_HEADING = re.compile(
+    r"^\s{0,3}#{1,6}\s*(use cases?|happy path|roles|glossary)\b", re.I | re.M)
+#: Heading word -> the section it names, so the two spellings count as one section and not two.
+_BEHAVIORAL_SECTION = {"use case": "use_cases", "use cases": "use_cases",
+                       "happy path": "happy_path", "roles": "roles", "glossary": "glossary"}
+
+
+def _behavioral_sections(blob: str) -> set[str]:
+    """Which sections of the behavioral layer this text carries, in either spelling."""
+    found = {m.group(1) for m in _BEHAVIORAL_KEY.finditer(blob)}
+    found.update(_BEHAVIORAL_SECTION[m.group(1).lower()]
+                 for m in _BEHAVIORAL_HEADING.finditer(blob))
+    return found
+
+
+def _written_files(call: ToolCall) -> list[str]:
+    """Every file this call names as a WRITE TARGET — a path a later turn can point an agent at.
+
+    Deliberately narrow: a `Write`/`Edit` target, or a shell redirect (`_redirect_targets` strips
+    heredoc bodies first, so `cat > draft.md <<'EOF' … EOF` yields `draft.md` and nothing from the
+    body). `_writes_path` answers a different question — 'did this call produce THIS named file,
+    however it did it' — and follows a path through a program to answer it; this one only reports
+    the targets the call spells out."""
+    if call.name in ("Write", "Edit", "NotebookEdit"):
+        target = call.input.get("file_path")
+        return [target] if isinstance(target, str) else []
+    if call.name == "Bash":
+        return _redirect_targets(call.command)
+    return []
+
+
+def _drafts_the_behavioral_layer(call: ToolCall) -> bool:
+    """Did this call write the behavioral draft down somewhere a harvest brief can point at?
+
+    THE DRAFT IS NOT ONLY A FRAGMENT. The first cut required the text to name
+    `build-fragments/`, and that made the detector blind on a build that obeyed the rule: the
+    2026-09-13 reminderrepo run drafted its goal, roles, glossary and ranked use cases into
+    `<scratchpad>/behavioral-draft.md` at turn 90, twenty-two turns before its harvest, and
+    assertion 22 scored it 0 — the same 0 as a build that harvested first. What GR1 protects is
+    that the layer EXISTS before the structural slices are cut; where it is parked does not matter,
+    only that the build can send an agent to it.
+
+    Two conditions, and the second is what keeps the widening from swallowing the run. A slot file
+    or a brief mentions use-case IDS by the dozen, and neither is a draft:
+
+    * the call must name a WRITE TARGET — a file, not an `echo` into the void;
+    * the text must carry the layer's own SECTIONS, and outside `build-fragments/` at least TWO
+      different ones. A brief naming `UC5, UC6` carries none of them; the draft carries four.
+
+    Inside `build-fragments/` one section is still enough — that file IS the behavioral layer, and
+    a sub-agent writing it is the blind spot the tool's own `GR1 met` line was added to cover."""
+    blob = _raw_blob(call)
+    sections = _behavioral_sections(blob)
+    if not sections:
+        return False
+    if FRAGMENT_DIR in blob:
+        return True
+    return len(sections) >= 2 and bool(_written_files(call))
+
 
 def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Assertion:
     """GR1: the behavioral layer is drafted BEFORE the structural pre-index is used.
@@ -2129,13 +2331,10 @@ def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Asser
     results = results_by_tool_use_id(turns)
     for turn in turns:
         for call in turn.tool_calls:
-            blob = call.text()
-            if first_behavioral is None and call.name in ("Write", "Edit", "Bash", "Agent"):
-                # `\\?["\']` — the call's text is JSON-serialised, so a fragment's own keys arrive
-                # escaped, and a heredoc may quote them either way.
-                if FRAGMENT_DIR in blob and re.search(
-                        r"""\\?["'](use_cases|happy_path|roles|glossary)\\?["']""", blob):
-                    first_behavioral = turn.index
+            if (first_behavioral is None
+                    and call.name in ("Write", "Edit", "Bash", "Agent")
+                    and _drafts_the_behavioral_layer(call)):
+                first_behavioral = turn.index
             if call.name == "Bash" and _invokes(call.command, "preindex"):
                 if first_preindex is not None:
                     continue

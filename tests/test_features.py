@@ -465,18 +465,72 @@ def test_a_map_with_no_walk_columns_in_map_order():
 
 def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
     """The frontend reads `applyBundle` keys, so a rename here is a silent blank screen there. This
-    pins the shape, and that the whole bundle still serialises."""
+    pins the shape, and that the whole bundle still serialises.
+
+    EXACT EQUALITY, so a key cannot be renamed or dropped unnoticed; growing the list is the
+    deliberate act of adding one. `ownerRecords` is such an addition — the Features page needs the
+    author's recorded reason for an ownership claim no step reaches, and it is parsed server-side
+    through `records` (the one reader of the `<key>: <why>` line shape) rather than a second time in
+    the browser. It rides ALONGSIDE `as_bundle`'s output rather than inside it: that function is the
+    feature-led derivation of the map, and a recorded exception is the author's note about the map's
+    own build record. `{}` on a map that records nothing, which is most maps."""
     from coyomap.viewer.gen_viewer import build_view_bundle
     from coyomap.views import model_to_graph
     m = load_model(json.dumps(make_map()))
     b = build_view_bundle(model_to_graph(m, EXTENTS), None, Path("."), model=m, extents=EXTENTS)
     f = b["features"]
     assert sorted(f) == ["areas", "componentFeatures", "coverage", "entityOwners", "features",
-                         "interfaces", "roleFeatures", "ruleFeatures", "ruleJoinUsesExtents",
-                         "story", "unassignedUseCases", "useCaseInterfaces"]
+                         "interfaces", "ownerRecords", "roleFeatures", "ruleFeatures",
+                         "ruleJoinUsesExtents", "story", "unassignedUseCases", "useCaseInterfaces"]
+    assert f["ownerRecords"] == {}, "a map recording nothing ships an empty answer, never no key"
     assert f["features"][0]["useCases"] == ["UC1"]        # camelCase, not use_cases
     assert f["coverage"]["componentsUnreached"] == ["C3"]
     json.dumps(b)                                          # the bundle is served as JSON
+
+
+def make_owner_record_map(body: str) -> dict:
+    """The small map, plus one `Data owner exceptions` section holding `body`."""
+    doc = make_map()
+    doc["extras"] = [{"heading": "Data owner exceptions", "body": body}]
+    return doc
+
+
+def test_the_bundle_carries_the_recorded_owner_reason_for_every_key_on_the_line():
+    """A MULTI-KEY line is the form the live maps actually use: all 12 recorded reasons that reach a
+    box on the three maps that record anything ride one, because the record format exists so an
+    author writes a shared reason ONCE instead of seventeen times. A reader that took only the first
+    key would blank the reason on 9 of those 12 boxes.
+
+    This is also the test that can fail on an always-empty answer: asserting `{}` on a map that
+    records nothing cannot, and that was the whole of the coverage."""
+    from coyomap.viewer.gen_viewer import owner_records
+    m = load_model(json.dumps(make_owner_record_map(
+        "SD1, SD2, SD3: the rows are written by a loop no use case narrates")))
+    got = owner_records(m)
+    assert got == {"SD1": "the rows are written by a loop no use case narrates",
+                   "SD2": "the rows are written by a loop no use case narrates",
+                   "SD3": "the rows are written by a loop no use case narrates"}, got
+
+
+def test_the_recorded_reason_is_read_whole_and_a_malformed_line_records_nothing():
+    """The why is the WHOLE sentence after the keys, colons and all — a cut reason is the one thing
+    the page cannot recover, because it holds the only complete copy in the product. And a line whose
+    key list does not parse records NOTHING rather than the part it could read: a partly-read record
+    is the dangerous direction, since the author believes the gap is answered."""
+    from coyomap.viewer.gen_viewer import owner_records
+    whole = "written deep inside the start path: the walk narrates the start, not the write"
+    m = load_model(json.dumps(make_owner_record_map(f"SD4: {whole}")))
+    assert owner_records(m) == {"SD4": whole}
+    # A key the family does not own, and a bare sentence, both record nothing.
+    for body in ("CAP1: this heading has no say over a feature", "no key at all here"):
+        assert owner_records(load_model(json.dumps(make_owner_record_map(body)))) == {}, body
+
+
+def test_a_map_recording_nothing_ships_an_empty_answer_not_a_missing_key():
+    """The page reads `FEATURES.ownerRecords` and must never have to tell "no record" apart from
+    "this bundle is too old to carry the field"."""
+    from coyomap.viewer.gen_viewer import owner_records
+    assert owner_records(load_model(json.dumps(make_map()))) == {}
 
 
 def test_a_bundle_built_without_a_readable_map_still_renders_the_rest():

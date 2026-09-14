@@ -9,6 +9,13 @@ The clone's `internal/` folder is design rationale, not the method — ignore it
 under the coyomap clone (`COYOMAP_HOME` from the skill), **not** the repo you are mapping (your cwd).
 Read/run them with that absolute prefix. Only `.coyomap/...` paths are in the analyzed repo.
 
+**The shell here is not bash, and every difference is silent, at exit 0.** `set -e` does nothing —
+a loop of failing commands runs every iteration and the turn still succeeds — and an unquoted
+`$VAR` holding a list does not word-split, so `for f in $LIST` runs ONCE on the whole string. Read
+each command's own exit code, never let a `&&` chain stand in for a guard, and print one line per
+item in a loop. One build appended a T5 addendum to a brief that 8 failed fill calls never wrote;
+three wrote 35 `timings record` calls with empty arguments and no timings file was ever written.
+
 ## Step 0 — brief the user BEFORE doing anything else
 
 The first thing the user sees must be what coyomap is about to read, and what the map will claim
@@ -94,19 +101,20 @@ Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`, and
 leaf-only map, and it was missing from this list, so a whole build never opened it): agents return
 structured rows and `coyomap assemble` writes the model + views.
 
-**`method.md` is ~2,500 lines and cannot be read in one tool call.** A `cat` and a `sed -n
+**`method.md` is thousands of lines and cannot be read in one tool call.** A `cat` and a `sed -n
 '1,400p'` both overflow the tool-result cap and spill into a persisted-output file that nobody then
 opens; one build burned a turn finding that out. Read it in windows — `Read` with `offset`/`limit`,
 **650 lines at a time**, no gaps — and do that FIRST rather than after two failed attempts.
 
 **650, and why that number and not 300.** The cap is 25,000 tokens per tool result, and this file
-runs about 2.88 bytes to the token, so the window that matters is BYTES, not lines. Measured on the
-densest 900-line stretch of this file: 27,738 tokens — over. The densest 650-line stretch is 20,583
-tokens, a 21% margin that survives the file growing. 300 lines costs **nine** reads where 650 costs
-**four**, and the five extra turns bought nothing: the earlier number was set after a 400-line `sed`
-failed, and 400 was never the ceiling — it was just the first thing tried. Re-measure the number if
-`method.md` grows past ~2,700 lines; do not raise it on a guess, because the failure mode is a
-silent spill to a file nobody opens.
+runs about 2.88 bytes to the token, so the window that matters is BYTES, not lines. Measured on its
+densest 900-line stretch: 27,738 tokens — over. Its densest 650-line stretch was 20,583 tokens, a
+21% margin that survives the file growing. 300 lines costs more than twice the reads, and the extra
+turns buy nothing: the earlier number was set after a 400-line `sed` failed, and 400 was never the
+ceiling — it was just the first thing tried. **No line count for `method.md` is written here, on
+purpose**: the one that used to be here said "~2,500" while the file had reached 3,290, and the
+read count beside it was stale the same way. `wc -l` divided by 650 is how many windows it is. Do not raise
+650 on a guess: the failure mode is a silent spill to a file nobody opens.
 
 **When you archive, remember the archived map at the GATE.** `coyomap finalize --access-baseline
 <archived-map.json>` adds one advisory leg: files that held ACCESS enforcement in that map and are

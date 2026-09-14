@@ -25,3 +25,5 @@ Escalation: none on its own.
    `--with-prose`, and finalize's unread-prose check silent.
    regression sign: prose batches minted and deleted, or the unread-prose advisory firing on a
    build that never asked for them.
+
+verified in reminderrepo build of 2026-09-13 23:03

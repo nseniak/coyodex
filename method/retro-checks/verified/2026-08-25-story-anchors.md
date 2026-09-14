@@ -26,3 +26,5 @@ before accepting the map.
    feature follows the work it extends rather than landing last for want of an anchor.
    regression sign: an anchor that contradicts the walk's own reading (a marketing feature after
    onboarding is complete), or anchors invented to reorder ON-walk features.
+
+verified in reminderrepo build of 2026-09-13 23:03

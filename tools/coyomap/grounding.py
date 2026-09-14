@@ -43,8 +43,8 @@ USAGE = """usage: coyomap grounding lint   --verdicts <raw.json>... [--agent-tra
                                [--out <fragment.json>] [--json] [--partial]
                                [--note <text> | --note-file <path> | --keep-note]
                                [--note-cites-other-runs] [--map <project-map.json>]
-coyomap grounding report --worklist <audit.json> --verdicts <raw.json>... [--map <map>] [--json]
-       coyomap grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
+       coyomap grounding report --worklist <audit.json> --verdicts <raw.json>... [--map <map>]
+                               [--agent-transcripts <dir>] [--json]
        coyomap grounding by-element --worklist <audit.json> --verdicts <raw.json>... \\
                                --map <project-map.json> [--kind <kind>] [--json]
 
@@ -64,6 +64,21 @@ acted on. It also lists the elements whose stated confidence the votes do not su
 `write` computes and then reduces to four counts. A TIE is listed apart from a stated
 `unverifiable`: the first needs a human decision, the second is a skeptic saying the code cannot
 answer, and the counts cannot tell them apart.
+
+It also collects the two channels in which an agent tells the LEAD something no verdict carries,
+because a claim it upheld is still a claim it had a reservation about:
+  NOTES TO THE LEAD ON UPHELD CLAIMS  a `grounded: true` row whose note speaks to you. Confirmed
+                                      reads as "nothing to do", so the row reaches nothing else.
+  FINDINGS THE AGENTS SENT UP         the closing section of each agent's final message
+                                      (`--agent-transcripts`, or this session's own, as `lint`
+                                      finds them). A harvest or trace agent files no verdict, so
+                                      this is its only channel.
+Both are PHRASE MATCHES over prose and both print their own coverage. Without
+`--agent-transcripts` and outside a session, the second says NOT READ rather than zero.
+
+`report` ends on the `NOTE FACTS` block, the numbers the closing note must quote — the same block
+`write` prints. It used to be printed only by `write`, which is the run that REFUSES a wrong note,
+so the first note of every build was written from figures computed by hand.
 
 Derive the `grounding` block from the skeptics' verdict files and the PINNED audit worklist they
 were drawn from (`coyomap audit <map> --json > audit.json`, captured BEFORE the refutations were
@@ -91,6 +106,112 @@ FULL pinned surface and `claims_challenged` says how far you got. Needs a --note
 prioritized, and is refused when the pass turns out to be complete after all. Do NOT instead shrink
 the --worklist file to what you challenged: that makes `claims_total` the reduced size, so the real
 surface survives only in prose and a 319-of-1608 pass ships looking complete."""
+
+
+#: The three words a CLOSER row may carry, from `method/templates/closer-contract.md`.
+_CLOSER_VERDICTS = ("uphold", "reject", "unsure")
+
+#: What two appeals that disagree amount to. PARENTHESISED so it cannot be read as a vocabulary
+#: word and copied back into a file: the first version of this used the bare word `conflict`,
+#: printed it to the operator as `closer said CONFLICT`, and an agent echoing it into a verdict
+#: file would have had the row read as a skeptic VOTE — erasing the refutation it was about.
+DISPUTED = "(appeals disagree)"
+
+
+def is_closer_row(row: dict) -> bool:
+    """Does this row carry a `verdict` field AT ALL?
+
+    THE FIELD, NOT ITS VALUE, and this is a fail-closed decision. Keyed on the value, a row whose
+    word is not one of the three fell through to the SKEPTIC side and its `grounded: true` became a
+    vote: one such row turns a single-skeptic refutation into a tie, `grounding refutations` exits 0
+    saying "No refuted claim survives", and `grounding write` records `claims_refuted 0`. Every gate
+    green, a refutation erased, from one misspelt word — `rejected` for `reject`. Before the closer
+    files were globbed into the closing sequence that was harmless; now every grounding step reads
+    them, so a bad word went from inert to destructive.
+
+    So the field decides WHICH SIDE the row is on and the word decides what it SAYS. A row with an
+    unreadable word is an appeal that settles nothing — it never votes, the refutation it is about
+    keeps standing, and `closer_faults` names it.
+
+    THE CLOSER IS NOT A THIRD SKEPTIC. Counted as a vote, an `uphold` would double a refutation's
+    weight and a `reject` would add a confirming vote to it. It is an appeal: it settles a
+    refutation the skeptics already cast, and it changes no count of what the skeptics decided."""
+    return bool(str(row.get("verdict", "")).strip())
+
+
+def closer_word(row: dict) -> str:
+    """The closer's verdict word if it is one of the three, else "" — never a guess."""
+    word = str(row.get("verdict", "")).strip().lower()
+    return word if word in _CLOSER_VERDICTS else ""
+
+
+def closer_faults(rows: list[dict]) -> list[str]:
+    """Appeal rows whose word nothing can read — the shape that used to become a vote.
+
+    ON THE ROW, not on the file name. The first version of this check keyed on a file called
+    `closer-*.json`, so `closer.json` or `appeals-a.json` was unchecked; and it lived in
+    `grounding lint`, which `ship` never runs and which `method.md` schedules at COLLECTION, before
+    the closer is dispatched — on the reviewed build it ran over 38 verdict files and 0 closer
+    files. A guard nothing reaches is not a guard."""
+    bad = sorted({str(r.get("verdict", "")).strip()
+                  for r in rows if is_closer_row(r) and not closer_word(r)})
+    if not bad:
+        return []
+    echoed = [w for w in bad if w.lower() in ("conflict", DISPUTED)]
+    return [f"{len(bad)} unreadable closer verdict word(s): {', '.join(repr(w) for w in bad)}. "
+            f"The vocabulary is {' / '.join(_CLOSER_VERDICTS)} — `uphold` the refutation stands, "
+            f"`reject` the skeptic misread the code, `unsure` you could not settle it. A row with "
+            f"any other word settles nothing, so the refutation it is about KEEPS BLOCKING; fix the "
+            f"word or drop the row."
+            + (" `conflict` is not an input word: it is what an older build PRINTED for a claim "
+               "whose two appeals disagreed, and it was never something to write into a file."
+               if echoed else "")]
+
+
+@dataclass(frozen=True)
+class VerdictRows:
+    """One pile of verdict rows, told apart: the skeptics' votes and the closer's appeals.
+
+    NAMED rather than a pair, because both halves are lists of the same thing and a swap would read
+    perfectly at every call site while inverting the meaning of every count below it."""
+    skeptics: list[dict]
+    closer: list[dict]
+
+
+def split_closer_rows(rows: list[dict]) -> VerdictRows:
+    """The skeptics' votes and the closer's appeals, never mixed.
+
+    Split HERE rather than at the command line, so every caller is right: `finalize` runs the
+    refutation leg itself, `ship` hands the same file list to eight steps, and a split done once in
+    `main` would leave each of those counting closer rows as votes."""
+    closer = [r for r in rows if is_closer_row(r)]
+    if not closer:
+        return VerdictRows(skeptics=rows, closer=[])
+    return VerdictRows(skeptics=[r for r in rows if not is_closer_row(r)], closer=closer)
+
+
+def closer_ruling(rows: list[dict]) -> dict[str, str]:
+    """claim -> the closer's own word for it: `uphold`, `reject`, `unsure` — or `DISPUTED`.
+
+    THE WORD, NOT `grounded`. Reading the boolean instead let a row saying `{"verdict": "unsure",
+    "grounded": true}` clear the refutation gate while the record beside it counted an `unsure` and
+    the report printed "'uphold' and 'unsure' still need you". Two fields, one meaning, and the two
+    readers disagreed with nothing noticing. `verdict` is the field the contract makes the closer
+    write in its own vocabulary; `grounded` is its translation for the tally, and a translation is
+    the half that can be wrong.
+
+    A row whose word is unreadable rules on nothing — see `is_closer_row` for why that is the only
+    safe answer. `DISPUTED` when two readable appeals on ONE claim disagree: the first version let
+    the last row win and called it "the later wave", which is false — the winner is whichever file
+    sorted last, and closer files are named by random agent id, so which appeal survived was
+    chance. A dispute settles nothing, so the refutation keeps blocking and the lead is told."""
+    out: dict[str, str] = {}
+    for r in rows:
+        claim, word = r.get("claim"), closer_word(r)
+        if not isinstance(claim, str) or not claim or not word:
+            continue
+        out[claim] = word if out.get(claim, word) == word else DISPUTED
+    return out
 
 
 def _verdict_bucket(rows: list[dict]) -> str:
@@ -140,7 +261,13 @@ def multi_vote_agreement(rows: list[dict]) -> tuple[int, int, int]:
       agree were not looking at the same thing.
 
     Rows carrying no `evidence` are skipped for the anchor test rather than counted as agreeing —
-    an absent citation is not a matching one."""
+    an absent citation is not a matching one.
+
+    SKEPTIC ROWS ONLY. A closer's appeal on a refuted claim is a different reader answering a
+    different question, so counting it here would turn every closed refutation into a "multi-voted
+    claim" whose voters disagree — and a note that truthfully says "0 verdict disagreements" would
+    then be refused."""
+    rows = split_closer_rows(rows).skeptics
     votes: dict[str, list[dict]] = {}
     for r in rows:
         claim = r.get("claim")
@@ -169,6 +296,20 @@ def multi_vote_agreement(rows: list[dict]) -> tuple[int, int, int]:
     return multi, verdict_disagree, anchor_disagree
 
 
+def skeptic_labels(rows: list[dict]) -> list[str]:
+    """The distinct `skeptic` values across the verdict rows, sorted.
+
+    ONE derivation, because `NOTE FACTS` prints this number and the note gate now checks a note
+    against it: two derivations of one count is how a gate ends up disagreeing with the line it
+    tells the author to quote. A LABEL is not an agent — one agent may carry several batches — so
+    every message about it says label.
+
+    SKEPTIC ROWS ONLY: a closer signs its file with its own agent id, and counting that would make
+    the wave look one reader larger than it was — in the note, and in the gate that now checks it."""
+    rows = split_closer_rows(rows).skeptics
+    return sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")})
+
+
 def note_facts_block(worklist_claims: list[str], rows: list[dict], record: dict[str, object],
                      live_claims: "list[str] | None") -> str:
     """THE NUMBERS A NOTE WILL CITE, COMPUTED, so nobody retypes one from an earlier view.
@@ -185,7 +326,13 @@ def note_facts_block(worklist_claims: list[str], rows: list[dict], record: dict[
     used to be printed only on the success path, after the refusal had already returned."""
     buckets = json.loads(format_report(worklist_claims, rows, as_json=True, live_claims=live_claims))
     sup_confirmed = sum(1 for r in buckets["superseded"] if r.get("verdict") == "confirmed")
-    labels = sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")})
+    # THE APPEALS ARE NOT VERDICT ROWS. Counted in, three closer rows turned "1202 verdict rows,
+    # 256 redundant" into "1205, 259" — and the gate below then refused a note quoting the true
+    # figures. They are stated on their own line instead, because a note that never mentions the
+    # appeal hides the one reader who overturned a skeptic.
+    appeals = split_closer_rows(rows).closer
+    rows = split_closer_rows(rows).skeptics
+    labels = skeptic_labels(rows)
     # REDUNDANT ROWS, spelled out, because the note has to state it and the arithmetic is the kind
     # nobody re-does. A three-voted theme produces three rows per claim; "136 redundant rows" was
     # published in a shipped map and in the operator report for a pass whose four security batches
@@ -202,7 +349,7 @@ def note_facts_block(worklist_claims: list[str], rows: list[dict], record: dict[
     multi, verdict_dis, anchor_dis = multi_vote_agreement(rows)
     return (f"  NOTE FACTS — quote these, do not retype them from an earlier run:\n"
             f"    verdict rows {len(rows)} over {voted} distinct claim(s) — "
-            f"{redundant} row(s) that added no new claim (usually a re-vote)\n"
+            f"{REDUNDANT_PHRASE.format(n=redundant)}\n"
             f"    distinct skeptic labels {len(labels)} "
             f"(a label is not an agent: one agent may carry several batches)\n"
             f"    confirmed {record['claims_confirmed']} · refuted {record['claims_refuted']} · "
@@ -210,24 +357,157 @@ def note_facts_block(worklist_claims: list[str], rows: list[dict], record: dict[
             f"    multi-voted claims {multi} · verdict disagreements {verdict_dis} · "
             f"evidence-anchor disagreements {anchor_dis} "
             f"(unanimity is only a fact about the multi-voted ones)"
+            + (f"\n    closer appeal rows {len(appeals)} — "
+               + " · ".join(f"{w} {sum(1 for r in appeals if closer_word(r) == w)}"
+                            for w in _CLOSER_VERDICTS)
+               + f" · {sum(1 for v in closer_ruling(appeals).values() if v == DISPUTED)} "
+                 f"claim(s) disputed"
+               + " (an appeal is not a vote: none of the counts above moved)" if appeals else "")
             + (f"\n    superseded {record['claims_superseded']}, of which {sup_confirmed} "
                f"had been CONFIRMED — each is a settled verdict the build overrode, and a note "
                f"that does not say so hides it" if live_claims is not None else ""))
 
 
-_REDUNDANT_IN_NOTE = re.compile(r"(\d[\d,]*)\s+redundant\s+rows?", re.I)
+#: THE WORDING THE NOTE FACTS BLOCK PRESCRIBES for the redundant-row count, in one place, so the
+#: sentence a note is told to quote and the sentence the gate reads back cannot drift apart.
+REDUNDANT_PHRASE = "{n} row(s) that added no new claim (usually a re-vote)"
+
+#: The written-out numbers a note may use, to their value. Notes are prose and prose spells small
+#: numbers; the shipped note that got the skeptic count wrong opened "Twenty-one", so the tens and
+#: their hyphenated compounds are here too.
+_WORD_UNITS = {"no": 0, "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+               "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+               "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+               "seventeen": 17, "eighteen": 18, "nineteen": 19}
+_WORD_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+              "seventy": 70, "eighty": 80, "ninety": 90}
+
+def _number_pattern(include_zero: bool = True) -> str:
+    """ONE spelling of "a number a note states", shared by every check below, so a form one of them
+    reads and another does not cannot become the difference between a caught error and a shipped
+    one.
+
+    Compounds FIRST, and the longer word before the shorter: `re` takes the first alternative that
+    matches at a position, so a bare `twenty` ahead of `twenty-one` reads "Twenty-one skeptics" as
+    twenty, and `nine` ahead of `nineteen` reads nineteen as nine.
+
+    `include_zero=False` drops `no` and `zero`, for a noun a note QUANTIFIES rather than counts:
+    "so no skeptic saw them" says none of them did, not that the pass had none."""
+    units = [u for u in _WORD_UNITS if include_zero or _WORD_UNITS[u]]
+    nonzero = "|".join(u for u in _WORD_UNITS if _WORD_UNITS[u])
+    return "|".join([r"\d[\d,]*",
+                     *(f"{t}[- ](?:{nonzero})" for t in _WORD_TENS),
+                     *_WORD_TENS,
+                     *sorted(units, key=len, reverse=True)])
+
+
+_NUMBER = _number_pattern()
+_NUMBER_COUNTED = _number_pattern(include_zero=False)
+
+
+def _count_of(text: str) -> int | None:
+    """The value of a number a note states — `14`, `fourteen`, `Twenty-one` — or None."""
+    raw = text.strip().lower().replace(",", "")
+    if raw[:1].isdigit():
+        return int(raw)
+    if raw in _WORD_UNITS:
+        return _WORD_UNITS[raw]
+    if raw in _WORD_TENS:
+        return _WORD_TENS[raw]
+    tens, _sep, unit = raw.replace(" ", "-").partition("-")
+    if tens in _WORD_TENS and unit in _WORD_UNITS:
+        return _WORD_TENS[tens] + _WORD_UNITS[unit]
+    return None
+
+
+#: A note stating the redundant-row count — in the words a build invents ("161 redundant rows"), or
+#: in `REDUNDANT_PHRASE`'s own.
+#:
+#: READING THE PRESCRIBED WORDING IS THE POINT of the second alternative. `_ADDED_SINCE_IN_NOTE`
+#: below saw `no new claim` inside it, read `no` as "0 claims added since the pin", and refused a
+#: note whose record said 14 — so `ship` died at step 4 of 13 on the 2026-09-13 reminderrepo build
+#: for quoting the line the tool had just told it to quote, and the run that followed passed on a
+#: pure reword that changed no number. The phrase is not merely EXEMPTED here: recognising it as
+#: the redundant count means a mis-quote of it ("128 row(s) that added no new claim" on a pass with
+#: 256) is now caught, where before nothing read it at all.
+_REDUNDANT_IN_NOTE = re.compile(
+    rf"({_NUMBER})\s+(?:redundant\s+rows?"
+    rf"|(?:verdict\s+)?rows?(?:\(s\))?\s+that\s+added\s+no\s+new\s+claims?)", re.I)
 
 #: The note stating how many claims arrived AFTER the worklist was pinned. Third arithmetic shape,
 #: same failure as the other two: the 2026-09-02 mcpolis note said "9 post-pin claims" where its own
 #: record — and its own NEXT SENTENCE — said 13. Words and digits both, since notes write either.
 _ADDED_SINCE_IN_NOTE = re.compile(
-    r"\b(\d[\d,]*|no|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen)"
-    r"\s+(?:new\s+|post-pin\s+|added\s+)claims?\b", re.I)
+    rf"\b({_NUMBER})\s+(?:new\s+|post-pin\s+|added\s+)claims?\b", re.I)
 
-#: The words `_ADDED_SINCE_IN_NOTE` accepts, to their value.
-_WORD_NUMBERS = {"no": 0, "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-                 "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
-                 "twelve": 12, "thirteen": 13}
+#: The note stating how many SKEPTICS the pass had — the HEADLINE count, and only that.
+#:
+#: The defect: the 2026-09-13 reminderrepo note opened "Twenty-one fresh-context skeptics
+#: challenged the pinned worklist" and said "Distinct skeptic labels 38" three sentences later. 38
+#: is right three ways (38 dispatches, 38 verdict files, 38 distinct `skeptic` values in the rows);
+#: 21 was the first wave's dispatch, re-pasted. The count was already PRINTED in `NOTE FACTS` and
+#: nothing read it back.
+#:
+#: Tight on purpose. The number must sit against the word `skeptic`, with at most one hyphenated
+#: adjective between them, and `skeptic` must not be the adjective of another noun — a looser gap
+#: read "38 of the 1,202 rows came from skeptics" as a stated 1,202, and without the lookahead
+#: "21 skeptic teams were dispatched" reads as 21 skeptics.
+_SKEPTICS_IN_NOTE = re.compile(
+    rf"\b(?:({_NUMBER_COUNTED})\s+"
+    rf"(?:[a-z]+-[a-z]+\s+|distinct\s+|independent\s+|different\s+|separate\s+)?"
+    rf"skeptics?\b(?!\s+(?:teams?|batch|batches|waves?|groups?|files?|briefs?|slots?))"
+    rf"|(?:distinct\s+)?skeptic\s+labels?\s*[:=]?\s+({_NUMBER_COUNTED})\b)", re.I)
+
+#: Text that is somebody else's words, not the note's own claim: a quotation. `The brief said
+#: "dispatch twelve skeptics"` is a true sentence about an instruction, and reading the 12 in it as
+#: this pass's headline refused an honest note. Double quotes and backticks only — an apostrophe
+#: opens a span in "the lead's" that never closes.
+_QUOTED = re.compile(r"\"[^\"\n]*\"|\u201c[^\u201d\n]*\u201d|`[^`\n]*`")
+
+#: A magnitude this reader cannot compose. "One hundred and five fresh-context skeptics" matched
+#: `five` and read as 5 — a WRONG read, which is worse than no read: it can refuse a truthful note
+#: or pass a false one. A number reached through one of these words is not read at all.
+_UNCOMPOSED = re.compile(r"\b(?:hundred|thousand|million)\b[\s\w]{0,12}$", re.I)
+
+
+def _headline_skeptic_count(note: str) -> tuple[int, str] | None:
+    """The FIRST count of skeptics the note states — the headline, and nothing else.
+
+    ONE STATEMENT, and the first one, with no scope filtering of any kind. Three rules were tried on
+    the four live notes:
+
+    * **every stated count must agree** caught the reminderrepo defect and REFUSED argus, whose
+      per-batch sentences ("both batches got three independent skeptics") are true beside a correct
+      opening total.
+    * **some stated count must agree** passes reminderrepo, whose note states the right 38 three
+      sentences after the wrong 21. That is the defect, cleared by the defect's own note.
+    * **the first unscoped count**, which this was, is defeated by one word: "Twenty-one
+      fresh-context skeptics EACH challenged the pinned worklist" skips as scoped and falls through
+      to the correct 38. `per agent`, `in two waves`, `across both batches` and `one team of` do the
+      same. It was also blind on mcpolis, whose only count sentence says "across 19 batches", and
+      off-target on coyomap, whose true opening says "in two waves".
+
+    The first count, flat, is right on all four: argus 18 = 18, mcpolis 38 = 38, coyomap 25 = 25,
+    reminderrepo 21 vs 38 REFUSED — and no word added to the headline sentence can dodge it,
+    because there is nothing left to dodge.
+
+    WHAT IT WILL REFUSE, and this is a decision rather than an oversight: a note that opens on
+    ANOTHER run's figure ("the previous build used twelve skeptics") before stating its own. No
+    rule over prose can tell that sentence from the reminderrepo one — both put a wrong number
+    first and the right number later — so one of the two must be accepted, and the refusal is the
+    one with a one-line remedy: state this pass's own count first. The message says so."""
+    text = note or ""
+    quoted = [m.span() for m in _QUOTED.finditer(text)]
+    for m in _SKEPTICS_IN_NOTE.finditer(text):
+        if any(a <= m.start() and m.end() <= b for a, b in quoted):
+            continue
+        if _UNCOMPOSED.search(text[max(0, m.start() - 30):m.start()]):
+            continue
+        value = _count_of(m.group(1) or m.group(2) or "")
+        if value is not None:
+            return value, m.group(0)
+    return None
+
 
 #: A note stating a disagreement COUNT: "0 verdict disagreements", "zero evidence-anchor
 #: disagreements", "anchor disagreements: 2".
@@ -262,15 +542,24 @@ def _note_contradictions(note: str, rows: list[dict], record: dict[str, object],
     * **the shipped-map coverage pair.** The note said "16 of those 696 carry no verdict" while its
       own record said 22 of 702 — it had been written against an earlier pass and re-pasted.
 
-    Only these two shapes, and only when the note states them: a general prose checker is not
-    possible and a guessy one would refuse honest notes. Both fixes are one word."""
+    Only stated shapes, and only when the note states them: a general prose checker is not
+    possible and a guessy one would refuse honest notes. Every fix is one word."""
     problems: list[str] = []
+    # The closer's appeals are not verdict rows and never were: counting them makes this check
+    # demand a redundant-row figure that `NOTE FACTS` does not print.
+    rows = split_closer_rows(rows).skeptics
     claimed_rows = [r for r in rows if r.get("claim")]
     redundant = max(0, len(claimed_rows) - len({str(r.get("claim")) for r in claimed_rows}))
     # ANY occurrence may match, and one that does clears the note. A good note cites other builds'
     # figures for comparison — the real one said "over 160, 40 and 100 redundant rows" about three
     # earlier passes — and refusing those would refuse the most honest notes written.
-    stated_redundant = [int(m.group(1).replace(",", "")) for m in _REDUNDANT_IN_NOTE.finditer(note or "")]
+    redundant_spans = [m.span() for m in _REDUNDANT_IN_NOTE.finditer(note or "")]
+    # Digits OR words, and `10 verdict rows that added no new claim` as well as `10 row(s) …`:
+    # the skip below keys on THIS match, so a form it misses re-opens the bug it was added for —
+    # this codebase's own notes spell small numbers out.
+    stated_redundant = [v for v in (_count_of(m.group(1))
+                                    for m in _REDUNDANT_IN_NOTE.finditer(note or ""))
+                        if v is not None]
     if stated_redundant and redundant not in stated_redundant:
         quoted = ", ".join(f"'{n} redundant rows'" for n in stated_redundant)
         problems.append(
@@ -298,9 +587,13 @@ def _note_contradictions(note: str, rows: list[dict], record: dict[str, object],
     added = record.get("claims_added_since")
     if isinstance(added, int):
         stated_added = [
-            (_WORD_NUMBERS.get(m.group(1).lower(), None)
-             if not m.group(1)[:1].isdigit() else int(m.group(1).replace(",", "")), m.group(0))
-            for m in _ADDED_SINCE_IN_NOTE.finditer(note or "")]
+            (_count_of(m.group(1)), m.group(0))
+            for m in _ADDED_SINCE_IN_NOTE.finditer(note or "")
+            # NOT inside the redundant-row sentence. `REDUNDANT_PHRASE` ends "…added no new
+            # claim", and reading that `no` as "0 claims since the pin" refused a note whose
+            # record said 14 — the tool rejecting its own prescribed wording. `_REDUNDANT_IN_NOTE`
+            # reads that span as what it is, so it is spoken for and this check steps over it.
+            if not any(s < m.end() and m.start() < e for s, e in redundant_spans)]
         values = [v for v, _t in stated_added if v is not None]
         if values and added not in values:
             quoted = ", ".join(f"'{t}'" for _v, t in stated_added)
@@ -308,6 +601,18 @@ def _note_contradictions(note: str, rows: list[dict], record: dict[str, object],
                 f"the note states {quoted} and this record says {added} claim(s) added since the "
                 f"pin. Those are the claims no skeptic saw, so understating them understates how "
                 f"much of the shipped map went unchallenged; requote it from this run.")
+    # THE SKEPTIC COUNT, the fourth arithmetic shape: the note's HEADLINE figure against the
+    # labels. See `_headline_skeptic_count` for why one statement and not all of them.
+    labels = skeptic_labels(rows)
+    headline = _headline_skeptic_count(note)
+    if headline is not None and headline[0] != len(labels):
+        problems.append(
+            f"the note opens on '{headline[1]}' and this pass has {len(labels)} distinct skeptic "
+            f"label(s). A LABEL is not an agent — one agent may carry several batches — so the "
+            f"number to quote is the `distinct skeptic labels` line of `NOTE FACTS`, not how many "
+            f"agents were dispatched. Only the FIRST count in the note is read, so a per-batch or "
+            f"per-theme sentence later on needs no change — and a figure about ANOTHER run belongs "
+            f"after this pass's own, or behind `--note-cites-other-runs`.")
     return problems
 
 
@@ -405,7 +710,14 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
     `partial` is the operator asserting that challenging only part of the worklist was DELIBERATE.
     The counts never needed it — `claims_challenged` has always subtracted the unvoted — so what it
     buys is the distinction the tool cannot make on its own: a ranked worklist worked top-down until
-    the budget ran out looks exactly like a batch of skeptics that died on the way home."""
+    the budget ran out looks exactly like a batch of skeptics that died on the way home.
+
+    THE CLOSER NEVER VOTES HERE. Its rows are dropped before the tally, so the five counts keep the
+    meaning they have always had — what the SKEPTICS decided about the pinned worklist, the
+    arithmetic `validate` blocks on. An appeal that moved `claims_refuted` would rewrite that
+    meaning inside a permanent record, retroactively, for every reader of every past map."""
+    _split = split_closer_rows(grounding_rows)
+    grounding_rows, _closer_rows = _split.skeptics, _split.closer
     votes: dict[str, list[dict]] = {}
     for r in grounding_rows:
         claim = r.get("claim")
@@ -491,13 +803,204 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
         # was voted — which `--partial` exists to allow it not to be.
         record["claims_live_challenged"] = sum(1 for c in live if c in votes)
         record["live_claims_digest"] = live_claims_digest(live)
+    # THE APPEAL, RECORDED. Written unconditionally, zeros included, because "no appeal was heard"
+    # is an answer a reader of the shipped map is entitled to and an absent key is not one. Beside
+    # the five counts and never inside them: a closer rejection is why the map legitimately keeps a
+    # claim its own skeptics refuted, and until this field existed that fact lived only in chat.
+    # ROWS for the three — a claim re-heard in a second wave is two rows on purpose, and
+    # `validate`'s tie to the closer's own files counts them the same way.
+    words = [closer_word(r) for r in _closer_rows]
+    record["closer_upheld"] = words.count("uphold")
+    record["closer_rejected"] = words.count("reject")
+    record["closer_unsure"] = words.count("unsure")
+    # ...and CLAIMS for the fourth, because a disagreement is a fact about a claim and every row
+    # count reads it as two settlements.
+    record["closer_disputed"] = sum(1 for w in closer_ruling(_closer_rows).values() if w == DISPUTED)
     if note:
         record["note"] = note
     return record, errors
 
 
+#: The phrases that mark a verdict note as addressed to the LEAD rather than to the vote. A
+#: HEURISTIC, listed in the output beside its own numbers, because a regex over prose both
+#: over-fires and under-fires and a reader must be able to see which words it looked for.
+_LEAD_NOTE = re.compile(r"note for the lead|worth (?:flagging|noting)|caveat", re.I)
+
+#: The same phrases in the words a reader recognises, for the coverage sentence.
+_LEAD_NOTE_PHRASES = ('"note for the lead"', '"worth flagging"', '"worth noting"', '"caveat"')
+
+
+@dataclass(frozen=True)
+class LeadNote:
+    """One UPHELD verdict row whose note says something to the lead.
+
+    `said` is the note from the start of the SENTENCE the phrase sits in, to the end. These notes
+    run to 1,200 characters and put the message last — "…the call happens but its result is
+    discarded before the insert" — so truncating from the front shows the reasoning and throws away
+    the finding. From the sentence rather than from the phrase, because a phrase can land mid-clause
+    and cutting there printed the bare "separately at line 100"."""
+    claim: str
+    skeptic: str
+    evidence: str
+    note: str
+    said: str
+
+
+def lead_notes(rows: list[dict]) -> tuple[list[LeadNote], int, int]:
+    """(the rows a skeptic upheld AND wrote to the lead about, upheld rows with a note, upheld rows).
+
+    THE ONE VERDICT SHAPE THAT REACHED NOTHING. A refuted claim lands in the report's REFUTED list,
+    a tie in TIED, an unverifiable one in UNVERIFIABLE — and a CONFIRMED claim lands nowhere,
+    because confirmed reads as "nothing to do". On the 2026-09-13 reminderrepo build `security-1-c`
+    CONFIRMED business rule BR5 and added that `app-routing.module.ts:15` registers a second,
+    unguarded route to the same screen. That is true, no verb collected it, and the shipped map
+    still says the screen opens only for a signed-in person, `access: true`, confidence `verified`,
+    with that line named nowhere in it. 47 of that build's 1,182 upheld rows carry a note like it —
+    measured over the phrase list below, which is the only number that means anything here: a looser
+    list gave 49 and a tighter one 42 over the same files.
+
+    The second and third numbers are the DENOMINATORS the caller must print: this is a phrase match
+    over prose, so the only honest thing to say is how much of the pile it read.
+
+    SKEPTIC ROWS ONLY. A closer's note is addressed to the lead by design and has a section of its
+    own; listing it here too would say it twice and inflate the denominator with rows that are not
+    votes."""
+    rows = split_closer_rows(rows).skeptics
+    upheld = [r for r in rows if r.get("grounded") is True]
+    with_note = [r for r in upheld if str(r.get("note") or "").strip()]
+    out: list[LeadNote] = []
+    for r in with_note:
+        note = str(r.get("note") or "").strip()
+        m = _LEAD_NOTE.search(note)
+        if not m:
+            continue
+        # Back up to the sentence the phrase sits in. A file name ends in `.ts:25`, never in `. `,
+        # so the space is what keeps `app.controller.ts` from reading as a sentence end.
+        cut = 0
+        for sep in (". ", "; ", "\n", "! ", "? "):
+            at = note.rfind(sep, 0, m.start())
+            if at != -1:
+                cut = max(cut, at + len(sep))
+        out.append(LeadNote(claim=str(r.get("claim") or ""), skeptic=str(r.get("skeptic") or ""),
+                            evidence=str(r.get("evidence") or ""), note=note,
+                            said=note[cut:].strip()))
+    return out, len(with_note), len(upheld)
+
+
+#: A markdown heading in an agent's closing message: `## Findings the lead should know`, and the
+#: numbered form this codebase's own house style produces, `## [4] Things the lead should know`.
+_SECTION_HEADING = re.compile(
+    r"^(?P<hashes>\#{1,6})[ \t]+(?:\[[\w.]+\][ \t]*)?(?P<title>[^\n]*?)[ \t]*$", re.M)
+
+#: Which of those headings is ADDRESSED TO THE LEAD. Read off the real convention: across the 70
+#: agents of the 2026-09-13 reminderrepo build the closing sections were spelled "Findings the lead
+#: should know", "Findings worth the lead's attention", "Other findings worth passing on", "Notes
+#: worth passing on", "Other findings worth keeping", "Things the lead should know", "Three caveats
+#: the lead should weigh", "One caveat for you", "Two defects worth a second look" — nine wordings
+#: for one thing. A HEURISTIC over prose, and the output says so beside its own numbers.
+_LEAD_SECTION_TITLE = re.compile(
+    r"\blead\b|\bcaveats?\b"
+    r"|worth\s+(?:passing\s+on|keeping|reporting|noting|flagging|knowing|a\s+second\s+look"
+    r"|your\s+\w+)", re.I)
+
+_BULLET = re.compile(r"^[ \t]*(?:[-*•]|\d+[.)])[ \t]+(?P<text>.+?)[ \t]*$", re.M)
+
+
+@dataclass(frozen=True)
+class AgentFinding:
+    """One section of one build agent's closing message, addressed to the lead."""
+    agent: str          # the transcript's file stem, so the reader can open it
+    task: str           # the agent's own job description, from its sibling `.meta.json`
+    heading: str
+    items: tuple[str, ...]
+
+
+def _final_message(path: Path) -> str:
+    """The text of the LAST assistant message in one agent transcript — what the agent handed up."""
+    last = ""
+    for rec in _records(path):
+        msg = rec.get("message")
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            continue
+        blocks = msg.get("content")
+        if not isinstance(blocks, list):
+            continue
+        text = "\n".join(str(b.get("text") or "") for b in blocks
+                         if isinstance(b, dict) and b.get("type") == "text")
+        if text.strip():
+            last = text
+    return last
+
+
+def _agent_task(path: Path) -> str:
+    """What this agent was sent to do, from the `<stem>.meta.json` the harness writes beside it.
+
+    Without it every row reads `agent-a5626735a73ea9b47`, which tells a reader nothing about whose
+    finding it is — "Harvest Angular pages and routes" does."""
+    meta = path.with_suffix(".meta.json")
+    try:
+        doc = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    return str(doc.get("description") or "") if isinstance(doc, dict) else ""
+
+
+def _section_body(text: str, heading: "re.Match[str]") -> str:
+    """The lines under one heading, down to the next heading at the same level or shallower."""
+    depth = len(heading.group("hashes"))
+    for nxt in _SECTION_HEADING.finditer(text, heading.end()):
+        if len(nxt.group("hashes")) <= depth:
+            return text[heading.end():nxt.start()]
+    return text[heading.end():]
+
+
+def agent_findings(agent_dir: Path) -> tuple[list[AgentFinding], int, int]:
+    """(sections agents addressed to the lead, agents with a final message, transcripts read).
+
+    THE CHANNEL NOTHING READS. A build agent hands up a fragment and, when it is a skeptic, a
+    verdict file. Anything it noticed that fits in neither goes into the closing message it writes
+    to the lead — and that message is read once, by a lead 400 turns from the end, and then never
+    again. On the 2026-09-13 reminderrepo build 20 of 70 agents ended with such a section, 21
+    sections in all (a hand sweep of the same files found 13, reading fewer of the nine wordings). The
+    strongest of them came from a harvest agent, which has no verdict file at all: three Angular
+    paths declared twice with different guard sets, and a top-level route carrying no guard. The
+    three anchors it named appear ZERO times in the shipped map.
+
+    Collecting from the verdict rows alone would have seen 3 of those 13 — the skeptics — which is
+    why this reads the transcripts and `lead_notes` reads the rows. Two populations, both reported,
+    neither a superset of the other.
+
+    The second and third numbers are the DENOMINATORS the caller must print: this is a heading match
+    over prose, so the only honest thing to say is how much of the pile it read."""
+    files = _agent_transcript_files(agent_dir)
+    out: list[AgentFinding] = []
+    with_final = 0
+    for f in files:
+        final = _final_message(f)
+        if not final.strip():
+            continue
+        with_final += 1
+        task = _agent_task(f)
+        for m in _SECTION_HEADING.finditer(final):
+            title = m.group("title")
+            if not title or not _LEAD_SECTION_TITLE.search(title):
+                continue
+            body = _section_body(final, m)
+            items = tuple(b.group("text") for b in _BULLET.finditer(body))
+            if not items:
+                # A section written as a paragraph or a TABLE still counts — its lines ARE the
+                # finding, and dropping it because nobody typed a dash would lose the whole section
+                # silently. A table's `|---|---|` rule carries nothing and is dropped.
+                items = tuple(ln.strip() for ln in body.splitlines()
+                              if ln.strip() and set(ln.strip()) - set("|-: "))
+            if items:
+                out.append(AgentFinding(agent=f.stem, task=task, heading=title, items=items))
+    return out, with_final, len(files)
+
+
 def format_report(worklist_claims: list[str], grounding_rows: list[dict],
-                  as_json: bool = False, live_claims: list[str] | None = None) -> str:
+                  as_json: bool = False, live_claims: list[str] | None = None,
+                  agent_dir: Path | None = None) -> str:
     """WHICH claims landed in each bucket — the half `write` computes and then throws away.
 
     `write` resolves every claim to confirmed / refuted / unverifiable and emits only the four
@@ -510,6 +1013,10 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
     disagreeing and needs a human decision, while an `unverifiable` verdict is a skeptic saying the
     code cannot answer. A live build's grounding note described its four unverifiables as one kind
     when two were the other."""
+    # THE CLOSER IS NOT A VOTER — see `is_closer_row`. Its rows are pulled out before anything is
+    # bucketed, and printed in a section of their own below.
+    split = split_closer_rows(grounding_rows)
+    grounding_rows, closer_rows = split.skeptics, split.closer
     votes: dict[str, list[dict]] = {}
     for r in grounding_rows:
         claim = r.get("claim")
@@ -564,6 +1071,29 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
         # this codebase tells readers to prefer over parsing the lines — carries it too.
         if live is not None and bucket == "refuted" and claim in live:
             buckets["refuted_not_superseded"].append(row)
+    # NOT keyed on the worklist: a note to the lead is a fact about a ROW, and the row may sit on a
+    # claim that was reworded after the pin. Walking `grounding_rows` keeps it visible either way.
+    # THE APPEALS, as their own bucket: `uphold`/`reject`/`unsure` on a refutation the skeptics
+    # already cast. The map kept NOTHING of what the closer decided until this file existed.
+    buckets["closer"] = [{"claim": str(r.get("claim") or ""),
+                          "verdict": str(r.get("verdict") or ""),
+                          "grounded": r.get("grounded"),
+                          "closer": str(r.get("skeptic") or ""),
+                          "evidence": str(r.get("evidence") or ""),
+                          "note": str(r.get("note") or "")} for r in closer_rows]
+    to_lead, lead_denominator, upheld_total = lead_notes(grounding_rows)
+    buckets["lead_notes"] = [{"claim": n.claim, "skeptic": n.skeptic, "evidence": n.evidence,
+                              "note": n.note, "said": n.said} for n in to_lead]
+    # THE OTHER HALF OF THE SAME CHANNEL, and the bigger one: only a SKEPTIC writes a verdict row,
+    # so the rows above cannot carry a word from a harvest, trace, gap-fill or test agent. Those
+    # speak only in their closing message. Omitted, not emptied, when no transcript directory was
+    # given: "nothing found" and "nobody looked" must not read alike.
+    from_agents: list[AgentFinding] = []
+    agents_read = agents_total = 0
+    if agent_dir is not None:
+        from_agents, agents_read, agents_total = agent_findings(agent_dir)
+        buckets["agent_findings"] = [{"agent": f.agent, "task": f.task, "heading": f.heading,
+                                      "items": list(f.items)} for f in from_agents]
     if as_json:
         return json.dumps(buckets, indent=2, ensure_ascii=False)
     out: list[str] = []
@@ -579,6 +1109,14 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
         f"GROUNDING REPORT — {len(buckets['refuted'])} refuted, {len(buckets['tied'])} tied, "
         f"{len(buckets['unverifiable'])} unverifiable, {len(buckets['unvoted'])} unvoted"
         + (f", {len(buckets['superseded'])} superseded" if live is not None else "")
+        # ALWAYS, including the zero: this count is the only evidence that the pass over the
+        # upheld rows happened at all, and a silent zero reads the same as a check nobody ran.
+        + (f", {len(closer_rows)} closed on appeal" if closer_rows else "")
+        + f", {len(to_lead)} upheld with a note to the lead"
+        + (f", {len(from_agents)} finding(s) sent up by agents" if agent_dir is not None
+           # NOT a zero. Nobody looked, which is a different answer from "nobody found anything",
+           # and this report is read through a `head`.
+           else ", AGENT FINDINGS NOT READ (no --agent-transcripts)")
         + (f" · {still_live_n} REFUTED CLAIM(S) STILL IN THE MAP" if still_live_n else ""))
     if live is not None:
         sup = buckets["superseded"]
@@ -660,10 +1198,86 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
                        f"and will keep reading as full coverage either way:")
             for c in added:
                 out.append(f"  * {c}")
+    # THE CLOSER'S ANSWERS. An appeal, never a vote: none of the buckets above moved because of
+    # these rows. Listed because the map kept nothing of what the closer decided — on one build 22
+    # of 24 refutation judgements were applied on the strength of a chat sentence no later reader
+    # can open.
+    if closer_rows:
+        words = [closer_word(r) for r in closer_rows]
+        disputed = sum(1 for w in closer_ruling(closer_rows).values() if w == DISPUTED)
+        tally = " · ".join([f"{w} {words.count(w)}" for w in _CLOSER_VERDICTS if words.count(w)]
+                           + ([f"{disputed} claim(s) DISPUTED"] if disputed else []))
+        out.append(f"\nCLOSED ON APPEAL ({len(closer_rows)} appeal row(s)) — {tally}. A closer "
+                   f"re-read each "
+                   f"refutation in fresh context, denied the map. `reject` means the skeptic "
+                   f"misread the code, so the map is right to keep the claim and the refutation "
+                   f"gate lets it by; `uphold` and `unsure` still need you.")
+        for r in closer_rows:
+            word = (closer_word(r) or "UNREADABLE").upper()
+            out.append(f"  * [{word}] {str(r.get('claim') or '')}"
+                       f"   [{r.get('skeptic') or '-'}]  {r.get('evidence') or '-'}")
+            note = str(r.get("note") or "")
+            if note:
+                out.append(f"      {note if len(note) <= 300 else note[:300] + ' …'}")
+    # THE UPHELD ROWS THAT SAID SOMETHING ANYWAY. Every other section of this report is keyed on a
+    # verdict that asks for work; a CONFIRMED row asks for none, so a skeptic who upholds a claim
+    # and then tells the lead about a second, unguarded route to the same screen is writing into a
+    # file nothing reads. Its own section, after the verdict buckets, because it is not a verdict.
+    if to_lead:
+        out.append(f"\nNOTES TO THE LEAD ON UPHELD CLAIMS ({len(to_lead)}) — the skeptic voted the "
+                   f"claim GROUNDED and then wrote something for you. A confirmed row appears in no "
+                   f"other section of this report, so this is the only place these are said. Read "
+                   f"each against the map: the claim stands, the note may still change it.")
+        # COVERAGE, in `grounding lint`'s shape ("evidence check covered N of M"), because this is a
+        # phrase match over prose: it will miss a note that raises something in other words, and it
+        # will catch a note that uses one of the words about nothing.
+        out.append(f"  Phrase match over {lead_denominator} of {upheld_total} upheld row(s) — the "
+                   f"ones carrying a note — looking for {', '.join(_LEAD_NOTE_PHRASES)}. A note "
+                   f"that says it differently is NOT below.")
+        for n in to_lead:
+            out.append(f"  * {n.claim}"
+                       + (f"   [{n.skeptic}]" if n.skeptic else "")
+                       + (f"  {n.evidence}" if n.evidence else ""))
+            said = n.said if len(n.said) <= 320 else n.said[:320] + " …"
+            out.append(f"      {'' if n.said == n.note else '…'}{said}")
+    # WHAT THE OTHER AGENTS SENT UP. A harvest, trace, gap-fill or test agent writes no verdict
+    # file, so nothing above can carry a word of theirs; their closing message is the only channel
+    # they have, and it is read once by a lead hundreds of turns from the end.
+    if agent_dir is not None:
+        senders = len({f.agent for f in from_agents})
+        out.append(f"\nFINDINGS THE AGENTS SENT UP ({len(from_agents)} section(s) from {senders} "
+                   f"agent(s)) — the closing message each build agent wrote to you. A harvest or "
+                   f"trace agent files no verdict, so this is its ONLY channel; on the build this "
+                   f"check was written for, the strongest finding in it was an unguarded route "
+                   f"named nowhere in the shipped map.")
+        out.append(f"  Heading match over {agents_read} of {agents_total} agent transcript(s) in "
+                   f"{agent_dir} — the ones with a closing message — looking for a heading that "
+                   f"names the lead, a caveat, or something worth passing on. An agent that says it "
+                   f"under no heading is NOT below.")
+        for f in from_agents:
+            out.append(f"  * {f.task or f.agent}   [{f.agent}]  \"{f.heading}\"")
+            for item in f.items:
+                out.append(f"      - {item if len(item) <= 300 else item[:300] + ' …'}")
     out.append(f"\nconfirmed: {len(buckets['confirmed'])} of {len(worklist_claims)} claim(s)")
     # The trailer half of the both-ends rule above: a `| tail -N` reader gets this even when the
     # section itself scrolled off the top. Only printed when it is non-zero, so a clean run does
     # not end on a scary-looking line.
+    # The trailer half of the both-ends rule, for the notes to the lead as well: a `| tail -N`
+    # reader gets the count even when the section scrolled off the top.
+    if to_lead or from_agents:
+        out.append(
+            "\nTO THE LEAD: "
+            + " · ".join(
+                ([f"{len(to_lead)} upheld claim(s) carry a note written for you (NOTES TO THE LEAD "
+                  f"ON UPHELD CLAIMS above)"] if to_lead else [])
+                + ([f"{len(from_agents)} closing section(s) from build agents (FINDINGS THE AGENTS "
+                    f"SENT UP above)"] if from_agents else []))
+            + ". Neither is a refutation and nothing blocks on them; nothing else collects them "
+              "either.")
+    if agent_dir is None:
+        out.append("\nAGENT FINDINGS NOT READ — no --agent-transcripts directory, so the closing "
+                   "message every build agent wrote to you was not opened. That is not a clean "
+                   "result; it is an unread channel.")
     if still_live_n:
         out.append(f"\nSTILL IN THE MAP: {still_live_n} refuted claim(s) the map carries verbatim "
                    f"— see REFUTED BUT NOT SUPERSEDED above, and fix the map before shipping it: "
@@ -810,7 +1424,13 @@ def element_checks(m: ProjectModel, worklist_claims: list[str],
 
     The worklist is de-duplicated exactly as `build_record` and `format_report` do, and for the same
     reason: a repeated claim counted twice would make this report disagree with the record it exists
-    to explain."""
+    to explain.
+
+    SKEPTIC ROWS ONLY, like every other tally. This one was missed and is reached with appeals in
+    the pile two ways, both through `ship`: the `grounding by-element` step, and `grounding
+    refutations`, whose output `finalize` consumes. Measured on one refuted claim: skeptic alone
+    `refuted=1`; plus one closer `reject` `refuted=0, unverifiable=1`; plus two `confirmed=1`."""
+    grounding_rows = split_closer_rows(grounding_rows).skeptics
     votes: dict[str, list[dict]] = {}
     for r in grounding_rows:
         claim = r.get("claim")
@@ -912,13 +1532,23 @@ class SurvivingRefutation:
     THERE IS DELIBERATELY NO RECORDED ESCAPE for this. Every escape in this tool was added after a
     real false alarm, and there is not one yet: a lead who reads a refutation and disagrees is
     expected to RE-AUTHOR the claim, which supersedes it and removes it from here by itself. Add the
-    heading when a real map produces a survivor that should stay, not before."""
+    heading when a real map produces a survivor that should stay, not before.
+
+    THE ONE THING THAT DOES CLEAR IT is the closer REJECTING the refutation in writing — a second
+    fresh-context reader, denied the map, saying the skeptic misread the code. That is not an
+    escape hatch; it is the appeal the method already runs, and until `verify/closer-*.json` existed
+    its answer lived only in a chat sentence. On the 2026-09-13 reminderrepo build two rejected
+    refutations blocked this gate and cost five turns to talk past."""
     claim: str
     element_id: str
     kind: str
     label: str
     refuted_by: int
     note: str = ""
+    #: The closer's own word on this refutation, when it heard it: `uphold` (it stands), `unsure`
+    #: (it could not settle it), `conflict` (two appeals disagreed) or "" (never closed). A `reject`
+    #: is not here at all — it stops being a surviving refutation.
+    closed: str = ""
 
 
 def surviving_refutations(m: ProjectModel,
@@ -928,7 +1558,16 @@ def surviving_refutations(m: ProjectModel,
     Walks the VERDICTS, not the worklist: a refuted claim the reconcile dropped is absent from the
     live map and must not be looked for, while one the reconcile never touched is exactly what this
     finds. The pinned worklist is not needed and is not asked for, so this runs anywhere the map and
-    the verdict files are — which is what lets `finalize` include it without a captured snapshot."""
+    the verdict files are — which is what lets `finalize` include it without a captured snapshot.
+
+    A CLOSER REJECTION SETTLES ONE. The claim stays in the map on purpose, so it will keep resolving
+    here forever; what changes is that a named reader wrote down why. Only `reject` clears it:
+    `uphold` means the refutation stands, and `unsure` means nobody settled it — both still need the
+    lead, and reading "not settled" as "cleared" is the one way this change could hide a real
+    survivor."""
+    split = split_closer_rows(grounding_rows)
+    grounding_rows = split.skeptics
+    closed = closer_ruling(split.closer)
     votes: dict[str, list[dict]] = {}
     for r in grounding_rows:
         claim = r.get("claim")
@@ -941,10 +1580,13 @@ def surviving_refutations(m: ProjectModel,
         target = resolve_claim(m, claim).target
         if target is None:
             continue          # reconciled: the live map no longer makes this claim
+        if closed.get(claim) == "reject":
+            continue          # the closer REJECTED the refutation: the map is right to keep it
         note = next((str(r.get("note") or "") for r in rows if r.get("grounded") is False), "")
         out.append(SurvivingRefutation(
             claim=claim, element_id=target.element_id, kind=target.kind, label=target.label,
-            refuted_by=sum(1 for r in rows if r.get("grounded") is False), note=note))
+            refuted_by=sum(1 for r in rows if r.get("grounded") is False), note=note,
+            closed=closed.get(claim, "")))
     out.sort(key=lambda s: (s.kind, s.element_id, s.claim))
     return out
 
@@ -975,6 +1617,40 @@ def _rules_voted_under_any_anchor(m: ProjectModel, grounding_rows: list[dict]) -
             if br.id and (br.statement or "").strip() and (br.statement or "").strip() in claims}
 
 
+def settled_on_appeal(m: ProjectModel, grounding_rows: list[dict]) -> list[SurvivingRefutation]:
+    """The refutations a closer REJECTED that the map still carries — the ones the gate now lets by.
+
+    Named, always, and never merely absent. A gate that stops firing without saying what it stopped
+    firing on is the shape every silent pass in this tool has taken; `surviving_refutations` drops
+    these rows, so this is what puts them back on screen with the closer's own evidence line."""
+    split = split_closer_rows(grounding_rows)
+    closer_rows = split.closer
+    closed = closer_ruling(closer_rows)
+    rejected = {c for c, word in closed.items() if word == "reject"}
+    if not rejected:
+        return []
+    votes: dict[str, list[dict]] = {}
+    for r in split.skeptics:
+        claim = r.get("claim")
+        if isinstance(claim, str) and claim in rejected:
+            votes.setdefault(claim, []).append(r)
+    out: list[SurvivingRefutation] = []
+    for claim, rows in votes.items():
+        if _verdict_bucket(rows) != "refuted":
+            continue
+        target = resolve_claim(m, claim).target
+        if target is None:
+            continue
+        note = next((str(r.get("note") or "") for r in closer_rows
+                     if r.get("claim") == claim and r.get("note")), "")
+        out.append(SurvivingRefutation(
+            claim=claim, element_id=target.element_id, kind=target.kind, label=target.label,
+            refuted_by=sum(1 for r in rows if r.get("grounded") is False), note=note,
+            closed="reject"))
+    out.sort(key=lambda s: (s.kind, s.element_id, s.claim))
+    return out
+
+
 def format_refutations(surviving: list[SurvivingRefutation],
                        unseen: list[ElementCheck], as_json: bool = False,
                        m: ProjectModel | None = None,
@@ -993,11 +1669,18 @@ def format_refutations(surviving: list[SurvivingRefutation],
     which carry no `confidence` field, and printed as `says , pass says unchecked`."""
     access = _access_rule_ids(m) if m else set()
     voted = _rules_voted_under_any_anchor(m, grounding_rows or []) if m else set()
+    appealed = settled_on_appeal(m, grounding_rows or []) if m else []
     if as_json:
         return json.dumps({
             "surviving_refutations": [
                 {"claim": s.claim, "id": s.element_id, "kind": s.kind, "label": s.label,
-                 "refuted_by": s.refuted_by, "note": s.note} for s in surviving],
+                 "refuted_by": s.refuted_by, "note": s.note, "closed": s.closed}
+                for s in surviving],
+            # The refutations this gate NO LONGER blocks on, and why. `finalize` reads the key
+            # above; this one is beside it so a reader of either can see what left the list.
+            "settled_on_appeal": [
+                {"claim": s.claim, "id": s.element_id, "kind": s.kind, "label": s.label,
+                 "refuted_by": s.refuted_by, "note": s.note} for s in appealed],
             # RENAMED from `stated_but_unchallenged`, which described a comparison that no longer
             # exists: these are the elements NO SKEPTIC LOOKED AT, whatever their authored
             # `confidence` says. The old key implied the label was part of the test.
@@ -1013,11 +1696,24 @@ def format_refutations(surviving: list[SurvivingRefutation],
                      f"dropped — and a reconciled claim no longer resolves here at all:")
         for s in surviving:
             lines.append(f"  - {s.claim}   [{s.kind}{' ' + s.element_id if s.element_id else ''}, "
-                         f"refuted by {s.refuted_by}]")
+                         f"refuted by {s.refuted_by}"
+                         + (f", two appeals DISAGREE" if s.closed == DISPUTED
+                            else f", closer said {s.closed.upper()}" if s.closed else "") + "]")
             if s.note:
                 lines.append(f"      skeptic: {s.note[:200]}")
     else:
         lines.append("No refuted claim survives in this map.")
+    if appealed:
+        lines.append("")
+        lines.append(f"{len(appealed)} refutation(s) the CLOSER REJECTED — the map keeps these "
+                     f"claims on purpose, so they are not counted above. A second fresh-context "
+                     f"reader, denied the map, found the skeptic had misread the code:")
+        for s in appealed:
+            lines.append(f"  - {s.claim}   [{s.kind}"
+                         f"{' ' + s.element_id if s.element_id else ''}, "
+                         f"refuted by {s.refuted_by}, REJECTED on appeal]")
+            if s.note:
+                lines.append(f"      closer: {s.note[:200]}")
     if unseen:
         lines.append("")
         access_rows = [e for e in unseen if e.element_id in access]
@@ -1082,6 +1778,29 @@ class VerdictLint:
     notes: list[str] = field(default_factory=list)
 
 
+def _closer_file_faults(paths: list[str]) -> list[str]:
+    """Is each file the KIND of file its name says it is?
+
+    ONE DIRECTION ONLY, now that `closer_faults` reads the rows: an appeal word inside a
+    `verdicts-*.json`. That row is not malformed — it is a well-formed appeal in the wrong file, so
+    nothing about the row itself can object, and it silently leaves the vote tally. The other
+    direction, a `closer-*.json` whose rows carry no readable word, is a row fault and is caught by
+    `closer_faults` wherever the file is called `closer.json`, `appeals-a.json` or anything else."""
+    faults: list[str] = []
+    for path in paths:
+        if not Path(path).name.startswith("verdicts-"):
+            continue
+        rows, _notes = load_verdicts([path])
+        appeals = [r for r in rows if is_closer_row(r)]
+        if appeals:
+            faults.append(
+                f"{Path(path).name}: {len(appeals)} of {len(rows)} row(s) carry a `verdict` field "
+                f"inside a skeptics file, so they are read as APPEALS and drop out of the vote "
+                f"tally. A closer writes its own `verify/closer-<agent>.json`; move them there, or "
+                f"drop the field.")
+    return faults
+
+
 def lint_verdicts(paths: list[str], agent_dir: Path | None = None) -> VerdictLint:
     """Shape check over raw verdict files, WITHOUT needing a worklist or a map.
 
@@ -1113,6 +1832,7 @@ def lint_verdicts(paths: list[str], agent_dir: Path | None = None) -> VerdictLin
     if not rows:
         out.problems.append("no verdict rows found in " + ", ".join(paths))
         return out
+    out.problems += closer_faults(rows) + _closer_file_faults(paths)
 
     bad = sorted({f"{r.get('grounded')!r}" for r in rows
                   if not (r.get("grounded") is True or r.get("grounded") is False
@@ -1436,6 +2156,49 @@ def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> VerdictLint:
     return found
 
 
+def _repo_of(*paths: str | None) -> Path | None:
+    """The repo a `<repo>/.coyomap/...` path belongs to — the first of `paths` that names one.
+
+    Every input these verbs take lives under `.coyomap/`: the map, the pinned worklist, the verdict
+    files. So the project is always knowable from an argument, and never has to be guessed from the
+    working directory — which is a different project whenever a coyomap clone is driving the build.
+    None when no argument names one, and then the caller falls back to cwd as before."""
+    for path in paths:
+        if not path:
+            continue
+        parts = Path(path).resolve().parts
+        if ".coyomap" in parts:
+            return Path(*parts[:parts.index(".coyomap")])
+    return None
+
+
+def _resolve_agent_dir(agent_dir: str | None, env: Mapping[str, str] | None,
+                       repo: Path | None = None, home: Path | None = None) -> str | None:
+    """`--agent-transcripts`, or this session's own sub-agent directory when it can be found.
+
+    THE SESSION ID COMES FROM `env`, never straight from the process: three tests that lint
+    throwaway files failed in any Claude Code session that had spawned a sub-agent, because the
+    lint picked up THAT session's transcripts and rejected a citation they never held.
+
+    `repo` is WHICH PROJECT'S transcripts, and it must be the repo the work is about rather than
+    wherever the command was typed. Run from a coyomap clone against another repo's map, the cwd
+    default read the CLONE's session — 26 transcripts of coyomap's own development. In `report`
+    that printed coyomap's own components inside a report about a different product; in `lint` it
+    exits 1 with `28 file(s) are cited as evidence but appear NOWHERE in the 59 transcript(s)
+    given`, accusing 28 real files of fabricated citations. BOTH verbs pass it now, derived from
+    the map, the worklist or the verdict files — every one of which lives under `<repo>/.coyomap/`."""
+    if agent_dir is not None:
+        return agent_dir
+    sid = (os.environ if env is None else env).get(SESSION_ENV)
+    found = (session_agent_transcripts(repo or Path.cwd(), session_id=sid, home=home)
+             if sid else None)
+    if found is None:
+        return None
+    print(f"agent transcripts: {found} (this session's, found without --agent-transcripts)",
+          file=sys.stderr)
+    return str(found)
+
+
 def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None) -> int:
     """`env` is the process environment the verb reads its session id from (`lint` defaults
     `--agent-transcripts` to the running session's sub-agent transcripts). Injected, not read
@@ -1531,7 +2294,12 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None)
         # five verdict-consuming commands then ran against the incomplete set and were redone.
         # A missing file is the one failure a reader cannot spot by eye, because nothing is there.
         if expect:
-            have = {Path(v).stem.replace("verdicts-", "") for v in verdicts}
+            # A CLOSER FILE IS NAMED BY ITS AGENT, NOT BY A BATCH. `--expect` names the skeptic
+            # batches that must have landed, and `closer-<agent id>.json` matches none of them —
+            # harmless, until someone writes `--expect closer` and reads the silence as a pass. Both
+            # prefixes are stripped, so a closer file can be expected by the name it actually has.
+            have = {Path(v).stem.replace("verdicts-", "", 1).replace("closer-", "", 1)
+                    for v in verdicts}
             missing = [b for b in (x.strip() for x in expect) if b and b not in have]
             if missing:
                 print(f"VERDICTS INCOMPLETE — {len(missing)} expected batch(es) have no verdicts "
@@ -1540,16 +2308,8 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None)
                       "run anchor-drift, apply-drift or grounding write yet: each consumes the "
                       "verdict set and would have to be redone.", file=sys.stderr)
                 return 1
-        if agent_dir is None:
-            # THE SESSION ID COMES FROM `env`, never straight from the process: three tests that lint
-            # throwaway files failed in any Claude Code session that had spawned a sub-agent, because
-            # the lint picked up THAT session's transcripts and rejected a citation they never held.
-            sid = (os.environ if env is None else env).get(SESSION_ENV)
-            found = session_agent_transcripts(Path.cwd(), session_id=sid) if sid else None
-            if found is not None:
-                agent_dir = str(found)
-                print(f"agent transcripts: {found} (this session's, found without "
-                      f"--agent-transcripts)", file=sys.stderr)
+        agent_dir = _resolve_agent_dir(agent_dir, env,
+                                       _repo_of(map_path, worklist_path, *verdicts))
         lint = lint_verdicts(verdicts, Path(agent_dir) if agent_dir else None)
         problems = lint.problems
         for n in lint.notes:
@@ -1569,7 +2329,14 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None)
         # that NAMES a file it read; that number belongs on screen beside the verdict.
         lint_rows, _ = load_verdicts(verdicts)
         rows_total, rows_testable = _read_claim_coverage(lint_rows)
+        # SAY WHEN APPEALS ARE IN THE PILE. A closer row loads like any other and is counted by
+        # nothing as a vote, so a run over 38 skeptic files and a run over 38 plus two closer files
+        # printed the same line — and `--expect` cannot see the difference either.
+        closer_rows = split_closer_rows(lint_rows).closer
         print(f"VERDICTS OK — {len(verdicts)} file(s) well-formed, {rows_total} verdict row(s)"
+              + (f" of which {len(closer_rows)} are CLOSER appeals (uphold / reject / unsure), "
+                 f"which vote on nothing and settle refutations the skeptics cast"
+                 if closer_rows else "")
               + ("; pass --agent-transcripts <dir> to also check that every note claiming a read "
                  "is backed by the agent's transcript" if not agent_dir else
                  f"; evidence check covered {rows_testable} of {rows_total} row(s) — every row "
@@ -1705,7 +2472,17 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None)
                                     only_kind=only_kind))
         return 0
     if verb == "report":
-        print(format_report(claims, rows, as_json=as_json, live_claims=live_claims))
+        # THE AGENTS' OWN CLOSING MESSAGES, read with the same discovery `lint` uses — so the
+        # channel is read by default on a build, and by name (`--agent-transcripts`) afterwards.
+        # Keyed on the MAP'S OWN REPO, the way `finalize` derives it, and not on the directory the
+        # command was typed in: those differ whenever a coyomap clone is driving another repo's
+        # build, and the cwd answer is another product's agents.
+        report_agent_dir = _resolve_agent_dir(
+            agent_dir, env, _repo_of(map_path, worklist_path, *verdicts))
+        for fault in closer_faults(rows):
+            print(f"WARNING: {fault}", file=sys.stderr)
+        print(format_report(claims, rows, as_json=as_json, live_claims=live_claims,
+                            agent_dir=Path(report_agent_dir) if report_agent_dir else None))
         # NAME THE NEXT VERB, HERE. This report is what the closing note is written FROM, so a lead
         # reading it is standing exactly at the start of the close — and `ship` runs that whole
         # close in one command. It was reached for ZERO times on the 2026-09-02 build, which then
@@ -1714,11 +2491,27 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None)
         # `head -60`. It was never unreachable for a bad reason; it was just never in front of
         # anyone at the moment it mattered. A build follows the `Next:` lines the tools print.
         if not as_json:
+            # THE NUMBERS, HERE, WHERE THE NOTE IS WRITTEN. This block was printed only by
+            # `grounding write` — that is, only by the run that REFUSES the note — so the first
+            # note of every build was written from figures computed by hand. On the 2026-09-13
+            # reminderrepo build the lead globbed one theme's verdict files and wrote "128
+            # redundant rows" against the pass's real 256; `ship` died at step 6 and the second
+            # attempt was the first time these numbers were on screen. `ship` PREPARE ends on this
+            # report, so printing them here puts them in front of the author before the first try.
+            # Errors are discarded on purpose: a report is a READ, and `write` is where a refusal
+            # belongs.
+            record, _errors = build_record(claims, rows, live_claims=live_claims)
+            print("\n" + note_facts_block(claims, rows, record, live_claims))
             print("\nNext: coyomap ship <repo> --note-file <the note you write from this report> "
                   "— the whole closing sequence in one command, stopping at the first failing step "
                   "and naming every step that did not run.")
         return 0
     record, errors = build_record(claims, rows, note, live_claims=live_claims, partial=partial)
+    # AN UNREADABLE APPEAL WORD, REFUSED HERE. `grounding lint` catches it too, and `ship` never
+    # runs `grounding lint` — `method.md` schedules that at COLLECTION, before the closer is even
+    # dispatched, so on the reviewed build it read 38 verdict files and 0 closer files. A guard
+    # nothing reaches is not a guard, and this is the step every closing sequence does run.
+    errors = list(errors) + closer_faults(rows)
     # REFUSE, having been a warning and having failed as one. This used to warn, on the argument
     # that prose has more shapes than a regex — a note citing only EARLIER builds' figures states a
     # number this pass does not have and is honest. That case is already covered by the "any

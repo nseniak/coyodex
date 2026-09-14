@@ -551,6 +551,12 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
         "the finding IS the record's shape; the fix is to write the reason once with every id on it",
     "'{}' has a line that tries to be a record and adjudicates NOTHING":
         "a line that records nothing cannot be answered by recording another one; fix the key list",
+    # The third of the same META family, and the counterweight to the first: merging kills the wall,
+    # and one sentence stretched over 25 keys is a judgement made once and applied 25 times. Its
+    # subject is a record, so recording another to silence it is circular — and an escape here would
+    # let one line silence every finding it names and then silence the line saying so.
+    "'{}' has one record answering {} findings with one sentence":
+        "the finding IS the record's shape; split the line into the groups it is really about",
     # The map's own vocabulary, not a fact about the code: two boxes under one name are
     # indistinguishable on every diagram and in every sentence about them, and the remedy is a
     # rename. There is no state of the world in which "deliberately identical" helps a reader, so
@@ -614,6 +620,19 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     # it is a structured one (like `deployment_linked`), not an extras token.
     "No `grounding` record":
         "record `grounding` (the block itself IS the escape); an extras token would defeat the feature",
+    # The same shape from the other side: claims the pinned worklist held that the shipped map no
+    # longer makes. Both honest answers are structured — re-state the claim, or re-pin the surface
+    # with `audit` — and re-pinning IS the record, exactly as authoring `grounding` is above. An
+    # extras token here would let a build delete a claim and then delete the line saying so.
+    "{} claim(s) the skeptics were given are GONE from the shipped map":
+        "re-state the claim, or re-pin the surface with `coyomap audit` — the re-pin IS the record",
+    # Arithmetic between the record and the closer's own files. There is no judgement to record:
+    # either the record is stale (re-run `grounding write`) or `verify/` has lost files (restore
+    # them). An extras token would be a switch for asserting an appeal that never happened, which is
+    # exactly what the check exists to stop — the same reason `No 'grounding' record' is allowlisted.
+    "`grounding`'s appeal counts disagree with the closer's files":
+        "re-run `grounding write` over every closer file, or restore the verify files — an escape "
+        "here would let a map assert an appeal nothing backs",
     "Grounding is partial":
         "a measured share of the claim surface — ground more claims; nothing else can honestly quiet it",
     # Closed two-word vocabulary: the fix is to write `verified` or `inferred`, never a judgement.
@@ -652,6 +671,12 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     "recorded `runs_in` exception key(s) no check reads":
         "the opposite of an advisory needing an escape — it reports that the escape the operator "
         "wrote is a typo, and names the five that work",
+    # The same line one generation on, for a `/scope` word instead of a literal: it reports that the
+    # record the operator wrote silences nothing, and names the scopes that do work. Recording
+    # another escape to answer it would be recording a second dead line.
+    "{} recorded '{}' key(s) name a scope no check reads":
+        "the finding IS a record that silences nothing, and it names the scopes that do; another "
+        "record cannot answer it",
     "a bare `runs-in` exception is recorded and silences NOTHING":
         "the opposite of an advisory needing an escape — it exists to say the escape the operator "
         "wrote does not work, and names the five scoped lines that do",

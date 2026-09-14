@@ -11,16 +11,33 @@ question only the map answers. It answered from the claim text alone, got it wro
 blocked on the refutation, and the lead spent 5 turns undoing it.
 
 So the fix is not to let the closer read `.coyomap/` — that would hand it the whole map, including
-every confirming row it must not see. **The fix is that the LEAD puts the rows in the brief.** For
-each refuted claim, run:
+every confirming row it must not see. **The fix is that the rows go in the brief**, and the tool
+builds them:
 
 ```
-<COYOMAP_HOME>/.venv/bin/coyomap dump --map <map> --id <the element the claim is about>
-<COYOMAP_HOME>/.venv/bin/coyomap dump --map <map> --edges <that id>
+coyomap contract closer --from-verdicts <repo>/.coyomap/verify --map <repo>/.coyomap/project-map.json \
+                        --fill closer-slots.json --out <scratch>/closer.md --brief closer
 ```
 
-and paste both outputs under that claim in «CLAIMS». That is the one thing no tool can do for you:
-the brief is composed by the lead, and this is what the contract says must be in it.
+It reads every skeptic verdicts file, takes every `grounded: false` row, and pastes that claim's own
+`dump --id`, `dump --record` and `dump --edges` output under it — for EVERY claim kind, the rule
+site included. **Do not hand-build the claims block.** One build built it twice, in two shapes, and
+the second was a regex generator with no branch for a rule-site claim: 4 of 20 refutations reached
+the closer with no map row at all, and it answered `uphold` on all four instead of the `unsure` this
+contract asks for.
+
+**A second wave excludes what the first one settled, BY ID.** `--settled <the first closer's
+verdicts file>` does it automatically; `--exclude rule-1#12` (a refutation id) or `--exclude BR205`
+(an element id) does it by hand, and an exclusion that matches nothing is an ERROR. The same build
+filtered on rule ids tested against the claim TEXT — which carries the rule statement and never the
+id — matched 0 of 20, and re-sent four settled refutations to the second closer.
+
+- **«REPO»** — absolute path of the repo being mapped. The closer reads its source and is forbidden
+  its `.coyomap/`.
+- **«AGENT_ID»** — this closer's id, one word. It names the verdicts file this closer writes, so two
+  waves never write over each other.
+- **«CLAIMS»** — the refuted claims with their map rows, built by `--from-verdicts`. Leave it empty
+  in the slots file; that verb refuses to run if you filled it.
 
 1. Take the quoted block below and strip the leading `> ` from every line.
 2. Fill ONLY the «angle-bracket» slots.
@@ -60,7 +77,9 @@ lead; nothing above this line goes into an agent prompt.
 > answer a question about a row you were not given: guessing at it is the exact failure this
 > contract was written after.
 >
-> ## «CLAIMS»
+> ## The refuted claims
+>
+> «CLAIMS»
 >
 > ## How to judge
 >
@@ -81,14 +100,50 @@ lead; nothing above this line goes into an agent prompt.
 >
 > ## What to return
 >
-> One block per claim, in the order given:
+> **WRITE your verdicts to `«REPO»/.coyomap/verify/closer-«AGENT_ID».json`**, beside the skeptics'
+> own `verdicts-*.json`, and then say only that you wrote it and give the one-line tally. The map
+> keeps what the skeptics decided and kept NOTHING of what the closer decided — on one build 22 of
+> 24 refutation judgements were applied on the strength of a sentence in a chat that no later reader
+> can open, about "the re-read that decides what the map ends up saying".
+>
+> The file is a verdicts file, in the skeptics' own shape, so the same readers load it:
+>
+> ```json
+> {"grounding": [
+>   {"id": "<the claim id from its heading above, e.g. rule-1#12>",
+>    "claim": "<the claim text, VERBATIM from this brief>",
+>    "verdict": "uphold",
+>    "grounded": false,
+>    "evidence": "path/to/file.ts:90",
+>    "skeptic": "«AGENT_ID»",
+>    "note": "<one or two sentences: what that line does, and why it settles the refutation>"}
+> ]}
+> ```
+>
+> - `verdict` is your word — `uphold`, `reject` or `unsure`.
+> - `grounded` is the SAME word said about the CLAIM, in the vocabulary every verdicts file uses, so
+>   nothing has to translate it later:
+>     - **uphold → `false`** — the refutation stands, so the claim is not grounded;
+>     - **reject → `true`** — the skeptic was wrong, so the claim holds;
+>     - **unsure → `"unverifiable"`** — you could not settle it.
+>   A JSON boolean, unquoted; `"true"` in quotes is refused at the end of the build, and printing
+>   `str(value)` cannot catch it because it renders `'true'` either way.
+> - `claim` must match this brief character for character — every reader pairs rows to claims by
+>   that string, and a reworded claim silently becomes an orphan.
+> - `evidence` is the ONE `path:line` you actually read. On an `unsure`, give the line you tried;
+>   a row with no line is an opinion, and the shape check counts it as a fault.
+> - `id` is the claim's heading in this brief. It is what lets a later wave exclude what you already
+>   settled, by id rather than by matching text.
+>
+> Then, in your reply, one block per claim, in the order given:
 >
 > ```
-> <claim id or the first 60 chars of the claim>
+> <the claim id from its heading>
 > verdict: uphold | reject | unsure
 > line read: <path:line> — <what that line does, in one sentence>
 > why: <one or two sentences>
 > ```
 >
-> Nothing else. Do not rewrite the claim, do not propose a correction, and do not edit any file:
-> the lead applies what you uphold.
+> Nothing else. Do not rewrite the claim, do not propose a correction, and do not edit the map or
+> any source file: the one file you write is your own verdicts file, and the lead applies what you
+> uphold.

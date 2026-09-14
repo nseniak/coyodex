@@ -11,6 +11,8 @@ from __future__ import annotations
 import io
 import contextlib
 import json
+import os
+import re
 from pathlib import Path
 
 import pytest
@@ -161,7 +163,9 @@ def test_the_skeleton_is_json_with_every_slot_empty() -> None:
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         assert contract.main(["rules", "--slots"]) == 0
-    assert json.loads(out.getvalue()) == {k: "" for k in contract.slots("rules")}
+    printed = json.loads(out.getvalue())
+    assert {k: v for k, v in printed.items() if not k.startswith("//")} == \
+        {k: "" for k in contract.slots("rules")}
 
 
 def test_a_clean_fill_leaves_no_slot_behind() -> None:
@@ -599,3 +603,619 @@ def test_from_batches_tolerates_the_empty_batch_and_claims_slots_the_skeleton_pr
     names = sorted(p.name for p in (tmp_path / "briefs").glob("skeptic-*.md"))
     assert names == ["skeptic-backbone.md", "skeptic-odd.md", "skeptic-security.md",
                      "skeptic-small.md"], names
+
+
+# --- T11: `--slots` says what goes IN each slot (retro 2026-09-13, reminderrepo) -----------------
+# `coyomap contract harvest` prints the agent half and strips the lead's, by design — so the only
+# place saying that «SERVES» must name `Rn`/`UCn`/`CAPn`/`HPn` ids, and that «EXPECTED_COMPONENTS»
+# is the slice's E from the pre-index, was a file the lead never opened. `--slots` printed bare
+# empty strings. All 8 SERVES came back as map-section names and all 8 were refused at the barrier.
+
+def test_every_shipped_contract_says_what_goes_in_every_one_of_its_slots() -> None:
+    """The check with teeth. A slot with no one-line spec anywhere REFUSES, so a new slot cannot
+    ship with an empty explanation beside its empty value."""
+    for name in contract.CONTRACTS:
+        specs = contract.slot_specs(name)
+        assert set(specs) == set(contract.slots(name)), name
+        for key, spec in specs.items():
+            assert spec.strip(), f"{name}.{key} has an empty spec"
+
+
+def test_the_skeleton_prints_each_spec_beside_its_own_empty_value() -> None:
+    """The spec rides INSIDE the JSON, on a `//` line before the slot, because the lead redirects
+    the skeleton to a file and fills it there."""
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert contract.main(["harvest", "--slots"]) == 0
+    printed = json.loads(out.getvalue())
+    keys = list(printed)
+    for key in contract.slots("harvest"):
+        assert keys.index(f"//{key}") == keys.index(key) - 1, f"{key}'s spec is not beside it"
+    assert "granularity.per_dir" in printed["//EXPECTED_COMPONENTS"]
+    assert "UC" in printed["//SERVES"] and "CAP" in printed["//SERVES"]
+
+
+def test_the_lead_facing_spec_still_never_reaches_an_agent() -> None:
+    """The separation is the reason this verb exists — a build once sent the lead's own half to ten
+    skeptics. Saying more to the lead must not say more to the agent."""
+    for name in contract.CONTRACTS:
+        text = render(name)
+        for spec in contract.slot_specs(name).values():
+            assert spec[:60] not in text, f"{name}: a lead-facing spec crossed into the agent half"
+
+
+def test_a_slot_with_no_spec_is_refused_and_named(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    (home / "method" / "templates").mkdir(parents=True)
+    (home / "method" / "templates" / "toy-contract.md").write_text(
+        "lead half\n\n- **«DESCRIBED»** — what this one holds.\n\n"
+        "> agent half with «DESCRIBED» and «UNDESCRIBED».\n", encoding="utf-8")
+    contract.CONTRACTS["toy"] = "toy-contract.md"
+    try:
+        with pytest.raises(ValueError, match="UNDESCRIBED"):
+            contract.slot_specs("toy", root=home)
+        assert contract.template_specs("toy", root=home) == {"DESCRIBED": "what this one holds."}
+    finally:
+        del contract.CONTRACTS["toy"]
+
+
+def test_the_spec_check_has_no_exemption_and_the_one_false_slot_is_gone() -> None:
+    """The check above covers every contract with nothing carved out. It found a FALSE slot doing
+    it: `«key» parent_id` in the T5 addendum is the label a keyed relation draws on its arrow, not
+    something a lead fills — and while it sat there in guillemets, appending that addendum to a
+    harvest brief demanded a value for it and filling it would have destroyed the notation."""
+    assert not hasattr(contract, "_SPECLESS"), "an exemption is a hole in the spec check"
+    assert contract.slots("harvest-t5") == ["COYOMAP_HOME"]
+
+
+def test_the_t5_addendum_rides_a_harvest_brief_on_the_same_slots_file() -> None:
+    """The `>>` that produced a 1,217-byte brief holding only the addendum. The addendum's one slot
+    is the harvest contract's own, so `--append` needs nothing extra from the lead."""
+    values = make_slot_values("harvest")
+    assert set(contract.union_slots(["harvest", "harvest-t5"])) == set(contract.slots("harvest"))
+    text = contract.fill("harvest", values, append=["harvest-t5"])
+    assert "«" not in text and "»" not in text
+    assert "You are ALSO the T5 DOMAIN-MODEL owner" in text
+
+
+def test_a_filled_slot_file_may_keep_the_comment_lines_the_skeleton_printed() -> None:
+    """The lead edits the file `--slots` wrote, so the `//` lines come back in. `--fill` must read
+    past them rather than call each one an unknown slot."""
+    values = make_slot_values("rules")
+    values["//REPO"] = "absolute path of the repo being mapped"
+    assert "«" not in contract.fill("rules", values)
+
+
+# --- T10: the doors half reaches the brief FILLED (retro 2026-09-13, reminderrepo) ---------------
+# Turn 231 built each trace brief with `contract trace --fill`, then appended the doors half with a
+# bare `>>`. `--fill` refuses a value still carrying guillemets; `>>` walked around the guard. Every
+# brief but one shipped with nine literal slot names, and each of those 9 agents then ran one
+# `lint-fragment --repo «REPO» …` that could not run.
+
+def test_the_trace_and_doors_slot_sets_do_not_coincide() -> None:
+    """The reason `--append` fills against the UNION and not against the first contract's slots.
+    Assuming they coincided is what a `>>` silently assumes."""
+    trace, doors = set(contract.slots("trace")), set(contract.slots("doors"))
+    assert doors - trace == {"FLOWS", "MAP", "SURFACES"}
+    assert trace - doors == {"USE_CASES", "SF_RANGE", "LEGEND", "WHERE_TO_LOOK", "your-fragment"}
+
+
+def test_append_composes_both_halves_with_no_slot_left() -> None:
+    values = make_slot_values("trace")
+    values.update(make_slot_values("doors"))
+    text = contract.fill("trace", values, append=["doors"])
+    assert "«" not in text and "»" not in text
+    assert "You are tracing use cases" in text and "doors\" retrofit" in text
+
+
+def test_append_refuses_the_whole_brief_when_an_appended_slot_is_missing() -> None:
+    """The point. A doors slot nobody filled must refuse the trace brief too, instead of shipping
+    one brief that is half filled."""
+    with pytest.raises(ValueError, match="no value given for.*FLOWS"):
+        contract.fill("trace", make_slot_values("trace"), append=["doors"])
+
+
+def test_the_skeleton_of_an_appended_pair_lists_both_contracts_slots() -> None:
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert contract.main(["trace", "--slots", "--append", "doors"]) == 0
+    printed = json.loads(out.getvalue())
+    assert set(k for k in printed if not k.startswith("//")) == \
+        set(contract.slots("trace")) | set(contract.slots("doors"))
+
+
+def test_the_unfilled_form_says_out_loud_what_it_is() -> None:
+    """`contract doors >> brief.md` is invisible to every check the tool makes, because the tool
+    never sees the `>>`. So the one thing it can do is say what it just printed."""
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        assert contract.main(["doors"]) == 0
+    assert "UNFILLED" in err.getvalue() and "FLOWS" in err.getvalue()
+    assert "«FLOWS»" in out.getvalue()          # stdout is unchanged: it is still the raw contract
+
+
+def test_an_unknown_append_name_is_refused() -> None:
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        assert contract.main(["trace", "--append", "dorrs"]) == 2
+    assert "no such contract" in err.getvalue()
+
+
+# --- T12: many briefs in ONE run, refusing atomically (retro 2026-09-13, reminderrepo) -----------
+# Turn 106 looped `contract harvest --fill` over 8 slices under `set -e`. All 8 exited 2 and wrote
+# nothing; `set -e` does not abort a loop in this harness, so the trailing `&&` appended the T5
+# addendum to a brief no fill had written. `record --lines-from` already solved this class: one
+# process, one write, every line shape-checked before anything is written.
+
+def _slots_dir(tmp: Path, name: str, agents: list[str], **over: str) -> Path:
+    d = tmp / "slots"
+    d.mkdir(parents=True, exist_ok=True)
+    for agent in agents:
+        values = make_slot_values(name)
+        values.update(over)
+        (d / f"{agent}.json").write_text(json.dumps(values), encoding="utf-8")
+    return d
+
+
+def _from_slots(tmp: Path, name: str, extra: list[str] | None = None) -> tuple[int, str]:
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = contract.main([name, "--from-slots", str(tmp / "slots"), "--out-dir",
+                            str(tmp / "briefs"), *(extra or [])])
+    return rc, buf.getvalue()
+
+
+def test_one_run_writes_a_brief_per_slots_file_and_prints_its_pointer(tmp_path: Path) -> None:
+    _slots_dir(tmp_path, "rules", ["r1", "r2", "r3"])
+    rc, out = _from_slots(tmp_path, "rules")
+    assert rc == 0, out
+    assert sorted(p.name for p in (tmp_path / "briefs").glob("*.md")) == \
+        ["r1.md", "r2.md", "r3.md"]
+    assert "3 brief(s) written, 0 skipped" in out and out.count("Read it COMPLETELY") == 3
+
+
+def test_one_bad_slots_file_writes_NOTHING_and_every_fault_is_named(tmp_path: Path) -> None:
+    """The shape, not the cost: a loop that keeps going leaves part of a fan-out on disk and a lead
+    that cannot tell which briefs are real."""
+    d = _slots_dir(tmp_path, "rules", ["r1", "r2"])
+    (d / "r3.json").write_text(json.dumps({"REPO": "  "}), encoding="utf-8")
+    (d / "r4.json").write_text("{not json", encoding="utf-8")
+    rc, out = _from_slots(tmp_path, "rules")
+    assert rc == 2, out
+    assert not (tmp_path / "briefs").exists(), "a refused batch left briefs behind"
+    assert "2 of 4 slots file(s) are bad" in out
+    assert "r3.json" in out and "r4.json" in out and "blank" in out
+
+
+def test_a_batch_never_rewrites_a_brief_an_agent_may_be_reading(tmp_path: Path) -> None:
+    _slots_dir(tmp_path, "rules", ["r1", "r2"])
+    (tmp_path / "briefs").mkdir()
+    (tmp_path / "briefs" / "r1.md").write_text("AN AGENT IS READING THIS", encoding="utf-8")
+    rc, out = _from_slots(tmp_path, "rules")
+    assert rc == 0, out
+    assert (tmp_path / "briefs" / "r1.md").read_text(encoding="utf-8") == "AN AGENT IS READING THIS"
+    assert "1 brief(s) written, 1 skipped" in out
+
+
+def test_a_batch_of_trace_briefs_carries_the_doors_half_filled(tmp_path: Path) -> None:
+    """T10 and T12 together — the run that replaces `--fill` in a loop plus `contract doors >>`."""
+    values = make_slot_values("trace")
+    values.update(make_slot_values("doors"))
+    d = tmp_path / "slots"
+    d.mkdir()
+    for agent in ("t-ops", "t-browse"):
+        (d / f"{agent}.json").write_text(json.dumps(values), encoding="utf-8")
+    rc, out = _from_slots(tmp_path, "trace", ["--append", "doors"])
+    assert rc == 0, out
+    for agent in ("t-ops", "t-browse"):
+        text = (tmp_path / "briefs" / f"{agent}.md").read_text(encoding="utf-8")
+        assert "«" not in text and "»" not in text
+        assert "doors\" retrofit" in text
+
+
+def test_a_batch_of_harvest_briefs_records_every_budget(tmp_path: Path) -> None:
+    """The single `--fill` records the budget `finalize` sums; the batch form must too, or a
+    fan-out run this way ships a budgets file with a hole in it."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    d = tmp_path / "slots"
+    d.mkdir()
+    for agent, budget in (("h1", "~6"), ("h2", "4-6")):
+        values = _harvest_values(REPO_ABS=str(repo), EXPECTED_COMPONENTS=budget)
+        values["agent-id"] = agent
+        (d / f"{agent}.json").write_text(json.dumps(values), encoding="utf-8")
+    rc, out = _from_slots(tmp_path, "harvest")
+    assert rc == 0, out
+    doc = json.loads((repo / ".coyomap" / "verify" / "budgets.json").read_text(encoding="utf-8"))
+    assert doc["harvest"] == {"h1": 6, "h2": 4}, doc
+
+
+# --- T7a: the closer's claims block is BUILT, not hand-typed (retro 2026-09-13) ------------------
+# `contract closer` had only `--slots`/`--fill`, so the block was hand-built twice in one build, in
+# two shapes. The second was a regex generator with no branch for a rule-site claim: 16 of 20
+# refutations carried a map row and 4 carried none, and the closer answered `uphold` on all four
+# rowless blocks and `unsure` on none. `dump` was typed once in 571 turns and `--edges` never.
+
+def _tiny_map() -> str:
+    return json.dumps({
+        "format": "coyomap-map",
+        "title": "Toy",
+        "components": [
+            {"id": "C1", "name": "Gate", "purpose": "Checks the caller may pass.",
+             "source": "src/gate.py:10"},
+            {"id": "C2", "name": "Store", "purpose": "Keeps the rows.", "source": "src/store.py:5"}],
+        "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": "asks for the row",
+                   "where": "src/gate.py:22"}],
+        "rules": [{"id": "BR1", "statement": "A caller with no token is refused.",
+                   "sites": [{"where": "src/gate.py:31", "why": "Rejects the tokenless caller."}]}],
+        "roles": [{"id": "R1", "name": "Caller", "kind": "human"}],
+        "use_cases": [{"id": "UC1", "name": "Pass the gate", "actors": ["R1"],
+                       "trigger_outcome": "A caller arrives → the row is returned"}],
+        "flows": [{"uc": "UC1", "title": "Pass the gate", "steps": [
+            {"n": 1, "src": "R1", "dst": "C1", "phrase": "present the token"},
+            {"n": 2, "src": "C1", "dst": "C2", "phrase": "ask for the row",
+             "where": "src/gate.py:22"}]}],
+    })
+
+
+def _refuted(claim: str, note: str = "the line does not do that") -> dict[str, object]:
+    return {"claim": claim, "grounded": False, "evidence": "src/gate.py:31",
+            "skeptic": "rule-1", "note": note}
+
+
+def make_closer_inputs(tmp: Path, claims: list[str]) -> tuple[Path, Path, Path]:
+    """The three paths `--from-verdicts` needs: the verdicts dir, the map, the slots file."""
+    verify = tmp / "verify"
+    verify.mkdir(parents=True, exist_ok=True)
+    (verify / "verdicts-rule-1.json").write_text(
+        json.dumps({"grounding": [{"claim": "C1 calls C2", "grounded": True,
+                                   "evidence": "src/gate.py:22", "skeptic": "rule-1", "note": "ok"}]
+                    + [_refuted(c) for c in claims]}), encoding="utf-8")
+    map_path = tmp / "project-map.json"
+    map_path.write_text(_tiny_map(), encoding="utf-8")
+    slots_file = tmp / "closer-slots.json"
+    slots_file.write_text(json.dumps({"REPO": str(tmp), "AGENT_ID": "closer1", "CLAIMS": ""}),
+                          encoding="utf-8")
+    return verify, map_path, slots_file
+
+
+def _from_verdicts(tmp: Path, extra: list[str] | None = None) -> tuple[int, str, Path]:
+    out = tmp / "closer.md"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = contract.main(["closer", "--from-verdicts", str(tmp / "verify"), "--map",
+                            str(tmp / "project-map.json"), "--fill", str(tmp / "closer-slots.json"),
+                            "--out", str(out), *(extra or [])])
+    return rc, buf.getvalue(), out
+
+
+#: One refutation of each kind the build produced. The rule site is the kind the hand-written
+#: generator had no branch for, and it is the one that reached the closer with no map row.
+_FOUR_KINDS = [
+    "Component C1 (Gate) is described as: Checks the caller may pass.",
+    "C1 calls C2",
+    "UC1 step 2: C1 → C2 — ask for the row",
+    "Rule 'A caller with no token is refused.' is enforced at src/gate.py:31 — Rejects the "
+    "tokenless caller.",
+]
+
+
+def test_every_claim_kind_reaches_the_closer_with_its_map_row_and_its_edges(tmp_path: Path) -> None:
+    """The finding, as a test: all four kinds, each carrying `dump --id` AND `dump --edges`, with no
+    block reading NO MAP ROW FOUND."""
+    make_closer_inputs(tmp_path, _FOUR_KINDS)
+    rc, out, brief_path = _from_verdicts(tmp_path)
+    assert rc == 0, out
+    text = brief_path.read_text(encoding="utf-8")
+    assert "NO MAP ROW FOUND" not in text
+    for claim in _FOUR_KINDS:
+        assert claim in text, claim
+    assert "dump --id BR1" in text, "the rule-site claim reached the closer with no map row"
+    assert "dump --edges C1" in text and "dump --record C1" in text
+    assert "dump --id UC1" in text and '"phrase": "ask for the row"' in text
+    assert "«" not in text
+
+
+def test_a_claim_the_map_no_longer_makes_is_labelled_rather_than_dropped(tmp_path: Path) -> None:
+    """The contract tells the closer to answer `unsure` when rows are missing. It can only do that
+    if the brief SAYS they are missing."""
+    make_closer_inputs(tmp_path, ["Auth surface 'nothing' is protected by: nobody"])
+    rc, out, brief_path = _from_verdicts(tmp_path)
+    assert rc == 0, out
+    assert "NO MAP ROW FOUND" in brief_path.read_text(encoding="utf-8")
+
+
+def test_an_exclusion_that_matches_nothing_is_an_ERROR(tmp_path: Path) -> None:
+    """The measured bug: `done={"BR205","BR66","BR104"}` tested against claim TEXT, which carries
+    the rule statement and never the id — 0 of 20 matched, silently, and four settled refutations
+    were re-sent to the second closer."""
+    make_closer_inputs(tmp_path, _FOUR_KINDS)
+    rc, out, _ = _from_verdicts(tmp_path, ["--exclude", "BR999"])
+    assert rc == 2, out
+    assert "matched no refutation" in out
+
+
+def test_an_exclusion_takes_a_rule_id_and_the_claim_text_never_carries_one(tmp_path: Path) -> None:
+    make_closer_inputs(tmp_path, _FOUR_KINDS)
+    rule_claim = _FOUR_KINDS[3]
+    assert "BR1" not in rule_claim, "the claim text carries the statement, never the id"
+    rc, out, brief_path = _from_verdicts(tmp_path, ["--exclude", "BR1"])
+    assert rc == 0, out
+    assert rule_claim not in brief_path.read_text(encoding="utf-8")
+
+
+def test_a_second_wave_excludes_what_the_first_closer_settled(tmp_path: Path) -> None:
+    """The durable answer (T7b) feeding the next wave (T7a): the closer's own verdicts file names
+    what it judged, by id."""
+    make_closer_inputs(tmp_path, _FOUR_KINDS)
+    rc, out, first = _from_verdicts(tmp_path)
+    assert rc == 0, out
+    ids = re.findall(r"^### (\S+) —", first.read_text(encoding="utf-8"), re.M)
+    assert len(ids) == 4, ids
+    settled = tmp_path / "closer-closer1.json"
+    settled.write_text(json.dumps({"grounding": [
+        {"id": ids[0], "claim": _FOUR_KINDS[0], "verdict": "uphold", "grounded": False,
+         "evidence": "src/gate.py:10", "skeptic": "closer1", "note": "read it"}]}),
+        encoding="utf-8")
+    buf = io.StringIO()
+    second = tmp_path / "closer2.md"
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = contract.main(["closer", "--from-verdicts", str(tmp_path / "verify"), "--map",
+                            str(tmp_path / "project-map.json"), "--fill",
+                            str(tmp_path / "closer-slots.json"), "--out", str(second),
+                            "--settled", str(settled)])
+    assert rc == 0, buf.getvalue()
+    text = second.read_text(encoding="utf-8")
+    assert _FOUR_KINDS[0] not in text and _FOUR_KINDS[3] in text
+
+
+def test_a_refutation_id_names_the_batch_and_the_row(tmp_path: Path) -> None:
+    """Stable across waves, because the verdicts file is written once and never edited — the
+    property a sequence number over a shrinking list does not have."""
+    make_closer_inputs(tmp_path, _FOUR_KINDS)
+    refs = contract.refutations(tmp_path / "verify")
+    assert [r.id for r in refs] == ["rule-1#2", "rule-1#3", "rule-1#4", "rule-1#5"]
+    assert refs[0].skeptic == "rule-1"
+
+
+def test_a_slots_file_that_fills_CLAIMS_itself_is_refused(tmp_path: Path) -> None:
+    """The same rule `--from-batches` has: a value this verb composes would be silently overwritten."""
+    make_closer_inputs(tmp_path, _FOUR_KINDS)
+    (tmp_path / "closer-slots.json").write_text(
+        json.dumps({"REPO": str(tmp_path), "AGENT_ID": "c1", "CLAIMS": "typed by hand"}),
+        encoding="utf-8")
+    rc, out, _ = _from_verdicts(tmp_path)
+    assert rc == 2 and "builds «CLAIMS» itself" in out, out
+
+
+def test_an_empty_or_missing_verdicts_directory_is_refused(tmp_path: Path) -> None:
+    make_closer_inputs(tmp_path, _FOUR_KINDS)
+    for target in (tmp_path / "verify" / "verdicts-rule-1.json",):
+        target.unlink()
+    rc, out, _ = _from_verdicts(tmp_path)
+    assert rc == 2 and "no verdicts-*.json" in out, out
+
+
+# --- T7b: the closer's answer has a durable home ------------------------------------------------
+# `.coyomap/verify/` held 0 closer artifacts, and 22 of 24 refutation judgements on one build were
+# applied on the strength of a chat sentence, about "the re-read that decides what the map ends up
+# saying".
+
+def test_the_closer_is_told_to_write_its_verdicts_beside_the_skeptics() -> None:
+    text = render("closer")
+    assert ".coyomap/verify/closer-«AGENT_ID».json" in text
+    assert '"grounding"' in text and '"skeptic": "«AGENT_ID»"' in text
+
+
+def test_the_closer_file_is_a_verdicts_file_the_existing_reader_can_load() -> None:
+    """It is written in the skeptics' own shape on purpose, so `grounding lint --verdicts` reads it
+    with no change to that command: uphold → grounded false, reject → true, unsure →
+    "unverifiable"."""
+    text = render("closer")
+    for word, value in (("uphold", "`false`"), ("reject", "`true`"), ("unsure", '`"unverifiable"`')):
+        assert f"{word} → {value}" in text, word
+
+
+def test_the_closer_carries_an_agent_id_so_two_waves_never_collide() -> None:
+    assert set(contract.slots("closer")) == {"REPO", "CLAIMS", "AGENT_ID"}
+
+
+# --- review round: the four findings the adversarial pass returned --------------------------------
+
+def _map_with_moved_rule_site() -> str:
+    """The map as it stands AFTER a rule refutation is applied: the statement is untouched, the
+    refuted SITE has moved. `resolve_claim` matches statement AND anchor AND why, so the claim about
+    the old site no longer resolves — and its text carries the statement, never the id."""
+    doc = json.loads(_tiny_map())
+    doc["rules"][0]["sites"] = [{"where": "src/gate.py:99", "why": "Rejects it earlier now."}]
+    return json.dumps(doc)
+
+
+_RULE_CLAIM = ("Rule 'A caller with no token is refused.' is enforced at src/gate.py:31 — "
+               "Rejects the tokenless caller.")
+
+
+def test_a_rule_claim_whose_site_moved_still_finds_its_rule(tmp_path: Path) -> None:
+    """The finding: run on the build's own verdicts this gave 16 of 20 refutations a map row and 4
+    none — every one a rule site whose refutation had already been applied. That is the identical
+    split the hand-written generator produced, which is the whole reason this verb exists."""
+    from coyomap.model import load_model
+    live = load_model(_map_with_moved_rule_site())
+    assert "BR1" not in _RULE_CLAIM, "a rule claim's text carries the statement, never the id"
+    assert contract.dump_ids(live, _RULE_CLAIM) == ["BR1"]
+
+
+def test_the_documented_exclude_example_works_on_a_moved_rule_site(tmp_path: Path) -> None:
+    """Sharpest form of the same bug: `--exclude BR205` is the flag's own help-text example, and on
+    the build's own verdicts it exited 2 with `matched no refutation: BR205` — while the error
+    naming it as valid was printed by the same run."""
+    make_closer_inputs(tmp_path, [_RULE_CLAIM])
+    (tmp_path / "project-map.json").write_text(_map_with_moved_rule_site(), encoding="utf-8")
+    rc, out, _ = _from_verdicts(tmp_path, ["--exclude", "BR1"])
+    assert rc == 2 and "every one of the 1 refutation(s)" in out, out   # excluded, not unmatched
+    assert "matched no refutation" not in out, out
+
+
+def test_two_rules_stating_the_same_decision_are_both_named(tmp_path: Path) -> None:
+    """Answering with one of them silently picks a side; the brief names both so the closer sees it."""
+    from coyomap.model import load_model
+    doc = json.loads(_map_with_moved_rule_site())
+    twin = dict(doc["rules"][0], id="BR2")
+    doc["rules"].append(twin)
+    assert contract.dump_ids(load_model(json.dumps(doc)), _RULE_CLAIM) == ["BR1", "BR2"]
+
+
+def make_description_refutation(eid: str) -> contract.Refutation:
+    return contract.Refutation(id="description-1#6",
+                               claim=f"Component {eid} (Gate) is described as: Checks the caller.",
+                               evidence="src/gate.py:10", skeptic="description-1", note="no")
+
+
+def test_an_id_the_map_no_longer_holds_still_tells_the_closer_to_answer_unsure(tmp_path: Path) -> None:
+    """The second finding. The guidance was gated on "no id was FOUND", so a claim naming `C101`
+    against a map without `C101` printed `NOT IN THE MAP` and no instruction at all — the exact
+    shape that returned four `uphold`s and zero `unsure`."""
+    from coyomap.model import load_model
+    doc = json.loads(_tiny_map())
+    doc["components"] = [c for c in doc["components"] if c["id"] != "C1"]
+    doc["edges"], doc["flows"] = [], []
+    gone = load_model(json.dumps(doc))
+    block = contract.claims_block(gone, [make_description_refutation("C1")])
+    assert "NOT IN THE MAP" in block
+    assert "Return `unsure`" in block, "a rowless block reached the closer with no instruction"
+    assert "The map holds no C1" in block
+    assert block.splitlines()[0].endswith("NO MAP ROW FOUND")
+
+
+def make_budgets_file(repo: Path, harvest: dict[str, int], session: str | None) -> Path:
+    """A `budgets.json` as an earlier build left it. `session=None` writes a file with NO session
+    key at all, which is what a build made before that field existed leaves behind."""
+    (repo / ".coyomap" / "verify").mkdir(parents=True, exist_ok=True)
+    doc: dict[str, object] = {"harvest": harvest}
+    if session is not None:
+        doc["session"] = session
+    path = repo / ".coyomap" / "verify" / "budgets.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path
+
+
+def make_harvest_slots(d: Path, agents: list[str], repo: Path, budget: str = "6") -> Path:
+    d.mkdir(parents=True, exist_ok=True)
+    for agent in agents:
+        values = _harvest_values(REPO_ABS=str(repo), EXPECTED_COMPONENTS=budget)
+        values["agent-id"] = agent
+        (d / f"{agent}.json").write_text(json.dumps(values), encoding="utf-8")
+    return d
+
+
+def _fill_one(tmp: Path, agent: str, repo: Path, out: Path) -> tuple[int, str]:
+    """ONE `contract harvest --fill` call — the shape the method dispatches harvest in, eight times
+    per build, and the path the first version of this guard did not cover."""
+    make_harvest_slots(tmp / "slots1", [agent], repo)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = contract.main(["harvest", "--fill", str(tmp / "slots1" / f"{agent}.json"),
+                            "--out", str(out)])
+    return rc, buf.getvalue()
+
+
+def test_one_fill_call_will_not_discard_another_builds_budgets(tmp_path: Path) -> None:
+    """THE PATH THAT MATTERS. `budgets.json` is written for `harvest` alone, and the method
+    dispatches harvest one `--fill` per slice — so a guard that lived only in the batch verb was on
+    a path harvest never takes. Three such calls under a fresh session turned `{h1..h8}` into
+    `{h1,h2,h3}`, exit 0 and no warning on all three, after which `finalize` summed 23 budgeted
+    against 126 shipped and raised a band failure about a harvest that never happened."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    held = {f"h{n}": 6 for n in range(1, 9)}
+    path = make_budgets_file(repo, held, "the-earlier-build")
+    rc, out = _fill_one(tmp_path, "h1", repo, tmp_path / "h1.md")
+    assert rc == 2, out
+    assert "already records `h1` under build the-earlier-build" in out
+    assert "drop 7 sibling slice(s)" in out and "h2, h3, h4, h5, h6, h7, +1 more" in out
+    assert json.loads(path.read_text(encoding="utf-8"))["harvest"] == held, "the file was rewritten"
+    assert not (tmp_path / "h1.md").exists(), "a refused budget left a filled brief behind"
+
+
+def test_a_rebuild_that_renames_its_agents_is_never_refused(tmp_path: Path) -> None:
+    """`record_budget`'s own docstring says a rebuild does exactly this — `h1..h12` one build,
+    `h-entry-gateway…` the next. The first version of this guard refused it, and the test that was
+    supposed to cover the case reused `h1, h2` and so never exercised a rename at all."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    path = make_budgets_file(repo, {f"h{n}": 6 for n in range(1, 9)}, "the-earlier-build")
+    rc, out = _fill_one(tmp_path, "h-entry-gateway", repo, tmp_path / "hx.md")
+    assert rc == 0, out
+    assert (tmp_path / "hx.md").exists()
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert doc["harvest"] == {"h-entry-gateway": 6}, doc   # started over, which is right here
+
+
+def test_a_budgets_file_with_no_session_key_is_not_silently_reset(tmp_path: Path) -> None:
+    """`doc.get("session") in (None, session)` short-circuited the refusal, so a file written before
+    that field existed was reset anyway: 8 slices to 3, exit 0, no warning."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    held = {f"h{n}": 6 for n in range(1, 9)}
+    path = make_budgets_file(repo, held, None)
+    rc, out = _fill_one(tmp_path, "h1", repo, tmp_path / "h1.md")
+    assert rc == 2, out
+    assert "(no session id)" in out, out
+    assert json.loads(path.read_text(encoding="utf-8"))["harvest"] == held
+
+
+def test_the_batch_path_refuses_on_the_very_same_condition(tmp_path: Path) -> None:
+    """One condition, asked in two places. The batch asks it in its plan phase only so that a
+    refusal writes no briefs at all — two copies of the reasoning is how the first guard ended up on
+    a path harvest never takes."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    held = {f"h{n}": 6 for n in range(1, 9)}
+    path = make_budgets_file(repo, held, "the-earlier-build")
+    make_harvest_slots(tmp_path / "slots", ["h1", "h2", "h3"], repo)
+    rc, out = _from_slots(tmp_path, "harvest", [])
+    assert rc == 2, out
+    assert "3 of 3 slots file(s) are bad" in out and "already records `h1`" in out
+    assert not (tmp_path / "briefs").exists(), "a refused batch left briefs behind"
+    assert json.loads(path.read_text(encoding="utf-8"))["harvest"] == held
+
+
+def test_the_same_build_filling_its_own_slices_again_is_never_refused(tmp_path: Path) -> None:
+    """A repair or a second wave inside ONE build merges, and must keep doing so — the refusal is
+    about another build's file, never about this one's."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    session = os.environ.get("CLAUDE_CODE_SESSION_ID") or ""
+    doc = contract.budgets_doc(repo)
+    assert contract.budget_conflict({"harvest": {"h1": 6}, "session": "s"}, "h1", "s") is None
+    assert contract.budget_conflict({"harvest": {"h1": 6}, "session": "s"}, "h1", None) is None
+    assert doc == {} and session is not None
+
+
+def test_a_missing_appended_slot_names_the_contract_it_belongs_to() -> None:
+    """`no value given for: FLOWS, MAP, SURFACES` sent a lead grepping trace-contract.md for three
+    slots that all live in doors-contract.md."""
+    with pytest.raises(ValueError) as exc:
+        contract.fill("trace", make_slot_values("trace"), append=["doors"])
+    message = str(exc.value)
+    assert "FLOWS (doors)" in message and "SURFACES (doors)" in message, message
+    assert "USE_CASES" not in message, "a trace slot that WAS given must not be listed"
+
+
+def test_the_usage_no_longer_offers_the_form_it_now_warns_about() -> None:
+    """`contract harvest > <scratch>/harvest-contract.md` was still in the help while the same run
+    printed `WARNING: this is the UNFILLED … contract`, and method.md had stopped recommending it."""
+    assert "> <scratch>/harvest-contract.md" not in contract._USAGE
+    assert "budgets.json" in contract._USAGE, "the one write outside --out is undocumented"
+
+
+def test_the_rowless_instruction_names_what_happens_without_it() -> None:
+    """A closer SKIMS a brief. The instruction alone read as boilerplate; the consequence beside it
+    is what makes the sentence land, and the consequence is measured — four blocks of exactly this
+    shape came back `uphold`, with no `unsure` across two waves."""
+    from coyomap.model import load_model
+    doc = json.loads(_tiny_map())
+    doc["components"], doc["edges"], doc["flows"] = [], [], []
+    block = contract.claims_block(load_model(json.dumps(doc)), [make_description_refutation("C1")])
+    assert "Do NOT settle it from the claim text and the skeptic's note alone" in block
+    assert "four blocks arrived exactly like this one" in block and "`uphold`" in block

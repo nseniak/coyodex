@@ -865,6 +865,102 @@ def test_a_rules_shrink_beyond_the_band_is_drift() -> None:
     assert not any(b.metric == "rules" and not b.within for b in grown.bands), "growth never breaches"
 
 
+def test_a_metric_no_band_in_force_watches_is_named_at_BOTH_ends_of_the_report() -> None:
+    """`rules` and `rule_sites` are banded in `eval/thresholds.json` and deliberately not in the code
+    defaults, and the skip was SILENT. `eval/retro/method.md` ran `compare` with no `--thresholds`,
+    so no retrospective's band table could ever have carried either row — the whole point of banding
+    them. The line prints at the top AND the bottom: a reader who `head`s the output and one who
+    `tail`s it must each be told the table is short."""
+    old, new = make_profile(rules=84, rule_sites=227), make_profile(rules=84, rule_sites=227)
+    r = compare(old, new)
+    assert r.unbanded == ["rules", "rule_sites"], r.unbanded
+    assert not any(b.metric in ("rules", "rule_sites") for b in r.bands)
+    lines = format_report(r).splitlines()
+    assert any("NOT BANDED" in ln for ln in lines[:5]), "a reader who `head`s the report must see it"
+    assert any("NOT BANDED" in ln for ln in lines[-3:]), "and so must one who `tail`s it"
+    assert all("rules, rule_sites" in ln for ln in lines if "NOT BANDED" in ln), "one writer"
+
+
+def test_a_map_with_no_rules_layer_is_told_nothing_about_rules() -> None:
+    """The reason these were kept out of `DEFAULT_BANDS` in the first place: a map that never
+    adopted the layer must not collect a line about it on every comparison."""
+    r = compare(make_profile(), make_profile())
+    assert r.unbanded == []
+    assert "NOT BANDED" not in format_report(r)
+
+
+def test_the_shipped_thresholds_replace_the_warning_with_the_rows() -> None:
+    """The fix the line asks for has to actually work: with the shipped file the metrics are banded,
+    so the warning goes and the two rows appear."""
+    shipped = load_thresholds(Path(__file__).resolve().parents[1] / "thresholds.json")
+    r = compare(make_profile(rules=84, rule_sites=227),
+                make_profile(rules=84, rule_sites=227), shipped)
+    assert r.unbanded == []
+    assert {"rules", "rule_sites"} <= {b.metric for b in r.bands}
+    assert "NOT BANDED" not in format_report(r)
+
+
+def test_a_band_spelled_the_other_way_still_counts_as_watching_the_metric() -> None:
+    """`rules_pct` and `rules_shrink_pct` resolve to the same profile field, so a thresholds file
+    that bands either one IS watching `rules`. Testing the band KEY instead printed the row and the
+    warning in the same report: `[ok] rules: 88 -> 88` above `no band in force watches it`."""
+    t = Thresholds(bands={"rules_pct": 0.30, "rule_sites_shrink_pct": 0.30})
+    r = compare(make_profile(rules=88, rule_sites=227), make_profile(rules=88, rule_sites=227), t)
+    assert r.unbanded == [], r.unbanded
+    assert {"rules", "rule_sites"} <= {b.metric for b in r.bands}
+    assert "NOT BANDED" not in format_report(r)
+
+
+def test_the_warning_is_silent_when_its_own_remedy_would_not_produce_the_row() -> None:
+    """The line PRESCRIBES `--thresholds`. With a count on one side only, the band that flag turns
+    on is demoted to a note ("not numeric on both sides"), so the advice cannot deliver the row it
+    promises — and the line must not be given."""
+    r = compare(make_profile(rules=None), make_profile(rules=88, rule_sites=227))
+    assert "rules" not in r.unbanded, r.unbanded
+    banded = compare(make_profile(rules=None), make_profile(rules=88),
+                     Thresholds(bands={"rules_shrink_pct": 0.30}))
+    assert not any(b.metric == "rules" for b in banded.bands), "the promised row does not appear"
+
+
+def test_a_vanished_layer_is_named_as_one_rather_than_as_a_generic_skip() -> None:
+    """`rules` is written `len(...) or None`, so a section that disappears reads None, the band is
+    demoted to a note, and the verdict is PASS. A shrink band catches 88 -> 20 and cannot catch
+    88 -> gone, which is the worse failure. The note at least says which way it went."""
+    r = compare(make_profile(rules=88), make_profile(rules=None),
+                Thresholds(bands={"rules_shrink_pct": 0.30}))
+    assert r.verdict == PASS, "unchanged: naming it does not gate it"
+    gone = [n for n in r.notes if "band 'rules_shrink_pct' skipped" in n]
+    assert gone and "BASELINE carried 88 and the candidate carries nothing" in gone[0], r.notes
+    other_way = compare(make_profile(rules=None), make_profile(rules=88),
+                        Thresholds(bands={"rules_shrink_pct": 0.30}))
+    assert not any("BASELINE carried" in n for n in other_way.notes), "a new layer is not a loss"
+
+
+def test_every_band_only_the_shipped_file_carries_is_declared_optional() -> None:
+    """The silence must not come back for the NEXT metric. A key added to `eval/thresholds.json` and
+    not to `DEFAULT_BANDS` disappears from any run that passes no `--thresholds`, exactly as `rules`
+    did; listing it in `OPTIONAL_BANDS` is what makes the skip say so.
+
+    `per_project` counts too, and it is not a lesser case: `Thresholds.from_config` merges a project
+    block over the global one, so a band that lives only under a project name is just as absent from
+    a default run and just as silent about it."""
+    shipped = json.loads(
+        (Path(__file__).resolve().parents[1] / "thresholds.json").read_text(encoding="utf-8"))
+    keys = set(shipped["global"]["bands"])
+    for block in shipped.get("per_project", {}).values():
+        keys |= set(block.get("bands", {}))
+    assert keys - set(DEFAULT_BANDS) == set(C.OPTIONAL_BANDS), sorted(keys - set(DEFAULT_BANDS))
+
+
+def test_the_retro_method_passes_the_thresholds_file_to_compare() -> None:
+    """Half the fix is the command the retrospective runs. A `compare` line with no `--thresholds`
+    silently falls back to the code defaults, and that is how the rows went missing."""
+    text = (Path(__file__).resolve().parents[1] / "retro" / "method.md").read_text(encoding="utf-8")
+    runs = [ln for ln in text.splitlines() if ln.strip().startswith("coyomap-eval compare")]
+    assert runs, "the retro method must still run compare"
+    assert all("--thresholds" in ln for ln in runs), runs
+
+
 def test_enforcement_functions_are_compared_beside_the_lines() -> None:
     """Two builds pick the same functions and different lines in them; the line number mixes that
     jitter with real losses. The function number cannot."""

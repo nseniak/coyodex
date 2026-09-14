@@ -73,6 +73,18 @@ class DriftResult:
     reported: int        # the consensus (median) line the skeptics reported
     same_file: bool      # the reported evidence names the same file as the stored anchor
     distance: int | None  # line distance from the stored anchor/range when same_file, else None
+    #: Why `fix apply-drift` must NOT write this correction mechanically — None when it may.
+    #:
+    #: DRIFT AND APPLICABILITY ARE TWO JUDGEMENTS, and conflating them shipped a wrong anchor.
+    #: `drifted` above has a LOWER bound only, so a 4-line nudge and a 174-line relocation came out
+    #: identical and `apply-drift` wrote both. On the 2026-09-13 reminderrepo build that moved
+    #: `C146 calls D31` from `auto-deploy.sh:87` (`sh get-docker.sh`, the install the edge's own
+    #: `why` describes) to line 261 (a `docker build`), with no pause. A large gap is still DRIFT —
+    #: the map is wrong either way and the row must be reported — but it is not a nudge the tool may
+    #: make on its own, and this field is how the reporting half and the writing half tell the two
+    #: apart. Never set by `anchor_drift` below, which compares two strings and cannot see the code:
+    #: `anchor_drift._confirmed_drifts` fills it in, because it can read the pre-index beside the map.
+    refusal: str | None = None
 
 
 def parse_anchor(s: str) -> AnchorLoc | None:
@@ -141,7 +153,10 @@ def anchor_drift(stored: str | None, reported: list[str], tolerance: int) -> Dri
     """Whether the skeptics' reported call-site line drifts from the stored anchor, for a CONFIRMED
     claim. `None` (not comparable) when the stored anchor is absent / line-less or no reported string
     carries a parseable `file:line`. Different file → drift; same file → drift when the consensus
-    (median) reported line falls more than `tolerance` outside the stored line/range."""
+    (median) reported line falls more than `tolerance` outside the stored line/range.
+
+    REPORTING ONLY. Whether the correction may be WRITTEN is a second judgement that needs the
+    pre-index (see `DriftResult.refusal`); this comparator leaves that field None."""
     if not stored:
         return None
     s = parse_anchor(stored)

@@ -100,6 +100,21 @@ EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2`
 ROLE_INCLUSION_CLAIM = re.compile(r"^Role '(.+)' may do everything '(.+)' may do$")
 
 
+#: A rule-site claim's STATEMENT alone, parsed back out of the string `rule_site_claim` builds. Kept
+#: beside its builder for the reason that function's own docstring gives: the one time this wording
+#: was re-derived somewhere else, the two drifted and every rule correction was reported as an
+#: unparseable edge claim and dropped.
+#:
+#: NOT for `resolve_claim`, which must keep matching the whole claim INCLUDING the anchor: it
+#: resolves in order to WRITE a corrected anchor, and a rule whose site has moved is precisely the
+#: one a writer must not touch. This is for a reader that asks the weaker question — *which rule is
+#: this claim about* — where a moved site is exactly the case worth answering: the 2026-09-13 build's
+#: four rule refutations were all applied, moving their sites, after which nothing could name the
+#: rule they had been about. Non-greedy up to the full ` is enforced at ` anchor, so a statement
+#: carrying an apostrophe (`the group owner's email address`) survives.
+RULE_SITE_CLAIM = re.compile(r"^Rule '(.+?)' is enforced at ")
+
+
 def role_inclusion_claim(role_name: str, other_name: str) -> str:
     """The sentence a role inclusion asserts, in the words the viewer draws it in."""
     return f"Role '{role_name}' may do everything '{other_name}' may do"

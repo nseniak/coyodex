@@ -11,6 +11,7 @@ suites, and `tests/test_cli_sweep.py` drives `ship` end-to-end against the commi
 """
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -386,3 +387,59 @@ def test_the_newest_archived_map_is_the_access_baseline_unless_one_is_given():
         mine.write_text("{}")
         fin = ship.build_plan(make_inputs(repo, note_file=note, access_baseline=mine))[-1].argv
         assert fin[fin.index("--access-baseline") + 1] == str(mine)
+
+# --- the closer's appeals are an input too (retro 2026-09-13 reminderrepo, T7) ----------
+# `contract closer` writes `verify/closer-<agent>.json` in the skeptics' own shape. The glob
+# here saw `verdicts-*.json` only, so the file sat beside the map and no step of the closing
+# sequence opened it — a refutation the closer had REJECTED still blocked the ship gate.
+
+def test_ship_gives_every_step_the_closer_file_too(tmp_path):
+    repo = tmp_path / "r"
+    (repo / ".coyomap" / "build-fragments").mkdir(parents=True)
+    (repo / ".coyomap" / "build-fragments" / "a.json").write_text("{}")
+    verify = repo / ".coyomap" / "verify"
+    verify.mkdir()
+    (verify / "worklist.json").write_text(json.dumps({"worklist": [{"claim": "c1"}]}))
+    (verify / "verdicts-rule-1.json").write_text(json.dumps({"grounding": []}))
+    (verify / "closer-agent-1.json").write_text(json.dumps({"grounding": []}))
+    inputs = ship.derive_inputs(repo)
+    assert not isinstance(inputs, str), inputs
+    assert [p.name for p in inputs.verdicts] == ["verdicts-rule-1.json", "closer-agent-1.json"]
+
+
+def test_ship_refuses_a_closer_file_with_no_skeptics_beside_it(tmp_path):
+    repo = tmp_path / "r"
+    (repo / ".coyomap" / "build-fragments").mkdir(parents=True)
+    (repo / ".coyomap" / "build-fragments" / "a.json").write_text("{}")
+    verify = repo / ".coyomap" / "verify"
+    verify.mkdir()
+    (verify / "worklist.json").write_text(json.dumps({"worklist": [{"claim": "c1"}]}))
+    (verify / "closer-agent-1.json").write_text(json.dumps({"grounding": []}))
+    problem = ship.derive_inputs(repo)
+    assert isinstance(problem, str) and "appeal against nothing" in problem, problem
+
+
+def test_agent_transcripts_reach_the_report_step_and_only_that_step():
+    """Inside the build's own session the directory is found without the flag. A RETROSPECTIVE is a
+    different session, so without it the whole findings-from-the-agents channel reads NOT READ —
+    and the retrospective is the reader who most needs it."""
+    with tempfile.TemporaryDirectory() as td:
+        repo = make_repo(td)
+        note = repo / "note.txt"
+        note.write_text("319 of 1608 challenged")
+        agents = repo / "subagents"
+        agents.mkdir()
+        prepare = ship.build_plan(make_inputs(repo, agent_transcripts=agents))
+        report = prepare[-1].argv
+        assert report[:2] == ("grounding", "report"), report
+        assert "--agent-transcripts" in report and str(agents) in report, report
+        # ...and nothing else is given a flag it does not take
+        full = ship.build_plan(make_inputs(repo, note_file=note, partial=True,
+                                           agent_transcripts=agents))
+        assert [st.title for st in full if "--agent-transcripts" in st.argv] == []
+
+
+def test_without_the_flag_the_report_step_is_unchanged():
+    with tempfile.TemporaryDirectory() as td:
+        steps = ship.build_plan(make_inputs(make_repo(td)))
+        assert "--agent-transcripts" not in steps[-1].argv, steps[-1].argv

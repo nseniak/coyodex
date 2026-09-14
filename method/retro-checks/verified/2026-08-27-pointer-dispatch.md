@@ -26,3 +26,5 @@ completeness checks already catch a thin brief's output.
    (the trace fan-out's launch window, first prompt emitted to last).
    regression sign: the launch window is unchanged because bodies are still being pasted, or agents
    burn their saving re-reading the contract repeatedly.
+
+verified in reminderrepo build of 2026-09-13 23:03

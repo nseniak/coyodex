@@ -381,6 +381,10 @@ Semantics, stated on the fields:
   "Dashboard", not "The dashboard". Record a line here only for a real proper name, a product
   actually called *The Gateway*. Measured when the rule landed: every other element type already
   kept the convention across 360-odd names, and interfaces alone had drifted off it.
+  It also adjudicates whether a name may be the CLASS's own spelling, recorded as
+  `<id>/code-name: <why>` — SCOPED, because one heading now answers two questions about the same id
+  and a bare `En` would quiet both, and a dependency's vendor name and a `non_entity_types` row are
+  exempt from that question so neither ever needs a line.
   It adjudicates one more naming question, keyed `Dn`: **a `Cn → Dn` arrow whose VERB names no
   role.** `uses` erases whether the dependency is a bus, a store or a service, and `validate` nudges
   for a role-revealing verb — but three live rebuilds decided the generic verb was the honest one

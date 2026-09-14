@@ -448,8 +448,18 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 // names, not prose), an entry-point trigger (an HTTP route is an address, not a sentence), a bare
 // file path (`.gloss-plain`), pills (labels, not prose), headings and card names (a title is a
 // label too — measured on the MCP Hero map, linking titles underlined half of every card list's
-// name column), and the Glossary view itself (the one page that IS the definitions).
-const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ibox-name, .tb-trig, '
+// name column), THE PAGE HERO'S OWN NAME, and the Glossary view itself (the one page that IS the
+// definitions).
+//
+// `.page-hero-name` is the heading skip's own blind spot: a page's title is drawn as a `p` and not
+// as an `h1`-`h4`, because the breadcrumb is what names the page. `glossSubjectKey` below covers the
+// case where the whole title IS one term ("Contact"); it cannot cover a COMPOUND title, so the
+// feature page for "Activities and schedules" underlined both halves of its own name, the actor page
+// for "Reminder owner" underlined the first word of its own name, and the rule "Named person or
+// group" underlined the last. A page's subject is not decorated with a link to itself — whether the
+// title is that term or merely contains it.
+const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .page-hero-name, '
+  + '.ibox-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
   + '.dv-kindpill, .dv-coll, .ibox-name, .ibox-pill, .ibox-count, .item-pill, '
   + '.story-pill, .story-colhead, '
@@ -2695,7 +2705,23 @@ function ownedByHtml(id) {
   // Several owners is a DELIBERATE statement that the record is shared, not an unresolved list, so
   // the row says so rather than leaving the reader to read a comma as uncertainty.
   const note = own.length > 1 ? ' <span class="dv-note">shared, deliberately</span>' : '';
-  return `<dt>Owned by</dt><dd class="dv-panerow">${doors}${note}</dd>`;
+  // AND WHETHER ANYTHING BACKS IT. 85 of the 237 records that draw this row across the four live
+  // maps sit in an area whose owners no step reaches, and the row said "Owned by <feature>" flatly —
+  // on `E44 SandboxPersistedRef` directly above a "In use cases" row naming a different feature, the
+  // contradiction on one screen with nothing marking it. The Features page learned to say this; a
+  // record's own page is the other place the same claim is made.
+  //
+  // ONLY WHERE THE CLAIM IS THE AREA'S. A record may carry `owners` of its own that override what it
+  // would have inherited, and the area's gap says nothing about THAT answer; the sets are compared
+  // rather than assumed equal, so an overriding record is left alone.
+  const area = storyAreaOfRecord(id);
+  const o = area ? storyAreaOwner(area) : null;
+  const inherited = !!o && o.owners.length === own.length
+    && o.owners.every((c) => own.indexOf(c) >= 0);
+  const gap = o && o.gap && inherited
+    ? ` <span class="dv-note dv-note-gap">${storyGapSentence(o, own.length > 1)}</span>`
+    : '';
+  return `<dt>Owned by</dt><dd class="dv-panerow">${doors}${note}${gap}</dd>`;
 }
 function persistedInHtml(id) {
   const n = GRAPH.nodes[id];
@@ -10764,6 +10790,53 @@ function storyAreaGlyphSvg() {
     + `<path d="M2.5 10.65 H13.5" fill="none" stroke="${stroke}" stroke-width="1.5"/>`
     + '</svg>';
 }
+// THE AREA'S OWNERSHIP, answered in ONE place. The box and the wire both have to know it, and they
+// used to work it out in two copies of the same expression — which disagreed on screen.
+//
+// THREE STATES, not two:
+//   BACKED    one authored owner, and a step of that feature reaches a saved record here.
+//   ANSWERED  no step reaches it, AND the map's author recorded why (`ownerRecords`, keyed by area).
+//   UNANSWERED no step reaches it and nothing is recorded — nobody has looked.
+//
+// A RECORDED EXCEPTION IS NOT A REASON TO DRAW THE CLAIM AS SETTLED. The record silences `validate`,
+// whose reader is the build lead; the person reading this page never sees it, and a recorded gap is
+// still a gap. So both gap states carry the SAME mark — one line style, nothing to learn — and the
+// words on the box say which: the author's own reason, or that the map does not give one. Marking
+// only the unanswered ones would take the page straight back to drawing nine identical wires,
+// because across the four live maps every single gap today is a recorded one (12 of 12).
+//
+// `touch` is EVIDENCE, never an owner. An owner is authored (`a.owners`) or absent, and nothing here
+// ever promotes a touch into one — that derivation is the one this whole design was measured out of.
+// `why` is likewise never evidence: it says who looked, not that anything reaches the data.
+function storyAreaOwner(a) {
+  const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
+  const sole = owners.length === 1 ? owners[0] : null;
+  const touched = a.touchedBy || [];
+  const touch = sole ? touched.find((x) => x.feature === sole) : null;
+  // A GAP IS ABOUT THE OWNERS, NOT ABOUT HOW MANY THERE ARE. It was `!!sole && !touch`, which asked
+  // the question only of an area with exactly ONE owner — so a SHARED area whose owners are ALL
+  // blind (mcpolis SD3: two features named, neither reaching a record) drew a plain "Shared by …"
+  // foot and no mark at all. Same defect, one branch over. A shared area draws no wire, so the mark
+  // and the words both land on the box.
+  const gap = owners.length > 0 && !owners.some((c) => touched.some((x) => x.feature === c));
+  const why = gap ? ((FEATURES.ownerRecords || {})[a.id] || '') : '';
+  return { owners, sole, touch, gap, why, answered: gap && !!why, unanswered: gap && !why };
+}
+// THE AREA one saved record sits in, or null. Read off the same `FEATURES.areas` the Features page
+// draws, so a record's own page and that page can never disagree about whether the data it holds is
+// claimed by a feature no step reaches.
+function storyAreaOfRecord(id) {
+  return (FEATURES.areas || []).find((a) => (a.entities || []).indexOf(id) >= 0) || null;
+}
+// The sentence a gap gets, wherever it is said: what is missing, then the author's recorded reason or
+// the plain fact that there is none. ONE writer for it, because it is said on the Features page and
+// again on the record's own page, and two copies drifted the moment the first one was edited.
+// `mdInline` and not `esc`: the reason is a prose field like every other, so a backtick in it renders
+// the way it does everywhere else in the viewer instead of arriving as a literal character.
+function storyGapSentence(o, plural) {
+  return 'No step of ' + (plural ? 'any of them' : 'it') + ' reaches this data.'
+    + (o.why ? ' The map says why: ' + mdInline(o.why) : ' The map does not say why.');
+}
 function storyAreaCardHtml(a) {
   const n = (a.entities || []).length;
   // The count says STORED ENTITIES, not "records": an area holds a handful of KINDS of thing that
@@ -10776,19 +10849,55 @@ function storyAreaCardHtml(a) {
   // SEVERAL is a deliberate statement of sharing that no wire can carry (the design draws no
   // ownership wire for a shared area, on purpose), so the box names them. An area the map has not
   // decided says nothing at all — the arrows landing on it are touches, never an owner.
-  const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
-  const shared = owners.length > 1
-    ? `<p class="story-shared">Shared by ${owners.map((c) => esc(featureName(c))).join(', ')}</p>`
-    : '';
+  // THE WAYS AN AREA IS NOT A PLAIN OWNED ONE, and the box says every one of them in words — the
+  // words are what make the dashed wire readable without a legend, because they sit at the end of
+  // the line, on the box it points at.
+  //   SHARED    several owners, which no wire can carry.
+  //   A GAP     one authored owner and no step of it reaching a single record here. Both gap states
+  //             open with the SAME sentence, so the claim and what is missing read identically; what
+  //             follows is either the author's recorded reason or the plain fact that there is none.
+  // The reason is quoted, not paraphrased: it is the author's sentence, and the reader is entitled
+  // to judge it rather than be told somebody was satisfied.
+  const own = storyAreaOwner(a);
+  const owners = own.owners;
+  // THE REASON IS PRINTED WHOLE. It was cut to its first sentence, and measured against every real
+  // recorded reason on the four live maps that cut lost the load-bearing half on 7 of 12 boxes:
+  // reminderrepo's five keep "the feature that creates this data is right, but no story can touch
+  // these rows" — a restatement of the finding — and drop "Each is one alternative shape of a column
+  // the activity row holds", which is the actual reason; mcpolis's two ended mid-clause on a
+  // dangling determiner. The cut also did not do what it was for: five boxes on coyomap still carry
+  // the identical paragraph down one column, each merely shorter.
+  // A LONG REASON IS CLAMPED BY CSS, never by the string: `.story-gap` caps the drawn height and the
+  // whole sentence stays in the DOM, so it is selected, searched, copied and read aloud in full.
+  // There is no other complete copy in the product — the area's own page carries neither the reason
+  // nor the gap — so cutting the string here would be the only copy losing its point.
+  const foot = owners.length > 1
+    // A SHARED area draws no wire, so this line is the only thing naming its owners — and when every
+    // one of them is blind it has to say that too.
+    ? `<p class="${own.gap ? 'story-gap' : 'story-shared'}">Shared by `
+      + `${owners.map((c) => esc(featureName(c))).join(', ')}.`
+      + (own.gap ? ` ${storyGapSentence(own, true)}` : '') + '</p>'
+    : own.gap
+      // THE OWNER IS NOT NAMED HERE. The wire in this same picture joins that feature to this box,
+      // which is exactly the case "a box does not repeat its picture" is written for. What is new is
+      // the half after it: that nothing reaches the data, and what the map says about that.
+      ? `<p class="story-gap">${storyGapSentence(own, false)}</p>`
+      : '';
   return itemBoxHtml({ id: a.id, k: 'subdomain', name: a.name || a.id, word: 'data area',
                        what: a.purpose || '', pills: [], facts: [],
                        band: [countLabel(n, 'stored entity')], chips: [] },
                      'full',
                      // WHITE, for the reason the cast card gives: the column heading says what this
                      // column is, so a fill here only competes with the feature's own colour.
-                     { foot: shared,
+                     { foot: foot,
+                       // The SETTLED border is for the owner the map can back. An unevidenced one
+                       // keeps the plain border and carries the words instead — a firm border in
+                       // the wire's colour says "the box and the line that reaches it are one
+                       // statement", which is the very thing this case cannot claim.
                        word: false, cls: 'story-card story-area'
-                            + (owners.length === 1 ? ' story-area-owned' : '')
+                            + (own.sole && own.touch ? ' story-area-owned' : '')
+                            + (own.gap ? ' story-area-gap' : '')
+                            + (own.unanswered ? ' story-area-gap-open' : '')
                             + (owners.length > 1 ? ' story-area-shared' : ''),
                        nameAttrs: ` data-sd="${esc(a.id)}"`,
                        attrs: ` data-sarea="${esc(a.id)}" tabindex="0"` });
@@ -11019,15 +11128,19 @@ function bindStoryDiagram(root) {
     // A SHARED area (several owners) deliberately gets no ownership wire: the design draws sharing
     // as the SHAPE of several inbound arrows, and the box names the owners in words. Nothing here
     // ever promotes a lone reference arrow into ownership — an owner is authored or absent.
-    const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
-    const sole = owners.length === 1 ? owners[0] : null;
+    const o = storyAreaOwner(a);
+    const sole = o.sole;
     if (sole && featEl[sole]) {
-      const own = wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, 'story-own', 'sfeat', 'sarea');
+      // A CLAIM NO STEP REACHES DOES NOT GET THE SETTLED LINE, recorded reason or not. One mark for
+      // both gap states — `story-own-gap` dashes the wire — so there is no dash code to learn: the
+      // line says "not backed" and the box it lands on says which kind and why.
+      const ownCls = 'story-own' + (o.gap ? ' story-own-gap' : '');
+      const own = wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, ownCls, 'sfeat', 'sarea');
       // The owning pair draws ONE wire, so its label carries what the reference arrow it replaced
       // would have: the records the feature reaches, each a door. The `story-own` class stays on
-      // the path — it marks which wire is the authored ownership, for a later use — but it says
-      // nothing at rest: the wire looks like every other, grey until the reader picks a card.
-      const t = (a.touchedBy || []).find((x) => x.feature === sole);
+      // the path — it marks which wire is the authored ownership — and says nothing at rest where the
+      // map can back the claim: the wire looks like every other, grey until the reader picks a card.
+      const t = o.touch;
       if (t) {
         fillAreaTouchLabel(own, t);
         own.title = featureName(sole) + ' is the reason ' + (a.name || a.id) + ' exists — it '
@@ -11039,11 +11152,21 @@ function bindStoryDiagram(root) {
         // defect it is. `validate` reports it, and the screen must not be the one place it hides:
         // this is exactly what the change's own retro-check calls a regression when it reaches the
         // page unmarked. Quiet at rest like every other label, and plain when the reader looks.
-        own.classList.add('story-elabel-noev');
-        own.textContent = 'no journey reaches this';
+        own.classList.add('story-elabel-gap');
+        // THE SAME WORDS THE BOX USES. The box's foot and this label are the same thing seen twice on
+        // one screen, and they said it with two different nouns — "journey" here, and the word the
+        // box would have used there. One thing, one name.
+        // "OF IT". Without the qualifier the pill is simply false on any box a reference arrow from
+        // ANOTHER feature also lands on — mcpolis SD11, where a step really does reach a record here,
+        // just not one of the owner's. The box's foot always carried the qualifier; this dropped it.
+        own.textContent = 'no step of it reaches this';
+        // WHAT THE MAP SAYS, never what a tool would say. This used to read "`coyomap validate`
+        // reports this as an owner with no evidence" — a sentence that is false on all four live
+        // maps, because every one of these areas is recorded and `validate` therefore reports
+        // nothing. The page is not running the validator and must not speak for it.
         own.title = featureName(sole) + ' is named as the owner of ' + (a.name || a.id)
-          + ', but no walk of it touches any saved record here — `coyomap validate` reports this as '
-          + 'an owner with no evidence';
+          + ', but no step of it touches any saved record here'
+          + (o.why ? '. The map says why: ' + o.why : ', and the map does not say why.');
       }
       own.addEventListener('click', (ev) => ev.stopPropagation());
       stage.appendChild(own); labels.push(own);

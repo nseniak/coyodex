@@ -104,6 +104,88 @@ def test_apply_drift_rewrites_security_and_leaves_a_paired_edge_untouched():
         assert out.edges[0].where == "a.py:10"                      # the edge (not in verdicts) untouched
 
 
+def make_preindex(td: str, extents: dict[str, list[list]]) -> None:
+    """The pre-index committed beside a map, holding the symbol table this command reads to tell a
+    nudge inside one definition from a re-anchor onto another."""
+    Path(td, "preindex.json").write_text(json.dumps({"symbols": {"extents": extents}}),
+                                         encoding="utf-8")
+
+
+def test_apply_drift_refuses_a_correction_onto_a_different_definition(capsys):
+    """The 2026-09-13 reminderrepo build wrote a 174-line move onto an unrelated statement inside an
+    unattended `ship`, because drift had a lower bound only and the writer applied whatever was
+    reported. A correction that leaves the definition the stored anchor sits in is now REPORTED with
+    both anchors and left unwritten — the map keeps its old anchor until a human decides."""
+    m = make_map([{"src": "C1", "verb": "persists", "dst": "E1", "where": "a.py:10"}])
+    verdicts = {"grounding": [make_vote("C1 persists E1", True, "a.py:60"),
+                              make_vote("C1 persists E1", True, "a.py:60")]}
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = write(td, m, verdicts)
+        make_preindex(td, {"a.py": [[5, 20, "save", "function"], [50, 70, "render", "function"]]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
+        assert load_model_path(mp).edges[0].where == "a.py:10"   # NOT moved
+        out = capsys.readouterr()
+    assert "REFUSED" in out.err and "save" in out.err and "render" in out.err
+    assert "a.py:10" in out.err and "a.py:60" in out.err, "both anchors must be named"
+    assert "REFUSED as a re-anchor" in out.out.splitlines()[-1], "the count must survive a `tail`"
+
+
+def test_apply_drift_still_writes_a_correction_inside_the_same_definition(capsys):
+    """The control for the test above, and the reason the cut is not an upper distance bound: 50
+    lines inside ONE function is the header-to-operative-line nudge this command exists for."""
+    m = make_map([{"src": "C1", "verb": "persists", "dst": "E1", "where": "a.py:10"}])
+    verdicts = {"grounding": [make_vote("C1 persists E1", True, "a.py:60"),
+                              make_vote("C1 persists E1", True, "a.py:60")]}
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = write(td, m, verdicts)
+        make_preindex(td, {"a.py": [[5, 70, "save", "function"]]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
+        assert load_model_path(mp).edges[0].where == "a.py:60"
+    assert "REFUSED as a re-anchor" not in capsys.readouterr().out
+
+
+def test_apply_drift_to_reconcile_does_not_record_a_refused_move(capsys):
+    """A refused correction must reach NEITHER write path. `set_anchors` is replayed by every
+    `assemble --reconcile`, so one recorded there would re-apply the wrong anchor on every rebuild —
+    durably, and out of sight of the run that decided it."""
+    m = make_map([{"src": "C1", "verb": "persists", "dst": "E1", "where": "a.py:10"},
+                  {"src": "C1", "verb": "reads", "dst": "E1", "where": "a.py:12"}])
+    verdicts = {"grounding": [
+        make_vote("C1 persists E1", True, "a.py:60"), make_vote("C1 persists E1", True, "a.py:60"),
+        make_vote("C1 reads E1", True, "a.py:16"), make_vote("C1 reads E1", True, "a.py:16")]}
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = write(td, m, verdicts)
+        make_preindex(td, {"a.py": [[5, 20, "save", "function"], [50, 70, "render", "function"]]})
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0",
+                         "--to-reconcile", str(rec)]) == 0
+        recorded = json.loads(rec.read_text(encoding="utf-8"))["set_anchors"]
+        out = capsys.readouterr()
+    assert [a["claim"] for a in recorded] == ["C1 reads E1"]     # the in-definition nudge only
+    assert "REFUSED" in out.err and "C1 persists E1" in out.err
+    assert "REFUSED as a re-anchor" in out.out.splitlines()[-1], "the count must survive a `tail`"
+
+
+def test_apply_drift_to_reconcile_warns_on_a_far_move_it_does_write(capsys):
+    """The far-move warning was dead on the path every build uses. It lives in the IN-PLACE writer,
+    and `ship` step 3 runs `--to-reconcile` — so the 2026-09-13 reminderrepo run recorded a 174-line
+    move with no note at all. A long move INSIDE one definition is legitimate (a header anchor
+    corrected onto the operative line), so it is still written; it just no longer lands in silence."""
+    m = make_map([{"src": "C1", "verb": "persists", "dst": "E1", "where": "a.py:10"}])
+    verdicts = {"grounding": [make_vote("C1 persists E1", True, "a.py:200"),
+                              make_vote("C1 persists E1", True, "a.py:200")]}
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = write(td, m, verdicts)
+        make_preindex(td, {"a.py": [[5, 300, "save", "function"]]})
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0",
+                         "--to-reconcile", str(rec)]) == 0
+        recorded = json.loads(rec.read_text(encoding="utf-8"))["set_anchors"]
+        out = capsys.readouterr().out
+    assert [a["corrected"] for a in recorded] == ["a.py:200"]    # written: one definition
+    assert "moved 190 lines" in out, out                         # and said so
+
+
 def test_apply_drift_skips_ambiguous_multi_where_edge():
     # Two edges share (src,verb,dst) but different call sites → one worklist claim matches 2 edges.
     # Blind-writing both is wrong, so apply-drift skips them.
@@ -1853,3 +1935,22 @@ def test_apply_drift_refuses_a_correction_into_a_file_neither_end_of_the_edge_li
         mp, vp = write(td, m, far_end)
         assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
         assert load_model_path(mp).edges[0].where == "b.py:3"
+
+
+def test_both_write_paths_count_a_cross_file_refusal_on_their_last_line(capsys):
+    """The two write paths keep drifting apart on what their final line says. The cross-file clause
+    was appended by the IN-PLACE path only, so `--to-reconcile` — the path `ship` step 3 actually
+    runs — ended without it, and a reader on `| tail` saw a refusal that was never counted."""
+    m = make_map([{"src": "C1", "verb": "reads", "dst": "C2", "where": "a.py:10"}])
+    m["components"] = [{"id": "C1", "name": "A", "source": "a.py:1", "files": ["a.py"]},
+                       {"id": "C2", "name": "B", "source": "b.py:1", "files": ["b.py"]}]
+    stray = {"grounding": [make_vote("C1 reads C2", True, "z.py:3"),
+                           make_vote("C1 reads C2", True, "z.py:3")]}
+    for extra in ([], ["--to-reconcile", "REC"]):
+        with tempfile.TemporaryDirectory() as td:
+            mp, vp = write(td, m, stray)
+            argv = [a.replace("REC", str(Path(td) / "reconcile.json")) for a in extra]
+            assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0",
+                             *argv]) == 0
+            last = capsys.readouterr().out.splitlines()[-1]
+        assert "1 cross-file correction(s) REFUSED" in last, f"{extra or 'in place'}: {last}"

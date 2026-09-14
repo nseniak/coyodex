@@ -44,15 +44,20 @@ names, never inside prose. So:
    fragment, and it costs a column of alignment against every name beside it. The exception is a
    real proper name: a product actually called *The Gateway* keeps its article, and that decision
    is recorded as `In: <why>` under a **"Naming exceptions"** extras heading.
+8. **A name is the READER's word, never the class's spelling** (`source` already carries that), which
+   is a rule because one map named 52 of 59 records after their classes and 0 of 126 components,
+   while coyomap's own map does it 0 times in 222; a dependency keeps its vendor's name and a
+   `non_entity_types` row exists to print a code type, so neither is governed, and a domain term
+   really spelled that way is recorded as `<id>/code-name: <why>` under the same heading.
 
-Measured when this rule landed, which is why it is a rule and not a preference: across the two live
+Measured when rule 7 landed, which is why it is a rule and not a preference: across the two live
 maps, components 0 of 138, entities 0 of 171, dependencies 0 of 49, use cases 0 of 80, roles 0 of 9
 and capabilities 0 of 17 began with "The" — while INTERFACES were 7 of 12 on one map and 3 of 11 on
 the other. One element type had drifted off a convention 360-odd names already kept, and it was not
 even consistent with itself. Note what the surfaces that skipped the article had in common: a proper
 name, a plural, a mass noun. The article was doing grammar, never meaning.
 
-`coyomap validate` counts rules 1 to 4 and 7, and reports them as advisories, so a build gets numbers
+`coyomap validate` counts rules 1 to 4, 7 and 8, and reports them as advisories, so a build gets numbers
 back rather than an opinion. Of rule 4 it counts the checkable part: an opening pointer word, and a
 mid-sentence "either / both / such / the other" + category noun with no two alternatives named in
 the same box. The rest of rule 4, and rules 5 and 6, are yours to obey.

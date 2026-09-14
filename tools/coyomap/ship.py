@@ -34,12 +34,21 @@ USAGE = """usage: coyomap ship <repo> [--note-file <path>] [--partial] [--keep-n
                     [--access-baseline <map-or-surface.json>]
                     [--worklist <audit.json>] [--reconcile <file>]
                     [--verdicts <raw.json>]... [--fragments <dir>]
+                    [--agent-transcripts <dir>]
 
 The closing sequence of a build (method.md's numbered list) as one command.
 Defaults, all under <repo>/.coyomap/: the map at project-map.json, fragments at
 build-fragments/*.json, the reconcile file at reconcile.json, the pinned worklist at
-verify/worklist.json, verdicts at verify/verdicts-*.json, the gate block written to
-verify/gate-block.md.
+verify/worklist.json, verdicts at verify/verdicts-*.json AND the closer's appeals at
+verify/closer-*.json, the gate block written to verify/gate-block.md.
+
+A closer file is a verdicts file in shape and an APPEAL in meaning: it never votes, and a
+refutation it REJECTS stops blocking the refutation gate. See `grounding.is_closer_row`.
+
+--agent-transcripts forwards to `grounding report`, which reads the closing message every build
+agent wrote to the lead. Inside the build's own session it is found without the flag; a
+RETROSPECTIVE is a different session, so without it that whole channel reads NOT READ — and the
+retrospective is the reader who most needs it.
 
 Two phases, split where the ONE judgement input sits:
   no --note-file : anchor-drift, apply-drift --to-reconcile, assemble, grounding report —
@@ -84,6 +93,9 @@ class ShipInputs:
     #: hand-run the remaining seven steps — the failure `run_plan`'s "NOT RUN:" line exists to stop.
     note_cites_other_runs: bool
     access_baseline: Path | None
+    #: Forwarded to `grounding report`, whose findings-from-the-agents section needs it whenever
+    #: the run is not the build's own session — which is every retrospective.
+    agent_transcripts: Path | None = None
     #: The pinned worklist's tier, read off its items. Step 2's `anchor-drift` counts coverage at
     #: that tier, so the gate block's `challenged N of M` and its audit line count ONE surface.
     behavioural: bool = False
@@ -110,7 +122,8 @@ def derive_inputs(repo: Path,
                   worklist: Path | None = None,
                   reconcile: Path | None = None,
                   verdicts: tuple[Path, ...] | None = None,
-                  fragments_dir: Path | None = None) -> ShipInputs | str:
+                  fragments_dir: Path | None = None,
+                  agent_transcripts: Path | None = None) -> ShipInputs | str:
     """Resolve every path the sequence needs, or return an error string saying what is missing.
 
     Globs are sorted, matching the shell's lexicographic `*.json` — fragment ARGUMENT ORDER decides
@@ -127,11 +140,24 @@ def derive_inputs(repo: Path,
     if not wl.is_file():
         return (f"no pinned worklist at {wl} — capture it BEFORE reconciling refutations "
                 "(coyomap audit <map> --json > .coyomap/verify/worklist.json), or pass --worklist")
-    vd = verdicts if verdicts else tuple(sorted((out / "verify").glob("verdicts-*.json")))
+    # TWO GLOBS, SEPARATELY, because they are two populations and the second was invisible.
+    # `verdicts-*.json` is the skeptics' votes; `closer-*.json` is the closer's appeals, written in
+    # the same shape beside them (`method/templates/closer-contract.md`). One glob for both would
+    # read, but naming the second is what says the gate can see it — until now the closer's file sat
+    # in `verify/` and no step of the closing sequence opened it, so a refutation the closer had
+    # REJECTED still blocked the ship gate. The readers tell the two apart by the row's own
+    # `verdict` field, never by the file name (`grounding.is_closer_row`).
+    skeptic_files = tuple(sorted((out / "verify").glob("verdicts-*.json")))
+    closer_files = tuple(sorted((out / "verify").glob("closer-*.json")))
+    vd = verdicts if verdicts else skeptic_files + closer_files
     if not vd:
         return (f"no verdicts files under {out / 'verify'} — the Phase-4 skeptics' output is a "
                 "required input; pass --verdicts, or run the sequence by hand for a map with no "
                 "claim surface")
+    if not verdicts and not skeptic_files:
+        return (f"only closer file(s) under {out / 'verify'} and no verdicts-*.json — a closer "
+                "settles refutations the skeptics cast, so on its own it is an appeal against "
+                "nothing; pass --verdicts if the skeptics' files live elsewhere")
     rec = reconcile if reconcile is not None else out / "reconcile.json"
     rec_final: Path | None = rec if rec.is_file() else None
     from coyomap.grounding import worklist_is_behavioural   # lazy, like `_dispatch`
@@ -145,7 +171,8 @@ def derive_inputs(repo: Path,
         gate_block=out / "verify" / "gate-block.md",
         note_file=note_file, partial=partial, keep_note=keep_note,
         note_cites_other_runs=note_cites_other_runs,
-        access_baseline=access_baseline, behavioural=behavioural)
+        access_baseline=access_baseline, agent_transcripts=agent_transcripts,
+        behavioural=behavioural)
 
 
 def _assemble_step(s: ShipInputs, title: str, carry_record: bool = False) -> Step:
@@ -257,6 +284,8 @@ def build_plan(s: ShipInputs) -> list[Step]:
         _assemble_step(s, "assemble (step 4 — last structural assemble)"),
         Step("grounding report (step 5 — what the note is written from)",
              ("grounding", "report", "--worklist", str(s.worklist), *_verdict_flags(s),
+              *(("--agent-transcripts", str(s.agent_transcripts))
+                if s.agent_transcripts is not None else ()),
               "--map", str(s.map_path))),
     ]
     if s.note_file is None:
@@ -374,6 +403,7 @@ def main(argv: list[str] | None = None) -> int:
     worklist: Path | None = None
     reconcile: Path | None = None
     fragments_dir: Path | None = None
+    agent_transcripts: Path | None = None
     verdicts: list[Path] = []
     it = iter(args)
     for a in it:
@@ -393,6 +423,8 @@ def main(argv: list[str] | None = None) -> int:
             reconcile = Path(next(it, ""))
         elif a == "--fragments":
             fragments_dir = Path(next(it, ""))
+        elif a == "--agent-transcripts":
+            agent_transcripts = Path(next(it, ""))
         elif a == "--verdicts":
             verdicts.append(Path(next(it, "")))
         elif a.startswith("-"):
@@ -416,7 +448,8 @@ def main(argv: list[str] | None = None) -> int:
                            access_baseline=access_baseline, worklist=worklist,
                            reconcile=reconcile,
                            verdicts=tuple(verdicts) if verdicts else None,
-                           fragments_dir=fragments_dir)
+                           fragments_dir=fragments_dir,
+                           agent_transcripts=agent_transcripts)
     if isinstance(inputs, str):
         print(f"ship: {inputs}", file=sys.stderr)
         return 2
@@ -436,6 +469,21 @@ def main(argv: list[str] | None = None) -> int:
               f"{', '.join(p.name for p in dropped)}. `finalize` still reads all "
               f"{len(inputs.verdicts)}. Those votes count toward the LIVE map, never toward "
               f"`claims_challenged`, which is pinned to the worklist the skeptics were given.")
+    # AN UNREADABLE APPEAL WORD STOPS THE RUN, before any step consumes the files. `ship` globs
+    # `closer-*.json` into every grounding step, so a misspelt `verdict` is no longer inert: the row
+    # falls to the SKEPTIC side, its `grounded: true` turns a refutation into a tie, and the
+    # refutation gate exits 0 saying nothing survives. `ship` runs no `grounding lint`, so the check
+    # that catches it has to be here as well.
+    from coyomap.anchor_drift import load_verdicts        # lazy, like `_dispatch`
+    from coyomap.grounding import closer_faults
+    all_rows, _notes = load_verdicts([str(v) for v in inputs.verdicts])
+    faults = closer_faults(all_rows)
+    if faults:
+        for fault in faults:
+            print(f"ship: {fault}", file=sys.stderr)
+        print("ship: STOPPED before step 1 — an appeal nobody can read must not reach a step that "
+              "counts it.", file=sys.stderr)
+        return 2
     rc = run_plan(build_plan(inputs), default_runner)
     if rc != 0:
         return rc

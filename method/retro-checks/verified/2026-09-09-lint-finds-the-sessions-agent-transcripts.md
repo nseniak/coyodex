@@ -23,3 +23,5 @@ Escalation: none on its own.
 3. expect: the share of verdict rows resting on grep-only evidence does not rise:
    56 of 1,180 (4.7 %) on 2026-09-08 is the baseline.
    regression sign: above 6 %, with the check now running during the build and read by nobody.
+
+verified in reminderrepo build of 2026-09-13 23:03

@@ -19,3 +19,5 @@ Escalation: none on its own.
 2. expect: the voted theme's briefs are named `skeptic-security-a/b/c.md` and their verdict files
    pair with them by name in `grounding lint --expect`.
    regression sign: voters named by hand, or `--expect` listing ids the briefs do not carry.
+
+verified in reminderrepo build of 2026-09-13 23:03

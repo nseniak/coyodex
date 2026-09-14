@@ -1127,6 +1127,51 @@ def test_both_door_counts_read_SUB_FLOWS_as_well_as_flows():
     assert p.crossings_without_a_door == 0
 
 
+def _recorded_door_map(steps: str, roles: str, record: str) -> str:
+    """`_door_map` plus an 'Interface exceptions' extras heading carrying one recorded line — the
+    adjudication `validate` honours for the doors gate."""
+    doc = json.loads(_door_map(steps, roles))
+    doc["extras"] = [{"heading": "Interface exceptions", "body": record}]
+    return json.dumps(doc)
+
+
+def test_a_recorded_crossing_still_counts_RAW_and_is_no_longer_UNADJUDICATED():
+    """`validate` honours a `UCn/doors: <why>` record and the profile did not, so a map `validate`
+    reported 0 owed on came back reading 1 — and Step 1c of the retro method treats "above 0" as a
+    defect with no adjudicated state to land in. Both numbers now travel: the raw count is the drift
+    signal (an adjudication must not erase the trend), the owed count is what the operator owes."""
+    p = build_profile(_recorded_door_map(
+        BARE, PERSON, "UC1/doors: the operator stands at the code host, pushing a branch"))
+    assert p.crossings_without_a_door == 1, "the crossing is still there to be counted"
+    assert p.crossings_without_a_door_unadjudicated == 0, "and it has been answered for"
+
+
+def test_an_unanswered_crossing_stays_unadjudicated_and_another_record_does_not_answer_it():
+    """The escape must be SCOPED. A record about another story, or about another gate of this one,
+    leaves the crossing owed — an escape that silences more than it names is the failure the whole
+    `UCn/<scope>` token shape exists to prevent."""
+    bare = build_profile(_door_map(BARE, PERSON))
+    assert (bare.crossings_without_a_door, bare.crossings_without_a_door_unadjudicated) == (1, 1)
+    for record in ("UC9/doors: another story entirely", "UC1/migration: a different gate"):
+        p = build_profile(_recorded_door_map(BARE, PERSON, record))
+        assert p.crossings_without_a_door_unadjudicated == 1, record
+
+
+def test_a_bare_use_case_record_answers_the_crossing_too():
+    """`validate`'s own rule: a bare `UCn` excuses the whole retrofit family, the scoped form one
+    gate. The profile reads the same two tokens, so the two instruments cannot disagree."""
+    p = build_profile(_recorded_door_map(BARE, PERSON, "UC1: the whole story is excused"))
+    assert (p.crossings_without_a_door, p.crossings_without_a_door_unadjudicated) == (1, 0)
+
+
+def test_a_profile_written_before_the_unadjudicated_count_reads_none_not_zero():
+    """0 is the CLEAN value here, so a missing field must not read as "nothing owed" — the same rule
+    `deployment_orphan_units` states, and for the same reason."""
+    p = build_profile(_door_map(BARE, PERSON))
+    text = p.to_json().replace('"crossings_without_a_door_unadjudicated"', '"retired_field"')
+    assert MapProfile.from_json(text).crossings_without_a_door_unadjudicated is None
+
+
 def test_a_step_naming_an_UNDEFINED_surface_is_not_counted_as_a_door():
     """The eval read the id SHAPE while the validator read the DEFINED ids, so a dangling `I99` was
     doored for one instrument and undoored for the other."""

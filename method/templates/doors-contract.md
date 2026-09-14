@@ -14,6 +14,21 @@ luck — that map had no `kind: service` + `audience: internal` role for it to b
 **The slot leads keep under-filling is «FLOWS».** A doors agent works one batch of flows; naming
 them by id, with their use case, is what keeps two agents from doring the same flow twice.
 
+- **«FLOWS»** — the flow ids this agent doors, each with its use case, and nothing outside the
+  batch. Two agents handed one flow door it twice.
+- **«SURFACES»** — the `In` rows already authored, with their names and their `ways_in`, so the
+  agent picks a surface instead of inventing one.
+
+**This half rides a trace brief.** The doors contract and the trace contract do NOT share a slot
+set — doors owns «FLOWS», «MAP» and «SURFACES», trace owns «USE_CASES», «SF_RANGE», «LEGEND»,
+«WHERE_TO_LOOK» and «your-fragment» — so appending this file to a filled trace brief with `>>` sends
+the agent nine literal slot names, which is what happened to 9 of 10 briefs on one build. Compose
+the two in one fill instead:
+
+```
+coyomap contract trace --from-slots <slots-dir> --out-dir <briefs-dir> --append doors
+```
+
 **The template starts at the quoted block below.** Everything above it is instructions to you, the
 lead; nothing above this line goes into an agent prompt.
 

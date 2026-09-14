@@ -25,3 +25,5 @@ Escalation: none on its own.
    that story opens (one reason may name several use cases, which is the registry's own form).
    regression sign: every jump recorded and no step written, which is the cheap way out; or a
    reason that could sit under any use case ("a second thread") and names no thread.
+
+verified in reminderrepo build of 2026-09-13 23:03

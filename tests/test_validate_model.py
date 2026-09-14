@@ -2110,6 +2110,79 @@ def test_one_recorded_line_may_adjudicate_several_entities():
     assert not any("no owning component" in w for w in warnings_of(m))
 
 
+SILENCED_LINE = "silenced by this map's recorded lines"
+
+
+def test_what_the_records_silenced_is_disclosed_even_where_the_family_says_nothing():
+    """Five families disclose their suppressions by hand and a dozen do not: the saved-record rule
+    silenced 25 of reminderrepo's 26 records behind ONE recorded line and the report said nothing,
+    so the gap was invisible without `--ignore-exceptions`.
+
+    Answered by running the checks again WITHOUT the records and counting the advisories that
+    vanish — which covers every family at once, including the ones nobody has written yet, and
+    cannot over-report the way a hand-rolled count can."""
+    m = make_unowned_entity_model()
+    m.entities.append(make_entity(eid="E3", name="Draft"))
+    live_without_record = warnings_of(m)
+    assert any("no owning component" in w for w in live_without_record)
+    assert not any(SILENCED_LINE in w for w in live_without_record), "nothing recorded, nothing hidden"
+
+    m.extras = [ExtraSection(heading="Persistence exceptions",
+                             body="E2, E3: read-only projections built at query time.")]
+    silenced: list[str] = []
+    _, warnings = validate_model(m, silenced_out=silenced)
+    assert not any("no owning component" in w for w in warnings), "the record still silences it"
+    hit = [w for w in warnings if SILENCED_LINE in w]
+    assert len(hit) == 1, warnings
+    assert hit[0].startswith("1 advisory line(s)"), hit[0]
+    assert "Persistence exceptions" in hit[0], "it names where the records sit"
+    assert "--ignore-exceptions" in hit[0], "and how to read the silenced lines"
+    assert [w for w in silenced if "no owning component" in w], silenced
+
+
+def test_the_disclosure_counts_the_silenced_lines_and_never_repeats_their_words():
+    """A disclosure that quotes a silenced finding puts that finding's own words back into the
+    report. 55 of this repo's tests ask "is this gone?" by looking for those words, and so does
+    every script and counter that reads the report the same way — they would have read a silenced
+    finding as a live one. The words go to the out-param; the line carries the count."""
+    m = make_unowned_entity_model()
+    m.extras = [ExtraSection(heading="Persistence exceptions",
+                             body="E2: a read-only projection built at query time.")]
+    silenced: list[str] = []
+    _, warnings = validate_model(m, silenced_out=silenced)
+    hit = [w for w in warnings if SILENCED_LINE in w]
+    assert hit and silenced, (warnings, silenced)
+    for line in silenced:
+        assert line not in " ".join(hit), "the report must not restate a silenced finding"
+        assert line[:40] not in " ".join(hit), line[:40]
+
+
+def test_a_finding_whose_COUNT_moves_is_not_called_silenced():
+    """A check still reporting, with a smaller number, is visible — calling it silenced would
+    overstate. The prose counter is the same case from the other side: dropping the recorded lines
+    drops the SENTENCES on them, so it reports fewer findings without the records, not more."""
+    m = make_valid_model()
+    m.extras = [ExtraSection(
+        heading="Unclaimed surfaces",
+        body="C1: a development-only surface that nobody outside this team will ever reach at all")]
+    silenced: list[str] = []
+    _, warnings = validate_model(m, silenced_out=silenced)
+    assert not [w for w in silenced if w.startswith("1 prose field")], silenced
+
+
+def test_the_re_read_flag_and_the_disclosure_drop_the_SAME_sections():
+    """One answer to "which section is a record". `--ignore-exceptions` carried its own list — every
+    heading ending in "exceptions" plus four named ones — and it had fallen four behind the
+    registry: 'Missing surfaces', 'Walk jumps', 'Sweep debt' and 'Bucket vocabulary' all silence a
+    finding and all survived the flag whose whole job is to drop them."""
+    from coyomap import records as records_mod
+    from coyomap.model import ExtraSection as Section
+    for spec in records_mod.HEADINGS:
+        assert validate_model_mod._is_recorded_section(Section(heading=spec.heading, body="x")), \
+            spec.heading
+    assert not validate_model_mod._is_recorded_section(Section(heading="Design notes", body="x"))
+
+
 def test_a_repeated_reason_across_records_is_reported():
     """The shape that grew the walls: one sentence written out once per element."""
     m = make_valid_model()
@@ -2153,6 +2226,39 @@ def test_the_merge_advice_names_the_real_keys_of_the_repeated_records():
                              body="C1: a dev-only surface\nC2: a dev-only surface\nC3: a dev-only surface")]
     hit = [w for w in warnings_of(m) if "repeats one reason" in w]
     assert hit and "C1, C2, C3: <why>" in hit[0]
+
+
+def test_one_sentence_stretched_over_too_many_findings_is_reported():
+    """The fix for the fix. Merging kills the wall, and reminderrepo then carried ONE line with 25
+    `En` keys and one sentence — every saved record the map keeps, adjudicated in a single judgement
+    nobody re-read against any of them.
+
+    MEASURED across the four live maps of 2026-09-13: of 106 recorded lines that parse a key list,
+    83 carry one key and 101 carry six or fewer, then the tail jumps to 8, 10, 10, 25 and 25."""
+    cap = validate_model_mod._KEYS_PER_RECORD_CAP
+    m = make_valid_model()
+    keys = ", ".join(f"C{n}" for n in range(1, cap + 1))
+    m.extras = [ExtraSection(heading="Unclaimed surfaces", body=f"{keys}: a dev-only surface")]
+    assert not any("with one sentence" in w for w in warnings_of(m)), "the cap itself is legal"
+
+    keys = ", ".join(f"C{n}" for n in range(1, cap + 2))
+    m.extras = [ExtraSection(heading="Unclaimed surfaces", body=f"{keys}: a dev-only surface")]
+    hit = [w for w in warnings_of(m) if "with one sentence" in w]
+    assert hit, warnings_of(m)
+    assert f"answering {cap + 1} findings" in hit[0] and "Unclaimed surfaces" in hit[0], hit[0]
+    assert "C1" in hit[0], "it must name the keys it is about"
+
+    # It must never ask for the wall back — the two advisories pull opposite ways on purpose.
+    assert "repeated-reason" in hit[0], hit[0]
+    assert not any("repeats one reason" in w for w in warnings_of(m))
+
+    # Splitting into the groups it is really about is the answer, and it goes quiet.
+    half = cap // 2
+    m.extras = [ExtraSection(
+        heading="Unclaimed surfaces",
+        body=", ".join(f"C{n}" for n in range(1, half + 1)) + ": a dev-only surface\n"
+             + ", ".join(f"C{n}" for n in range(half + 1, cap + 2)) + ": a build machine runs it")]
+    assert not any("with one sentence" in w for w in warnings_of(m)), warnings_of(m)
 
 
 def test_stale_view_warns_and_fresh_view_does_not():
@@ -3388,6 +3494,184 @@ def test_a_map_carrying_claims_nobody_challenged_says_so():
     # …and it is ADVISORY, never blocking: the record is arithmetically sound, and which claims to
     # re-challenge is a judgement.
     assert not any("shipped map" in p for p in problems_of(m))
+
+
+CLOSER_LINE = "appeal counts disagree with the closer's files"
+
+
+def make_verify_dir(root: Path, m: ProjectModel, *, skeptics: int = 1,
+                    closer: tuple[str, ...] = ()) -> Path:
+    """The map on disk with a `verify/` directory beside it: `skeptics` ordinary verdict rows, and
+    one closer row per word in `closer` (`uphold` / `reject` / `unsure`)."""
+    model_path = root / "project-map.json"
+    model_path.write_text(to_canonical_json(m), encoding="utf-8")
+    (root / "project-map.md").write_text(model_to_markdown(m), encoding="utf-8")
+    verify = root / "verify"
+    verify.mkdir(exist_ok=True)
+    rows = [{"claim": f"a claim ({n})", "grounded": True, "evidence": "a.py:1"}
+            for n in range(skeptics)]
+    (verify / "verdicts-1.json").write_text(json.dumps({"grounding": rows}), encoding="utf-8")
+    if closer:
+        appeals = [{"claim": f"a claim ({n})", "verdict": word, "grounded": True}
+                   for n, word in enumerate(closer)]
+        (verify / "closer-a.json").write_text(json.dumps({"grounding": appeals}), encoding="utf-8")
+    return model_path
+
+
+def test_a_recorded_appeal_must_agree_with_the_closers_own_files():
+    """`validate` blocks when confirmed + refuted + unverifiable != challenged, and the three closer
+    counts had no such tie to anything — an ASSERTION rather than evidence. A `closer_rejected` is
+    why a map legitimately keeps a claim its own skeptics refuted, so an overstated one turns an
+    unfixed defect into a settled question."""
+    m = make_grounded_model(claims_total=3, claims_challenged=3, claims_confirmed=2,
+                            claims_refuted=1)
+    grounding_of(m).closer_rejected = 1
+    with tempfile.TemporaryDirectory() as td:
+        model_path = make_verify_dir(Path(td), m, closer=("reject",))
+        _, warnings = validate_model(m, model_path)
+        assert not [w for w in warnings if CLOSER_LINE in w], warnings
+
+        # The record claims an appeal the files do not show.
+        grounding_of(m).closer_rejected = 2
+        _, warnings = validate_model(m, model_path)
+        hit = [w for w in warnings if CLOSER_LINE in w]
+        assert len(hit) == 1, warnings
+        assert "the record says 2, the files show 1" in hit[0], hit[0]
+        assert "grounding write" in hit[0], "it must name the recompute"
+
+        # …and the other direction: the closer ruled and the record never caught up.
+        grounding_of(m).closer_rejected = 0
+        model_path = make_verify_dir(Path(td), m, closer=("reject", "uphold"))
+        hit = [w for w in validate_model(m, model_path)[1] if CLOSER_LINE in w]
+        assert hit and "the record says 0, the files show 1" in hit[0], hit
+
+
+def test_the_closer_check_is_ADVISORY_while_a_negative_appeal_count_BLOCKS():
+    """The split is deliberate. The negative half is arithmetic on the MAP ALONE, so it blocks with
+    its siblings. The comparison half reads files OUTSIDE the map, whose completeness nothing
+    guarantees — a closer wave run after `grounding write`, a half-copied `verify/` — and blocking
+    on that would fail a map that is right."""
+    m = make_grounded_model(claims_total=3, claims_challenged=3, claims_confirmed=2,
+                            claims_refuted=1)
+    grounding_of(m).closer_rejected = 2
+    with tempfile.TemporaryDirectory() as td:
+        model_path = make_verify_dir(Path(td), m, closer=("reject",))
+        problems, warnings = validate_model(m, model_path)
+        assert [w for w in warnings if CLOSER_LINE in w]
+        assert not [p for p in problems if CLOSER_LINE in p], "advisory, never a gate"
+
+    grounding_of(m).closer_rejected = -1
+    assert [p for p in problems_of(m) if "negative count(s)" in p and "closer_rejected" in p], \
+        "a negative tally is arithmetic on the map alone and blocks"
+
+
+def test_no_closer_evidence_means_the_check_SAYS_NOTHING_and_never_that_it_passed():
+    """Every map built before the field existed has no closer file, and a clone may carry the map
+    with no `verify/` at all. The guard is narrower than "the directory exists": the check runs only
+    when the verify evidence is THERE, so a pruned `verify/` reads as "cannot check" rather than
+    "checked and passed"."""
+    m = make_grounded_model(claims_total=3, claims_challenged=3, claims_confirmed=2,
+                            claims_refuted=1)
+    grounding_of(m).closer_rejected = 2
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        model_path = make_verify_dir(root, m, closer=("reject",))
+        # No `verify/` at all — the fresh-clone shape.
+        for f in sorted((root / "verify").glob("*")):
+            f.unlink()
+        (root / "verify").rmdir()
+        assert not [w for w in validate_model(m, model_path)[1] if CLOSER_LINE in w]
+
+        # A `verify/` holding no verdict row is the same state wearing a directory.
+        (root / "verify").mkdir()
+        (root / "verify" / "budgets.json").write_text('{"budget": 4}', encoding="utf-8")
+        assert not [w for w in validate_model(m, model_path)[1] if CLOSER_LINE in w]
+
+        # …but the skeptics' rows being there and the closer's not IS checkable, and fires.
+        model_path = make_verify_dir(root, m, skeptics=2)
+        hit = [w for w in validate_model(m, model_path)[1] if CLOSER_LINE in w]
+        assert hit and "no closer row at all" in hit[0], hit
+    # And a call with no path at all must not go looking for files.
+    assert not [w for w in warnings_of(m) if CLOSER_LINE in w]
+
+
+def test_an_appeal_re_heard_in_a_SECOND_wave_is_two_rows_not_one_claim():
+    """`grounding write` counts the closer's verdict WORDS, and the closer contract's own design is
+    that a re-hearing is a second row. Counted here the same way, or the two drift."""
+    m = make_grounded_model(claims_total=3, claims_challenged=3, claims_confirmed=2,
+                            claims_refuted=1)
+    grounding_of(m).closer_rejected = 2
+    with tempfile.TemporaryDirectory() as td:
+        model_path = make_verify_dir(Path(td), m, closer=("reject", "reject"))
+        assert not [w for w in validate_model(m, model_path)[1] if CLOSER_LINE in w]
+
+
+CLAIM_LOSS_LINE = "are GONE from the shipped map"
+
+
+def make_pinned_worklist(root: Path, m: ProjectModel, *, drop: int = 0) -> Path:
+    """The map on disk, with the claim surface it had BEFORE a correction pinned beside it.
+
+    `drop` removes that many claims from the pin's live equivalent by pinning the map's own current
+    worklist plus `drop` extra rows — the shape a `fix rows` leaves behind, where the pin holds
+    claims the shipped map no longer makes."""
+    from coyomap.audit_model import l2_worklist_model
+    model_path = root / "project-map.json"
+    model_path.write_text(to_canonical_json(m), encoding="utf-8")
+    (root / "project-map.md").write_text(model_to_markdown(m), encoding="utf-8")
+    rows = [{"claim": i.claim, "anchor": i.anchor, "theme": i.theme} for i in l2_worklist_model(m)]
+    rows += [{"claim": f"a claim a correction removed ({n})", "anchor": "a.py:1", "theme": "rule"}
+             for n in range(drop)]
+    verify = root / "verify"
+    verify.mkdir(exist_ok=True)
+    (verify / "worklist.json").write_text(json.dumps({"worklist": rows}), encoding="utf-8")
+    return model_path
+
+
+def test_a_correction_that_removed_claims_nobody_re_stated_is_reported():
+    """At turn 478 of one build a `fix rows` rewrote rule BR205's sites down to one entry, dropping
+    two deploy anchors. Two of the three claims that rule generated went with them — the audit's
+    `rule` theme fell from 103 on the pinned worklist to 100 on the shipped map — and the rule's own
+    `risk` still asserts a fact about "two of the three deploy commands" that its single surviving
+    anchor cannot support. `validate`, `audit` and `finalize` all saw nothing."""
+    m = make_valid_model()
+    with tempfile.TemporaryDirectory() as td:
+        model_path = make_pinned_worklist(Path(td), m, drop=2)
+        _, warnings = validate_model(m, model_path)
+        hit = [w for w in warnings if CLAIM_LOSS_LINE in w]
+        assert len(hit) == 1, warnings
+        assert hit[0].startswith("2 claim(s)") and "rule" in hit[0], hit[0]
+        assert "audit" in hit[0], "it must name the re-pin, which is the record"
+        problems, _ = validate_model(m, model_path)
+        assert not [p for p in problems if CLAIM_LOSS_LINE in p], "advisory, never a gate"
+
+
+def test_a_map_whose_claims_all_survive_hears_nothing_and_so_does_one_with_no_pin():
+    """Two silences that matter: the ordinary build removes no claim, and most maps have never run
+    a verify pass at all, so there is no pin to compare against."""
+    m = make_valid_model()
+    with tempfile.TemporaryDirectory() as td:
+        model_path = make_pinned_worklist(Path(td), m)
+        _, warnings = validate_model(m, model_path)
+        assert not [w for w in warnings if CLAIM_LOSS_LINE in w], warnings
+        (Path(td) / "verify" / "worklist.json").unlink()
+        _, warnings = validate_model(m, model_path)
+        assert not [w for w in warnings if CLAIM_LOSS_LINE in w], warnings
+    # No path at all — the profiler's shape — must not go looking for a file.
+    assert not [w for w in warnings_of(m) if CLAIM_LOSS_LINE in w]
+
+
+def test_a_claim_ADDED_since_the_pin_is_not_a_loss():
+    """Growth is the healthy direction and has its own advisory (the shipped map carrying claims
+    nobody challenged). Only a theme that SHRANK is a claim nobody re-stated."""
+    m = make_valid_model()
+    with tempfile.TemporaryDirectory() as td:
+        model_path = make_pinned_worklist(Path(td), m)
+        m.rules = [*m.rules, BusinessRule(id="BR99", name="A new rule",
+                                          statement="Only an owner may act.",
+                                          sites=[RuleSite(where="src/v.py:1")])]
+        _, warnings = validate_model(m, model_path)
+        assert not [w for w in warnings if CLAIM_LOSS_LINE in w], warnings
 
 
 def test_full_live_coverage_is_silent():
@@ -5210,6 +5494,130 @@ def test_the_naming_nudge_is_ONE_line_and_is_honoured_by_a_record():
     assert not [w for w in warnings_of(m) if "start with 'The'" in w]
 
 
+CODE_NAME_LINE = "spelled like code"
+
+
+def test_a_name_spelled_like_the_class_is_nudged():
+    """The asymmetry is the evidence: on the 2026-09-13 live maps 52 of 59, 50 of 53 and 96 of 100
+    RECORD names were the class's own spelling while 0 of 126, 0 of 43 and 0 of 114 COMPONENT names
+    were. The sentence beside each record was good plain language, so the writer knew what the thing
+    was and named it after the class anyway — and nothing in the method or the tools said not to."""
+    m = make_interface_model()
+    m.entities[0].name = "NotificationSecurityData"
+    fired = [w for w in warnings_of(m) if CODE_NAME_LINE in w]
+    assert fired, warnings_of(m)
+    assert "NotificationSecurityData" in fired[0] and m.entities[0].id in fired[0], fired[0]
+    assert not [p for p in problems_of(m) if CODE_NAME_LINE in p], "advisory, never a gate"
+    m.entities[0].name = "Who may see a reminder"
+    assert not [w for w in warnings_of(m) if CODE_NAME_LINE in w]
+
+
+def test_the_code_name_nudge_reads_every_reader_facing_element_and_exempts_dependencies():
+    """A dependency's name is the vendor's own spelling and SHOULD be — the rule would fire 14 times
+    on one live map's 35 dependencies, every one of them correct. An advisory wrong 14 times in one
+    section is one a build learns to route around."""
+    for setter in (lambda m: setattr(m.components[0], "name", "OrderRepository"),
+                   lambda m: setattr(m.use_cases[0], "name", "PlaceOrder"),
+                   lambda m: setattr(m.roles[0], "name", "AdminUser"),
+                   lambda m: setattr(m.interfaces[0], "name", "AdminConsole")):
+        m = make_interface_model()
+        setter(m)
+        assert [w for w in warnings_of(m) if CODE_NAME_LINE in w], m
+    m = make_interface_model()
+    m.deps[0].name = "BeautifulSoup"
+    assert not [w for w in warnings_of(m) if CODE_NAME_LINE in w], "a vendor spells its own name"
+
+
+def test_a_vendor_word_the_map_already_lists_clears_the_name_that_uses_it():
+    """"MongoDB stores" is a component naming a product, and the map's own dependency list is what
+    knows which words those are."""
+    m = make_interface_model()
+    m.deps[0].name = "MongoDB"
+    m.components[0].name = "MongoDB stores"
+    assert not [w for w in warnings_of(m) if CODE_NAME_LINE in w], warnings_of(m)
+    m.components[0].name = "MongoClient wrapper"
+    assert [w for w in warnings_of(m) if CODE_NAME_LINE in w]
+
+
+def test_the_code_name_nudge_is_ONE_line_and_its_escape_is_reachable_and_scoped():
+    """One line for a map with many such names, and a SCOPED key: this heading already adjudicates
+    the leading article on the same ids, and one record must never answer two checks it was not
+    written for."""
+    m = make_interface_model()
+    m.entities[0].name = "GroupContact"
+    m.components[0].name = "OrderRepository"
+    fired = [w for w in warnings_of(m) if CODE_NAME_LINE in w]
+    assert len(fired) == 1 and fired[0].startswith("2 element name(s)"), fired
+    assert NAMING_EXCEPTIONS_HEADING in fired[0], fired[0]
+
+    eid, cid = m.entities[0].id, m.components[0].id
+    m.extras.append(ExtraSection(
+        heading=NAMING_EXCEPTIONS_HEADING,
+        body=f"{eid}/code-name, {cid}/code-name: the business really calls them this"))
+    assert not [w for w in warnings_of(m) if CODE_NAME_LINE in w], warnings_of(m)
+    assert not validate_model_mod.recorded_line_warnings(m), "the scoped key must PARSE here"
+
+    # …and the leading-article question on the same element is NOT answered by that record.
+    m.entities[0].name = "The GroupContact"
+    assert [w for w in warnings_of(m) if "start with 'The'" in w]
+
+
+def test_a_BARE_naming_record_answers_the_article_question_and_only_that_one():
+    """One record silences exactly one (check, id) pair, never a family — the method says it in those
+    words, and the doors family already had this same bug fixed out of it once
+    (`method/retro-checks/2026-08-30-doors-both-ways.md`).
+
+    The bare `In` has ONE documented meaning under this heading — the article is part of a real
+    proper name — and every recorded line on every live map was written to mean that. So it keeps
+    that meaning and answers nothing else; the code-shape question has its own scoped key."""
+    m = make_interface_model()
+    m.entities[0].name = "The GroupContact"
+    eid = m.entities[0].id
+    m.extras.append(ExtraSection(heading=NAMING_EXCEPTIONS_HEADING,
+                                 body=f"{eid}: the business really is called The GroupContact"))
+    warnings = warnings_of(m)
+    assert not [w for w in warnings if "start with 'The'" in w], "the bare id answers the article"
+    hit = [w for w in warnings if CODE_NAME_LINE in w]
+    assert hit, "…and must NOT answer the code-shape question as well"
+    assert eid in hit[0], hit[0]
+
+
+def test_a_scope_no_check_reads_parses_looks_answered_and_is_reported_by_name():
+    """`C1/article` is the word an operator reaches for when answering the article question the
+    scoped way. It parses into a valid key, silences nothing, and `malformed_records` cannot see it
+    — that check only catches an UNREADABLE key. So the heading declares which scopes work and this
+    names the ones that do not."""
+    m = make_interface_model()
+    m.entities[0].name = "The GroupContact"
+    eid = m.entities[0].id
+    m.extras.append(ExtraSection(heading=NAMING_EXCEPTIONS_HEADING,
+                                 body=f"{eid}/article: it really is called that"))
+    warnings = warnings_of(m)
+    hit = [w for w in warnings if "name a scope no check reads" in w]
+    assert len(hit) == 1, warnings
+    assert f"{eid}/article" in hit[0] and "`/code-name`" in hit[0], hit[0]
+    # It really does silence nothing — both naming questions still fire.
+    assert [w for w in warnings if "start with 'The'" in w]
+    assert [w for w in warnings if CODE_NAME_LINE in w]
+    # …and the scope that IS read is never reported as inert.
+    m.extras[-1].body = f"{eid}/code-name: the business really spells it this way"
+    assert not [w for w in warnings_of(m) if "name a scope no check reads" in w]
+
+
+def test_a_heading_that_declares_no_scopes_is_left_alone_and_a_PATH_key_is_never_a_scope():
+    """Empty means unchecked, which is the safe default twice over: a family whose scopes nobody has
+    enumerated keeps working, and the two PATH-keyed headings must never be read this way — a
+    `src/app/` key is a directory, and reading its slash as a scope would report every coverage
+    record on every live map as dead."""
+    from coyomap import records as records_mod
+    m = make_valid_model()
+    m.extras = [ExtraSection(heading="Coverage exceptions", body="src/app/: vendored and coarse"),
+                ExtraSection(heading="Interface exceptions", body="UC1/doors: the anchor is right")]
+    assert not records_mod.inert_scoped_keys(m, "Coverage exceptions")
+    assert not records_mod.inert_scoped_keys(m, "Interface exceptions")
+    assert not [w for w in warnings_of(m) if "name a scope no check reads" in w], warnings_of(m)
+
+
 # ── a user-facing surface no use case reaches ──────────────────────────────────────────────────
 
 def make_unreached_surface_model() -> ProjectModel:
@@ -5912,6 +6320,71 @@ def test_the_embedded_holder_chain_must_end_somewhere_real():
     # A cycle terminates instead of hanging, and both rows are reported.
     m.entities = [rec("E1", "embedded", "E2"), rec("E2", "embedded", "E1")]
     assert {w.split()[0] for w in validate_model_mod._orphan_embedded_warnings(m)} == {"E1", "E2"}
+
+
+def make_variant_map():
+    """A saved row holding one record, and two variants of that record authored as `isA`.
+
+    The reminderrepo shape: 27 of its 29 `embedded` rows name a real table as their container, and
+    the 25 the check reported reach that table through a subtype relation, never a `contains` — the
+    map holds no `contains` pointing at them at all."""
+    from coyomap.model import Entity, EntityRelation, ProjectModel, Store
+    m = ProjectModel(title="T", goal="G")
+    table = Entity(id="E1", name="Activity", meaning="one scheduled thing", source="a.py:1",
+                   store=Store(mode="collection", container="activities"))
+    table.relations = [EntityRelation(verb="contains", target="E2")]
+    base = Entity(id="E2", name="Notification security", meaning="who may see the reminder",
+                  source="a.py:9", store=Store(mode="embedded", container="activities"))
+    kinds = [Entity(id=i, name=n, meaning="one way to do it", source=f"a.py:{i[1:]}",
+                    store=Store(mode="embedded", container="activities"))
+             for i, n in (("E3", "Public"), ("E4", "By code"))]
+    for k in kinds:
+        k.relations = [EntityRelation(verb="isA", target="E2")]
+    m.entities = [table, base, *kinds]
+    return m
+
+
+def test_a_variant_lands_where_the_record_it_is_a_kind_of_lands():
+    """The holder walk followed containment alone, so a VARIANT of a saved record read as kept
+    inside nothing — 25 of reminderrepo's 29 `embedded` rows, every one of them naming the real
+    table it sits in. The map states that family as `isA` and authors no `contains` for it, so the
+    check was asking for a relation the map does not use for this.
+
+    A supertype is not a holder, which is why this is its own walk: it says WHERE the row lands, not
+    what is inside what."""
+    m = make_variant_map()
+    assert not validate_model_mod._orphan_embedded_warnings(m)
+
+    # It is the LANDING that clears it, never the relation on its own: a variant of a read shape is
+    # still kept nowhere.
+    m.entities[1].store.mode = "projection"
+    fired = {w.split()[0] for w in validate_model_mod._orphan_embedded_warnings(m)}
+    assert fired == {"E3", "E4"}, fired
+
+    # A relation that is not inheritance says nothing about where the row lands.
+    m.entities[1].store.mode = "embedded"
+    for k in m.entities[2:]:
+        k.relations[0].verb = "refersTo"
+    assert {w.split()[0] for w in validate_model_mod._orphan_embedded_warnings(m)} == {"E3", "E4"}
+
+    # `extends` is the vocabulary's other inheritance verb and reads the same way.
+    for k in m.entities[2:]:
+        k.relations[0].verb = "extends"
+    assert not validate_model_mod._orphan_embedded_warnings(m)
+
+
+def test_the_supertype_walk_is_read_from_the_relation_vocabulary():
+    """Which verbs count is `grammar.REL_KIND`'s answer, not a second list here — the relation
+    checks, the class diagram and this walk must call the same verbs inheritance."""
+    from coyomap import grammar
+    m = make_variant_map()
+    inheritance = {v for v, kind in grammar.REL_KIND.items() if kind == "inheritance"}
+    assert inheritance, "the vocabulary must still name an inheritance kind"
+    for verb in inheritance:
+        for k in m.entities[2:]:
+            k.relations[0].verb = verb
+        assert not validate_model_mod._orphan_embedded_warnings(m), verb
+    assert set(validate_model_mod.record_supertypes(m)) == {"E3", "E4"}
 
 
 def test_a_machine_step_after_a_person_no_longer_hides_the_dead_end():

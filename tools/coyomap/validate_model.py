@@ -20,6 +20,7 @@ Stdlib-only.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import json
 import re
 import sys
@@ -51,6 +52,7 @@ from coyomap.model import (
     Dep,
     Entity,
     EntryPoint,
+    ExtraSection,
     FlowStep,
     Grounding,
     Group,
@@ -3170,8 +3172,32 @@ _KIND_NAMING_MIN_ROWS = 10
 _KIND_NAMING_FLOOR = 0.10
 
 
+def record_supertypes(m: ProjectModel) -> dict[str, list[str]]:
+    """Per record, the records it is a KIND OF — every relation whose verb `grammar.REL_KIND` calls
+    inheritance (`isA`, `extends`), read off the SUBTYPE's own card, where the map authors it.
+
+    Not containment, and deliberately not folded into `model.record_parents`: a supertype does not
+    HOLD its subtype, so calling it a parent would make "which record is this one inside" answer two
+    different questions. What it does say is WHERE THE SUBTYPE LANDS — a variant of a record kept in
+    the activities row is kept in the activities row too — and that is the one thing the `embedded`
+    check needs from it.
+
+    Read through `REL_KIND` rather than a literal verb list, so the vocabulary has ONE definition:
+    the relation checks, the class diagram and this walk all call the same two verbs inheritance."""
+    ents = {e.id for e in m.entities}
+    out: dict[str, list[str]] = {}
+    for e in m.entities:
+        for r in e.relations:
+            if (grammar.REL_KIND.get((r.verb or "").strip().lower()) == "inheritance"
+                    and r.target in ents and r.target != e.id
+                    and r.target not in out.setdefault(e.id, [])):
+                out[e.id].append(r.target)
+    return {k: v for k, v in out.items() if v}
+
+
 def _reaches_a_saved_root(eid: str, parents: dict[str, list[str]],
-                          by_id: dict[str, "Entity"]) -> bool:
+                          by_id: dict[str, "Entity"],
+                          supertypes: dict[str, list[str]] | None = None) -> bool:
     """Does this record's holder chain end at a `collection` — a compartment of its own?
 
     ONE LEVEL IS NOT ENOUGH, and the helper's own docstring says so: `record_parents` is "not
@@ -3184,9 +3210,22 @@ def _reaches_a_saved_root(eid: str, parents: dict[str, list[str]],
     A cycle never converges either, which is why `seen` is not optional.
 
     The chain must reach a `collection`. Nothing else is a place of its own: `embedded` only ever
-    borrows its holder's, which is the whole point of the word."""
+    borrows its holder's, which is the whole point of the word.
+
+    TWO KINDS OF HOP, because a map states "this record lands there" two ways. A HOLDER holds it
+    (`record_parents`). A SUPERTYPE stands where it stands: `E13 isA E12` and E12 sits in the
+    activities row, so E13 sits in the activities row — the subtype is the same slot with more
+    fields. Following holders alone read 25 of reminderrepo's 29 `embedded` records as kept inside
+    nothing, while 27 of the 29 named a real table as their container: the agent had labelled them
+    correctly and the walk could not see the relation that says so, because the map states this
+    family as `isA` and authors no `contains` at all."""
+    supers = supertypes or {}
+
+    def up(cur: str, seen: set[str]) -> list[str]:
+        return [h for h in (*parents.get(cur, ()), *supers.get(cur, ())) if h not in seen]
+
     seen = {eid}
-    frontier = [h for h in parents.get(eid, ()) if h != eid]
+    frontier = [h for h in up(eid, set()) if h != eid]
     while frontier:
         hid = frontier.pop()
         if hid in seen or hid not in by_id:
@@ -3197,7 +3236,7 @@ def _reaches_a_saved_root(eid: str, parents: dict[str, list[str]],
         if mode == "collection":
             return True
         if mode == "embedded":
-            frontier += [h for h in parents.get(hid, ()) if h not in seen]
+            frontier += up(hid, seen)
     return False
 
 
@@ -3237,6 +3276,7 @@ def _orphan_embedded_warnings(m: ProjectModel) -> list[str]:
                 if k.endswith("/embedded")}
     by_id = {e.id: e for e in m.entities}
     parents = record_parents(m)
+    supertypes = record_supertypes(m)   # a variant lands where the record it is a kind of lands
     out: list[str] = []
     for e in embedded:
         if e.id in recorded:
@@ -3244,7 +3284,7 @@ def _orphan_embedded_warnings(m: ProjectModel) -> list[str]:
         all_holders = [h for h in parents.get(e.id, ()) if h in by_id]
         holders = [by_id[h] for h in all_holders if h != e.id]
         self_held = e.id in all_holders
-        if _reaches_a_saved_root(e.id, parents, by_id):
+        if _reaches_a_saved_root(e.id, parents, by_id, supertypes):
             continue
         if holders:
             named = ", ".join(f"{h.id} ({(h.store.mode if h.store else '') or 'unstated'})"
@@ -3259,8 +3299,9 @@ def _orphan_embedded_warnings(m: ProjectModel) -> list[str]:
             why = ("the only record holding it is ITSELF, so nothing holds it. Name the record it "
                    "really sits inside, or take that record's mode")
         else:
-            why = ("no record holds it at all — either the mode is wrong, or the `contains` "
-                   "relation that names its holder was never authored")
+            why = ("no record holds it at all — either the mode is wrong, or the relation that "
+                   "names where it lands was never authored (`contains` for the record it sits "
+                   "inside, `isA` for the record it is a variant of)")
         out.append(
             f"{e.id} ({e.name}) is marked `embedded`, which means kept inside a saved parent's row, "
             f"but {why}. Take the holder's own mode, or author the holder, or record "
@@ -4220,6 +4261,92 @@ def _grounding_live_coverage_findings(g: Grounding) -> list[str]:
             f"challenged' is reporting the pin, not the map."]
 
 
+#: Where a build pins the claim surface the skeptics were given, beside the map.
+_PINNED_WORKLIST = ("verify", "worklist.json")
+#: How many shrunken themes the claim-loss line names before it counts the rest.
+_CLAIM_LOSS_SHOWN = 4
+
+
+def _pinned_worklist_themes(model_path: Path) -> tuple[dict[str, int], bool] | None:
+    """`(claims per theme, was it built with the behavioural half)` from the pinned worklist beside
+    the map — `None` when no pass has pinned one, which is most maps before Phase 4.
+
+    The behavioural flag is read off the pin's own rows rather than guessed: `l2_worklist_model`
+    emits that half only when asked, so deriving the live side without it would report every
+    behavioural claim as lost."""
+    path = model_path.parent.joinpath(*_PINNED_WORKLIST)
+    try:
+        pinned = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    rows = pinned.get("worklist") if isinstance(pinned, dict) else None
+    if not isinstance(rows, list) or not rows:
+        return None
+    counts: dict[str, int] = {}
+    for row in rows:
+        if isinstance(row, dict) and isinstance(row.get("theme"), str):
+            counts[row["theme"]] = counts.get(row["theme"], 0) + 1
+    return (counts, "behaviour" in counts) if counts else None
+
+
+def _claim_loss_warnings(m: ProjectModel, model_path: Path | None) -> list[str]:
+    """ADVISORY: a correction to the map REMOVED claims, and nobody re-challenged or re-stated them.
+
+    THE CASE IT WAS WRITTEN FOR. At turn 478 of one build, a `fix rows` correcting rule BR205 rewrote
+    its `sites` down to one entry and dropped two deploy anchors. Two of the three claims that rule
+    had generated went with them: the audit's `rule` theme fell from 103 on the pinned worklist to
+    100 on the shipped map, and the two `docker compose down` lines that really do run on a failed
+    migration are now named in no rule site at all — while BR205's own `risk` still asserts a fact
+    about "two of the three deploy commands" that its single surviving anchor cannot support.
+    Nothing in `validate`, `audit` or `finalize` noticed that a correction had removed claims.
+
+    WHY HERE, and not as a field or an audit finding:
+
+    * NOT a `grounding` field. That record is written ONCE, when the verify pass ends, and this
+      removal happened after it — a number computed at that moment cannot see a later `fix`. It must
+      be recomputed every time the map is read, which is what `validate` does. The record's
+      `claims_superseded` does count disappeared claims, but it folds "reworded" and "removed" into
+      one frozen number, and a reword is the harmless one.
+    * NOT an `audit` finding. `audit` BUILDS the worklist; it is the BEFORE side of this comparison
+      and cannot be the judge of it.
+    * `validate` already imports the worklist builder and already reads files beside the map (the
+      pre-index symbol table), so the comparison costs one file read and one derivation.
+
+    BY THEME, which is the finest grain the payload carries: a `WorkItem` records the theme at the
+    site that builds it and deliberately holds no element id, and re-deriving one by parsing the
+    claim string is the thing `audit_model` forbids in its own comment. A theme that shrank is the
+    signal; the pinned and live counts are what the reader compares.
+
+    NO RECORDED ESCAPE, deliberately. The two honest answers are both structured: re-state the claim
+    (author the site back), or re-pin the surface by re-running `coyomap audit` — and re-pinning IS
+    the record, exactly as authoring the `grounding` block is the record for the line above. Its
+    sibling then reports the re-pinned claims nobody has challenged yet, so neither answer can hide
+    the work."""
+    if model_path is None:
+        return []
+    pin = _pinned_worklist_themes(model_path)
+    if pin is None:
+        return []
+    pinned, behavioural = pin
+    live: dict[str, int] = {}
+    for item in l2_worklist_model(m, behavioural=behavioural):
+        live[item.theme] = live.get(item.theme, 0) + 1
+    shrunk = sorted(((theme, n, live.get(theme, 0)) for theme, n in pinned.items()
+                     if live.get(theme, 0) < n), key=lambda r: (r[2] - r[1], r[0]))
+    if not shrunk:
+        return []
+    lost = sum(was - now for _t, was, now in shrunk)
+    detail = _shown([f"{theme} {was} → {now}" for theme, was, now in shrunk],
+                    _CLAIM_LOSS_SHOWN, unit="theme(s)")
+    return [f"{lost} claim(s) the skeptics were given are GONE from the shipped map, and nothing "
+            f"re-stated them: {detail}. A correction that rewrites an element's sites removes every "
+            f"claim those sites carried — the fix is recorded, the claims are not, and no gate "
+            f"notices. Check each shrunken theme: if the element's own sentence still asserts what "
+            f"the removed anchors backed, the sentence is now unbacked. Then either re-state the "
+            f"claim, or re-pin the surface with `coyomap audit --json` (the re-pin IS the record) "
+            f"and challenge what it mints."]
+
+
 def _grounding_split_findings(g: Grounding) -> list[str]:
     """ADVISORY: the verdict split is absent, so nothing can be checked against it.
 
@@ -4256,7 +4383,13 @@ def _check_grounding_arithmetic(m: ProjectModel) -> list[str]:
         ("claims_confirmed", g.claims_confirmed), ("claims_refuted", g.claims_refuted),
         ("claims_unverifiable", g.claims_unverifiable),
         ("claims_superseded", g.claims_superseded),
-        ("claims_added_since", g.claims_added_since)) if val < 0}
+        ("claims_added_since", g.claims_added_since),
+        # The appeal's three counts are tallies like the rest, and this half of the closer check is
+        # arithmetic on the MAP ALONE, so it blocks with its siblings. The half that compares them
+        # to the closer's own files cannot block, because those files live outside the map — see
+        # `_closer_record_warnings`.
+        ("closer_upheld", g.closer_upheld), ("closer_rejected", g.closer_rejected),
+        ("closer_unsure", g.closer_unsure)) if val < 0}
     if negatives:
         # A negative count can BALANCE the equality below (confirmed 13 + refuted -3 == challenged 10),
         # so the sum check alone does not make the record meaningful.
@@ -4288,6 +4421,91 @@ def _check_grounding_arithmetic(m: ProjectModel) -> list[str]:
                         f"held. `claims_total` is the audit worklist size at grounding time; re-read "
                         f"it with `coyomap audit --json`.")
     return problems
+
+
+#: The closer's three words, in the order the record's fields are read and reported.
+_CLOSER_WORDS = ("uphold", "reject", "unsure")
+
+
+def _verify_rows(model_path: Path) -> list[dict[str, object]]:
+    """Every verdict row in the `verify/` directory beside the map — the skeptics' votes and the
+    closer's appeals together, in the order the files sort.
+
+    Reads the SAME payload shape `anchor_drift.load_verdicts` accepts (a `{"grounding": [...]}`
+    wrapper or a bare list) and tolerates anything else in the directory: the pinned worklist and
+    the budgets file live there too, and a half-written file must make this check say nothing rather
+    than raise. It is a directory scan and not a filename match, because which rows are the closer's
+    is a property of the ROW (`grounding.is_closer_row`), by design — the closer writes
+    `closer-<agent>.json`, and the whole point of the intrinsic test is that a renamed file still
+    reads correctly."""
+    verify = model_path.parent / "verify"
+    if not verify.is_dir():
+        return []
+    rows: list[dict[str, object]] = []
+    for f in sorted(verify.glob("*.json")):
+        try:
+            payload = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        loaded = payload.get("grounding") if isinstance(payload, dict) else payload
+        if isinstance(loaded, list):
+            rows.extend(r for r in loaded if isinstance(r, dict))
+    return rows
+
+
+def _closer_record_warnings(m: ProjectModel, model_path: Path | None) -> list[str]:
+    """ADVISORY: the recorded APPEAL must agree with the closer's own files beside the map.
+
+    `validate` blocks when `confirmed + refuted + unverifiable != challenged`, and until now the
+    three closer counts had no such tie to anything. That made them an ASSERTION rather than
+    evidence: a hand-edited map could claim an appeal that never happened, and a
+    `closer_rejected` is precisely what lets a map legitimately keep a claim its own skeptics
+    refuted — the one number whose overstatement turns an unfixed defect into a settled question.
+
+    WHEN THE FILES ARE ABSENT IT SAYS NOTHING, and that is a decision, not an oversight. Every map
+    built before the field existed has no closer file, and a fresh clone may carry the map with no
+    `verify/` directory at all. The guard is deliberately narrower than "the directory exists": the
+    check runs only when the verify evidence is THERE — at least one verdict row of any kind — so a
+    pruned or unshipped `verify/` reads as "cannot check", never as "checked and passed". That
+    distinction is the whole point of the check, so it is pinned by its own test.
+
+    ADVISORY, and its blocking sibling is one function up. The existing arithmetic gate blocks
+    because both sides of its equation are inside the record: the map alone proves the
+    contradiction, so there is nothing to defer to. This one compares the record against files
+    OUTSIDE the map, whose completeness nothing guarantees — a closer wave run after
+    `grounding write`, a half-copied `verify/`, an archive step that kept the verdicts and dropped
+    the appeals, all make a correct record look like a lie. Blocking on that would fail a map that
+    is right, which is the one failure a gate must never have. The negative-count half, which needs
+    no file, blocks with its siblings instead.
+
+    ROWS, not claims: `grounding write` counts the closer's verdict WORDS, and a claim re-heard in a
+    second wave is two rows on purpose (the closer contract's own design). Counted here the same
+    way, through `grounding`'s own row test, so the two can never drift."""
+    g = m.grounding
+    if g is None or model_path is None:
+        return []
+    # LOCAL, and the only kind that works: `grounding` imports `anchor_drift`, which imports this
+    # module at its top. `audit_model` breaks the same cycle the same way, four times over.
+    from coyomap.grounding import is_closer_row  # noqa: PLC0415 — circular at import
+    rows = _verify_rows(model_path)
+    if not rows:
+        return []        # the evidence is not here; "could not check" is never "checked"
+    words = [str(r.get("verdict", "")).strip().lower() for r in rows if is_closer_row(r)]
+    found = {w: words.count(w) for w in _CLOSER_WORDS}
+    recorded = {"uphold": g.closer_upheld, "reject": g.closer_rejected, "unsure": g.closer_unsure}
+    if found == recorded:
+        return []
+    gaps = ", ".join(f"{w}: the record says {recorded[w]}, the files show {found[w]}"
+                     for w in _CLOSER_WORDS if recorded[w] != found[w])
+    where = (f"{len(words)} closer row(s) across the verify files beside the map" if words
+             else "no closer row at all, though the skeptics' own verdict rows are there")
+    return [f"`grounding`'s appeal counts disagree with the closer's files: {gaps} — found in "
+            f"{where}. A `closer_rejected` is why a map legitimately keeps a claim its own skeptics "
+            f"refuted, so an overstated one turns an unfixed defect into a settled question. Two "
+            f"causes, and either can be the live one: the record is STALE (a closer wave ran after "
+            f"`grounding write`, or the counts were typed by hand), or the `verify/` directory has "
+            f"lost files since it was written. Re-run `coyomap grounding write` over every closer "
+            f"file, which recomputes all three from the rows."]
 
 
 def _inheritance_runs_in_warnings(m: ProjectModel) -> list[str]:
@@ -5489,8 +5707,22 @@ def _runs_in_family_warnings(m: ProjectModel) -> list[str]:
     return out
 
 
+#: How many findings one sentence may answer before the merge stops being readable as a judgement
+#: about each of them. MEASURED, like every other number here: across the four live maps of
+#: 2026-09-13, of the 106 recorded lines that parse a key list, 83 carry one key, 95 carry four or
+#: fewer and 101 carry six or fewer — then the tail jumps to 8, 10, 10, 25 and 25. The cap sits one
+#: step above the 95th percentile, so the ordinary merged line the repeated-reason advisory ASKS for
+#: is never argued with, and the four outliers are.
+#:
+#: The pair pulls in opposite directions on purpose. Merging is right — one reason written out
+#: seventeen times is the wall the advisory above exists to kill — and a reason stretched over 25
+#: elements is a judgement made once and applied 25 times. reminderrepo carried exactly that: one
+#: line, 25 `En` keys, one sentence, and every saved record the map keeps went quiet behind it.
+_KEYS_PER_RECORD_CAP = 8
+
+
 def recorded_line_warnings(m: ProjectModel) -> list[str]:
-    """Two advisories about the RECORDS themselves — the shape of the adjudication log, not the map.
+    """Three advisories about the RECORDS themselves — the shape of the adjudication log, not the map.
 
     1. REPEATED REASONS. One reason written out once per element is how a recorded section grows
        into a wall: a live map carried 66 lines holding 15 distinct reasons, the same sentence up to
@@ -5502,6 +5734,12 @@ def recorded_line_warnings(m: ProjectModel) -> list[str]:
        with no list grammar — a quoted claim, a `path:line`, a bucket name, a kind plus a contract
        word — following that advice destroyed the record with nothing said: the tool causing the
        silent over-suppression this whole module exists to prevent.
+
+    1b. …AND THE SAME MERGE, STRETCHED TOO FAR. The line above is the fix for a wall; this is the
+       fix for the fix. One sentence over `_KEYS_PER_RECORD_CAP` keys is a judgement made once and
+       applied to that many separate findings, and nobody re-reads it against each. Advisory, and it
+       never asks for the wall back: the answer is to split the line into the groups it is really
+       about, not to write the reason out once per key.
 
     2. A LINE THAT TRIED TO BE A RECORD AND ADJUDICATES NOTHING — a list holding a token that is not
        a key, a key with no why, or (in the audit family) a list that has lost the check name that
@@ -5515,6 +5753,7 @@ def recorded_line_warnings(m: ProjectModel) -> list[str]:
             continue
         if spec.key is not None:
             groups: dict[str, list[str]] = {}
+            overloaded: list[list[str]] = []
             for ln in lines:
                 keys = records.keys_on_line(ln, spec.key, spec.seps, spec.lead, spec.strict_multi)
                 _, sep, why = ln.partition(": ")
@@ -5522,6 +5761,16 @@ def recorded_line_warnings(m: ProjectModel) -> list[str]:
                 # another — a line already carrying a list is the fixed form, not the problem.
                 if len(keys) == 1 and sep and (w := _norm_reason(why)):
                     groups.setdefault(w, []).append(keys[0])
+                if len(keys) > _KEYS_PER_RECORD_CAP:
+                    overloaded.append(keys)
+            for keys in overloaded:
+                out.append(
+                    f"'{heading}' has one record answering {len(keys)} findings with one sentence "
+                    f"({_shown(keys, 6, unit='key(s)')}) — over the {_KEYS_PER_RECORD_CAP} this "
+                    f"check treats as still readable as a judgement about each. Re-read the reason "
+                    f"against every key it covers, and split the line into the groups it is really "
+                    f"about. Do NOT write the reason out once per key: that is the wall the "
+                    f"repeated-reason advisory exists to stop.")
             repeated = sorted((len(ks), ks) for ks in groups.values() if len(ks) >= _REPEATED_REASON_MIN)
             if repeated:
                 worst = repeated[-1]
@@ -5530,6 +5779,20 @@ def recorded_line_warnings(m: ProjectModel) -> list[str]:
                            f"{len(repeated)} reason(s), one of them {worst[0]} times — write each "
                            f"reason ONCE and name every element it answers on that line "
                            f"({', '.join(worst[1][:3])}{', …' if worst[0] > 3 else ''}: <why>).")
+        # A key that PARSES and answers nothing. `malformed_records` above catches only an
+        # unreadable key; this is the readable one whose `/scope` word no check here honours —
+        # `C1/article` under a heading whose only scope is `code-name`. It reads as answered, it
+        # silences nothing, and before this nothing said so. Same shape and same reason as the
+        # near-miss `runs_in` key line, which names the five that work; this names the set too,
+        # because "wrong" without "these are right" is a line an operator cannot act on.
+        inert = records.inert_scoped_keys(m, heading)
+        if inert:
+            out.append(f"{len(inert)} recorded '{heading}' key(s) name a scope no check reads: "
+                       f"{_shown(inert, 6, unit='key(s)')} — these parse, look answered and silence "
+                       f"NOTHING. The scope(s) that work here: "
+                       + ", ".join(f"`/{s}`" for s in spec.scopes)
+                       + ". Fix the word, or drop the `/scope` to answer this heading's own "
+                         "question instead.")
         for bad in records.malformed_records(m, heading):
             out.append(f"'{heading}' has a line that tries to be a record and adjudicates NOTHING "
                        f"(the form is `{spec.merged_form}`): {bad[:96]}")
@@ -5939,6 +6202,89 @@ _DEPLOYMENT_FLAVORED_EXTRA_KEYS = {
 
 NAMING_EXCEPTIONS_HEADING = "Naming exceptions"
 
+#: The scope word a 'Naming exceptions' line carries when it answers the CODE-SHAPED-NAME advisory
+#: rather than the leading-article one. Both are keyed by element id under one heading, so the bare
+#: `En` would answer whichever fired — the device `IFACE_KEY` already uses, for the reason stated
+#: there: a record must silence one (check, id) pair, never a family.
+_CODE_NAME_SCOPE = "code-name"
+
+
+def _named_elements(m: ProjectModel) -> tuple[object, ...]:
+    """The elements whose NAME a reader meets as a label — the population both naming advisories
+    walk, so the two can never end up asking about different halves of the map.
+
+    `deps` are in: a dependency name is drawn on a card like any other, and the leading-article rule
+    applies to it. The code-shape rule exempts them itself, for a reason that is about the code
+    shape and nothing else (see `_check_code_shaped_names`)."""
+    return (*m.interfaces, *m.components, *m.deps, *m.entities, *m.roles, *m.use_cases,
+            *m.subsystems, *m.subdomains, *m.capabilities, *m.blocks)
+
+
+def _product_name_words(m: ProjectModel) -> set[str]:
+    """Every word of every dependency's name — the map's own list of what a real product is called.
+
+    A dependency name IS the vendor's spelling by contract (`PostgreSQL`, `NestJS`, `Day.js`), so
+    these are the words that look like code and are not. Read off the map rather than kept as a
+    list here: a hard-coded vendor list would be wrong for the next project on the day it is
+    written."""
+    return {w for d in m.deps for w in re.split(r"[\s/(),]+", d.name or "") if w}
+
+
+def _check_code_shaped_names(m: ProjectModel) -> list[str]:
+    """ADVISORY: an element NAME is what the thing IS, not what the class is called.
+
+    THE ASYMMETRY IS THE EVIDENCE. On the 2026-09-13 live maps 52 of 59, 50 of 53 and 96 of 100
+    RECORD names were the class's own spelling (`WeeklyMultipleRequestTypeWithIntervalEndWithOccurence`,
+    `NotificationSecurityData`), while 0 of 126, 0 of 43 and 0 of 114 COMPONENT names were, and the
+    fourth map had 0 of 69 records. The `meaning` sentence beside each was good plain language —
+    "Repeats through the day between two times, every few days, and stops on an end date" — so the
+    writer knew what the thing was and named it after the class anyway. Nothing said not to: the
+    writing rules ban code inside a SENTENCE and govern the leading article of a NAME, and the prose
+    walk reads prose FIELDS, never names.
+
+    TWO SECTIONS ARE EXEMPT BY CONSTRUCTION, and neither is a threshold that could drift:
+
+    * `deps` — a dependency's name is the vendor's own spelling, and SHOULD be. The rule would fire
+      14 times on one live map's 35 dependencies, every one of them correct (`PostgreSQL`, `nginx`,
+      `axios`, `libphonenumber-js`). An advisory that is wrong 14 times in one section is one a
+      build learns to route around.
+    * `non_entity_types` — the row exists to say "this code type is deliberately NOT modelled", so
+      the code spelling is the row's content, the way a file path is a code link's content. It also
+      carries no id, so the recorded escape below could never reach it, and an advisory whose escape
+      is unreachable is the defect this codebase keeps finding.
+
+    ADVISORY and aggregated to ONE line, like its sibling above: a real domain term can be humped,
+    and a check that blocks on a legal name is one the lead routes around."""
+    # THE SCOPED KEY ONLY, and the bare id deliberately does NOT answer this. A bare `In` under this
+    # heading has one documented meaning — "the article is part of a real proper name" — and every
+    # recorded line on every live map was written to mean that. Honouring it here would make one
+    # record silence two different questions about one label, which is the family escape the method
+    # forbids in so many words ("a recorded line silences exactly one (check, id) pair — never a
+    # family") and which the doors family already had to have fixed out of it once
+    # (`method/retro-checks/2026-08-30-doors-both-ways.md`). The bare `runs-in` literal is refused in
+    # this same file for the same reason: rejecting the blunt form is what makes the operator say
+    # which finding they actually judged.
+    recorded = _recorded_ids(m, NAMING_EXCEPTIONS_HEADING, ("",))
+    vendor = _product_name_words(m)
+    dep_ids = {d.id for d in m.deps}
+    hits: list[tuple[str, str, list[str]]] = []
+    for el in _named_elements(m):
+        eid = getattr(el, "id", "")
+        if eid in dep_ids or f"{eid}/{_CODE_NAME_SCOPE}" in recorded:
+            continue
+        tokens = prose.name_tokens(getattr(el, "name", ""), vendor)
+        if tokens:
+            hits.append((eid, getattr(el, "name", ""), tokens))
+    if not hits:
+        return []
+    return [f"{len(hits)} element name(s) are spelled like code, not like the thing: "
+            f"{_shown([f'{i} {n!r}' for i, n, _t in hits], 6, unit='name(s)')}. A name is what a "
+            f"reader meets on a card and in a breadcrumb, and a reader of this map does not read "
+            f"code — the code link beside the element already says which class it is. Name it in "
+            f"the words the element's own sentence already uses. Record "
+            f"'<id>/{_CODE_NAME_SCOPE}: <why>' under a '{NAMING_EXCEPTIONS_HEADING}' extras heading "
+            f"for a domain term that really is spelled this way."]
+
 
 def _check_leading_article(m: ProjectModel) -> list[str]:
     """ADVISORY: an element NAME is a label, and a label takes no leading article.
@@ -5956,10 +6302,10 @@ def _check_leading_article(m: ProjectModel) -> list[str]:
     ADVISORY, never a gate, and aggregated to ONE line: a product really can be called "The
     Gateway", and a check that blocks on a legal name is a check the lead learns to route around."""
     recorded = _recorded_ids(m, NAMING_EXCEPTIONS_HEADING, ("",))
-    hits = [(el.id, el.name)
-            for el in (*m.interfaces, *m.components, *m.deps, *m.entities, *m.roles,
-                       *m.use_cases, *m.subsystems, *m.subdomains, *m.capabilities)
-            if getattr(el, "name", "").lower().startswith("the ") and el.id not in recorded]
+    hits = [(getattr(el, "id", ""), getattr(el, "name", ""))
+            for el in _named_elements(m)
+            if getattr(el, "name", "").lower().startswith("the ")
+            and getattr(el, "id", "") not in recorded]
     if not hits:
         return []
     return [f"{len(hits)} element name(s) start with 'The' — a name is a LABEL, read on a card and "
@@ -6454,12 +6800,98 @@ def _check_view_fresh(m: ProjectModel, model_path: Path) -> list[str]:
     return []
 
 
+# ── what the records silenced ────────────────────────────────────────────────────────────────────
+
+def _is_recorded_section(section: ExtraSection) -> bool:
+    """Is this extras section one a CHECK reads — a recorded adjudication rather than a note?
+
+    The registry is the authority (`records.HEADINGS`), because the registry is what the checks
+    read. `--ignore-exceptions` used to carry its own list — every heading ending in "exceptions",
+    plus four named ones — and that list had fallen four behind: 'Missing surfaces', 'Walk jumps',
+    'Sweep debt' and 'Bucket vocabulary' all silence a finding and all survived the flag whose whole
+    job is to drop them. Two answers to one question, and the copy nobody maintained was the one the
+    operator was told to trust."""
+    return records.spec_of(section.heading) is not None
+
+
+#: How many of the silencing HEADINGS the disclosure line names before it counts the rest.
+_SILENCED_SHOWN = 6
+
+
+def _silencing_key(line: str) -> str:
+    """What makes two advisory lines THE SAME FINDING for the disclosure below: the line with its
+    numbers removed, cut to its opening words.
+
+    A check whose count moves — "3 saved records" becoming "25" — is still being reported, so it is
+    not silenced, and naming it as such would overstate. The prose counter is the other half of the
+    same case and the reason the key cuts at the opening words rather than at the digits: dropping
+    the recorded lines drops the SENTENCES on them too, so that counter reports FEWER findings
+    without the records, on different example fields. Keyed on the opening words, both pair up."""
+    return " ".join(re.sub(r"\d+", "", line).split())[:60]
+
+
+def _records_disclosure(m: ProjectModel, live: list[str],
+                        rerun: "Callable[[ProjectModel], list[str]]",
+                        silenced_out: list[str] | None = None) -> list[str]:
+    """ONE line naming what the map's recorded lines took out of this report.
+
+    WHY IT IS A DIFF AND NOT A LINE PER FAMILY. Five families already disclose by hand, and a dozen
+    do not: the saved-record rule silenced 25 of reminderrepo's 26 records behind a single recorded
+    line and nothing in the report said so; so did the writer-coverage rule, the data-owner rule,
+    the decision-area rule, the happy-path rule and the audience rule. Writing the sixth, seventh
+    and eighteenth hand-rolled disclosure would leave the nineteenth family to be found by the next
+    retrospective. Running the checks again WITHOUT the records answers it for every family at once,
+    including the ones nobody has written yet.
+
+    AND IT CANNOT OVER-REPORT, which the hand-rolled lines can: the interface family's own by-family
+    line counts 23 suppressions where 8 are real, because three retrofit gates mark a record
+    "honoured" when they merely consult it. This counts advisory lines that DISAPPEAR, so the number
+    is the difference itself.
+
+    `rerun` is the whole check suite, injected rather than called by name: the orchestration below
+    owns the flags and the paths, and passing them a second time here would be a second place where
+    what `validate` checks is decided.
+
+    IT COUNTS, IT DOES NOT QUOTE, and that is a decision with evidence. The first version named each
+    silenced advisory by its own opening words, and 55 tests went red: they ask "is this finding
+    gone?" by looking for its words in the report, and a disclosure that repeats those words puts
+    them back. So would every script, every gate and every eval counter that reads this report the
+    same way — the line would have made a silenced finding look like a live one. The WORDS go to
+    `silenced_out`, which `--json` carries, and the human line carries the count, the headings the
+    records sit under, and the command that prints the lot."""
+    if not any(_is_recorded_section(x) for x in m.extras):
+        return []
+    bare = dataclasses.replace(m, extras=[x for x in m.extras if not _is_recorded_section(x)])
+    without = rerun(bare)
+    live_set = set(live)
+    live_keys = {_silencing_key(w) for w in live}
+    added = [w for w in without if w not in live_set]
+    silenced = [w for w in added if _silencing_key(w) not in live_keys]
+    changed = len(added) - len(silenced)
+    if silenced_out is not None:
+        silenced_out.extend(silenced)
+    if not silenced and not changed:
+        return []
+    headings = _shown(sorted({x.heading.strip() for x in m.extras if _is_recorded_section(x)}),
+                      _SILENCED_SHOWN, unit="heading(s)")
+    tail = (f", and {changed} more read differently without them" if changed else "")
+    head = (f"{len(silenced)} advisory line(s) are silenced by this map's recorded lines{tail}"
+            if silenced else
+            f"{changed} advisory line(s) read differently because of this map's recorded lines")
+    return [f"{head}, which sit under: {headings}. A silence you cannot see reads exactly like "
+            f"having no findings, and most families say nothing at all when they go quiet — five "
+            f"disclose by hand and a dozen do not. Read every silenced line with `coyomap validate "
+            f"--ignore-exceptions`, or take the `silenced` list from `--json`."]
+
+
 # ── orchestration ────────────────────────────────────────────────────────────────────────────────
 
 def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                    check_sources: bool = False, check_coverage: bool = False,
                    repo_root: Path | None = None, model_is_edited: bool = False,
-                   stats: dict[str, int] | None = None) -> tuple[list[str], list[str]]:
+                   stats: dict[str, int] | None = None,
+                   disclose_records: bool = True,
+                   silenced_out: list[str] | None = None) -> tuple[list[str], list[str]]:
     """Every semantic check over a structurally-valid model; returns (problems, warnings) exactly
     like the v1 validator did, so the profiler and the CLI share one orchestration.
 
@@ -6476,7 +6908,13 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     printed byte-identical output on a clean map — so a lead who passed the flag on every run could
     not tell whether it did anything, and a silent flag is indistinguishable from a no-op one. Counts
     come from the same iterators the checks walk, never a re-derivation, so the number cannot drift
-    from the work."""
+    from the work.
+
+    `disclose_records` runs the whole suite a SECOND time on a copy with the recorded lines dropped,
+    and reports what they silenced (`_records_disclosure`). Off for that inner run, which is what
+    stops it recursing, and off for a model that already has no records to drop. `silenced_out` is
+    the out-param that collects those advisories in full — the report itself only counts them, for
+    the reason `_records_disclosure` states."""
     if (check_sources or check_coverage) and model_path is None and repo_root is None:
         raise ValueError("model_path or repo_root is required when check_sources/check_coverage is set")
     problems: list[str] = []
@@ -6563,6 +7001,11 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_messaging_payload_warnings(m))
     warnings.extend(_isolated_component_warnings(m))
     warnings.extend(_grounding_warnings(m))
+    # …and its mirror: claims the pin held that the shipped map no longer makes. Needs the path,
+    # because the pin is a file beside the map rather than a field inside it.
+    warnings.extend(_claim_loss_warnings(m, model_path))
+    # The appeal, checked against the closer's own files — the same reason, one field along.
+    warnings.extend(_closer_record_warnings(m, model_path))
     warnings.extend(_inheritance_runs_in_warnings(m))
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
@@ -6572,6 +7015,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(extra_warnings)
     warnings.extend(_check_prose(m))
     warnings.extend(_check_leading_article(m))
+    warnings.extend(_check_code_shaped_names(m))
 
     roots = _source_roots(model_path, repo_root) if model_path is not None else (
         [repo_root.resolve()] if repo_root is not None else [])
@@ -6735,6 +7179,15 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
 
     if model_path is not None and not model_is_edited:
         warnings.extend(_check_view_fresh(m, model_path))
+    if disclose_records and not model_is_edited:
+        # LAST, so the diff sees every warning above it — and skipped when the caller has already
+        # dropped the records (`--ignore-exceptions`), where the answer is the report itself.
+        def rerun(bare: ProjectModel) -> list[str]:
+            return validate_model(bare, model_path, check_sources=check_sources,
+                                  check_coverage=check_coverage, repo_root=repo_root,
+                                  model_is_edited=True, disclose_records=False)[1]
+
+        warnings.extend(_records_disclosure(m, warnings, rerun, silenced_out))
     return problems, warnings
 
 
@@ -6921,17 +7374,8 @@ def _run(argv: list[str] | None = None) -> int:
         # step-count band AND the fused-goal name smell; every `runs_in` advisory, not just the one
         # the exception was written about), so what a literal actually silences is routinely more
         # than its author meant. This flag is that copy, made by the tool.
-        dropped = sum(len(x.body.splitlines()) for x in m.extras
-                      if x.heading.strip().lower().endswith("exceptions")
-                      or x.heading.strip().lower() in ("accepted duplications", "unclaimed surfaces",
-                                                       "happy path coverage",
-                                                       "entry-point coverage"))
-        m.extras = [x for x in m.extras
-                    if not (x.heading.strip().lower().endswith("exceptions")
-                            or x.heading.strip().lower() in ("accepted duplications",
-                                                             "unclaimed surfaces",
-                                                             "happy path coverage",
-                                                             "entry-point coverage"))]
+        dropped = sum(len(x.body.splitlines()) for x in m.extras if _is_recorded_section(x))
+        m.extras = [x for x in m.extras if not _is_recorded_section(x)]
         print(f"NOTE: --ignore-exceptions — {dropped} recorded line(s) were dropped for this run, so "
               f"every advisory a recorded exception would have silenced is shown below. Nothing was "
               f"written; this is a READ of the map you have, not a different map.\n")
@@ -6976,9 +7420,11 @@ def _run(argv: list[str] | None = None) -> int:
                     print(f"- {ep.id}: <why>   # [{ep.kind}] {_clip(ep.trigger)}")
         return 0
     vstats: dict[str, int] = {}
+    vsilenced: list[str] = []
     problems, warnings = validate_model(m, path, check_sources=check_sources,
                                         check_coverage=check_coverage, repo_root=repo_root,
-                                        model_is_edited=ignore_exceptions, stats=vstats)
+                                        model_is_edited=ignore_exceptions, stats=vstats,
+                                        silenced_out=vsilenced)
     # What the repo-reading flags actually read. Without this, `validate` and
     # `validate --check-sources` print byte-identical output on a clean map, so passing the flag is
     # indistinguishable from forgetting it — and a lead cannot tell a silent pass from a no-op.
@@ -6994,6 +7440,12 @@ def _run(argv: list[str] | None = None) -> int:
                    "checked": checked or None,
                    # Structured, like `audit --json`'s `worklist`: the sweep rows a build acts on.
                    "sweep_worklist": sweep_worklist(m, load_map_extents(path)),
+                   # WHAT THE RECORDS SILENCED, in full. The human report counts these and does not
+                   # quote them: a disclosure that repeats a silenced finding's own words puts those
+                   # words back into the report, and every reader that asks "is this finding gone?"
+                   # by looking for them — 55 of this repo's own tests do — would then read a
+                   # silenced finding as a live one. A machine reader gets the list here instead.
+                   "silenced": vsilenced,
                    "checked_counts": vstats}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 1 if problems else 0

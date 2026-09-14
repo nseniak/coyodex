@@ -26,3 +26,5 @@ Escalation: none on its own.
    before the final assemble produces the mismatch, and the advisory says the record matches
    neither tier.
    regression sign: silence on such a build. The tier detection has become a way to pass.
+
+verified in reminderrepo build of 2026-09-13 23:03

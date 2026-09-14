@@ -15,8 +15,9 @@ accepting the map.
 
 ## Checks
 
-1. expect: the next build's Phase-4 reconcile shows one closer agent dispatched with the refuted
-   claims, and `grounding.note` records rejected refutations (a nonzero rejection count is normal
+1. expect: the next build's Phase-4 reconcile shows one closer agent PER REFUTATION WAVE dispatched
+   with that wave's refuted claims (two skeptic waves means two closers, not one), and
+   `grounding.note` records rejected refutations (a nonzero rejection count is normal
    — on the motivating build 3 of one batch's refutations were false).
    regression sign: refutations applied straight from the vote with no re-read anywhere, or the
    lead re-reads everything itself with the closer available and does not say why.
@@ -26,3 +27,5 @@ accepting the map.
    regression sign: a non-owner authors entities anyway, or the owner's brief was assembled
    without the addendum and the domain slice comes back thin (entities without relations, missing
    `keyed_by` / `non_entity_types`).
+
+verified in reminderrepo build of 2026-09-13 23:03

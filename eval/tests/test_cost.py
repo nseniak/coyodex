@@ -182,6 +182,25 @@ def test_an_undescribed_agent_is_other_never_forced_into_a_bucket():
 # --- the straggler tax ----------------------------------------------------------------
 
 
+def test_waste_is_not_charged_with_a_stragglers_idle_wait_on_an_UNBOUNDED_run():
+    """`waste = wall - mean`, and the two were measured on different bases: `mean` subtracts the
+    stretches an agent sat blocked on its coordinator, `wall` read the raw span. So the DEFAULT
+    invocation — no flags — printed 14.86 phantom minutes in one fan-out of a real build and 22.35
+    minutes of straggler waste for a true 7.49. `--to-turn` hid it there only because that build's
+    block happened to fall outside the window: correctness must not depend on a flag."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        make_spanning_agent(cost.subagent_dir(session), "s1", "Trace the slow one",
+                            start="2026-08-02T10:01:00.000Z", end="2026-08-02T10:04:00.000Z",
+                            woken="2026-08-02T10:29:00.000Z")
+        loose = cost.build_report(session)          # NO bounds at all
+        assert len(loose.batches) == 1
+        assert round(loose.batches[0]["waste"]) == 0, loose.batches[0]["waste"]
+        assert round(loose.batches[0]["wall"] / 60) == 3, "the barrier held for the work, not the nap"
+        assert round(loose.agent_busy_seconds / 60) == 3, loose.agent_busy_seconds
+
+
 def test_waste_is_the_batch_wall_minus_its_mean_agent():
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
@@ -315,6 +334,165 @@ def test_turn_bounds_cut_the_session_down_to_the_build():
         assert cost.build_report(session).requests == 4
         assert cost.build_report(session, from_turn=2).requests == 2
         assert cost.build_report(session, from_turn=1, to_turn=2).requests == 2
+
+
+def make_spanning_agent(dir_path: Path, name: str, description: str, *, start: str, end: str,
+                        woken: str | None = None, woke_until: str | None = None) -> None:
+    """A sub-agent running `start` to `end`, optionally WOKEN once more at `woken` and working on
+    until `woke_until` (default: answering immediately, at `woken`).
+
+    The wake is what a completed background command looks like in a real transcript: a user record
+    carrying NO tool result, long after the agent answered. Stamps are explicit so a test can place
+    the agent either side of a turn bound."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    usage = {"input_tokens": 1, "output_tokens": 500,
+             "cache_read_input_tokens": 44_000, "cache_creation_input_tokens": 500}
+
+    def response(n: int, stamp: str, block: dict[str, object]) -> dict[str, object]:
+        return {"type": "assistant", "isSidechain": True, "timestamp": stamp,
+                "message": {"id": f"{name}-{n}", "model": "claude-opus-5", "usage": usage,
+                            "content": [block]}}
+
+    records: list[dict[str, object]] = [
+        {"type": "user", "isSidechain": True, "timestamp": start, "message": {"content": "go"}},
+        response(1, start, {"type": "tool_use", "id": f"{name}-t1", "name": "Bash",
+                            "input": {"command": "rg x &"}}),
+        response(2, end, {"type": "text", "text": "nothing changes any verdict"}),
+    ]
+    if woken is not None:
+        records.append({"type": "user", "isSidechain": True, "timestamp": woken,
+                        "message": {"content": "the background command completed"}})
+        records.append(response(3, woke_until or woken,
+                                {"type": "text", "text": "a duplicate lookup"}))
+    write_jsonl(dir_path / f"agent-{name}.jsonl", records)
+    (dir_path / f"agent-{name}.meta.json").write_text(
+        json.dumps({"description": description}), encoding="utf-8")
+
+
+def make_bounded_session(tmp: Path) -> Path:
+    """A lead whose build is turns 0-1 (10:00 to 10:10) and which keeps chatting at 10:30 — the
+    normal case, an operator who goes on asking questions once the map has landed."""
+    records = [
+        {"type": "assistant", "timestamp": f"2026-08-02T{stamp}.000Z",
+         "message": {"id": f"m{i}", "model": "claude-opus-5", "usage": {"output_tokens": 100},
+                     "content": [{"type": "text", "text": str(i)}]}}
+        for i, stamp in enumerate(("10:00:00", "10:10:00", "10:30:00"))
+    ]
+    return write_jsonl(tmp / "s.jsonl", records)
+
+
+def test_a_turn_bound_stops_a_subagents_clock_where_it_stops_the_leads():
+    """`--to-turn` numbers the LEAD's messages and a sub-agent has none, so its span used to run on
+    to its last record whatever the bound said. One measured build: an agent woken by a background
+    command 12.9 minutes after the commit stretched a 42.0-minute build to 54.8 and made the
+    straggler waste read 22.3m (41% of active) for a true 7.5m (18%)."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        make_spanning_agent(cost.subagent_dir(session), "w1", "Close the wave-two refutations",
+                            start="2026-08-02T10:05:00.000Z", end="2026-08-02T10:08:00.000Z",
+                            woken="2026-08-02T10:38:00.000Z")
+        loose = cost.build_report(session)
+        assert round(loose.wall_seconds / 60) == 38, "unbounded, the wake is still the build's"
+        bound = cost.build_report(session, to_turn=1)
+        assert round(bound.wall_seconds / 60) == 10, bound.wall_seconds
+        assert round(bound.agent_busy_seconds / 60) == 3, bound.agent_busy_seconds
+        assert bound.batches[0]["waste"] == 0.0, "the 30-minute wake is not straggler waste"
+        assert round(bound.batches[0]["wall"] / 60) == 3
+
+
+def test_the_bound_cuts_the_clock_and_never_the_bill():
+    """The build spawned that agent and paid for every call it made, whenever it landed. Dropping
+    the late turns from the token sums would quietly change what the run COST, which is a different
+    claim from what it took."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        make_spanning_agent(cost.subagent_dir(session), "w1", "Close the wave-two refutations",
+                            start="2026-08-02T10:05:00.000Z", end="2026-08-02T10:08:00.000Z",
+                            woken="2026-08-02T10:38:00.000Z")
+        bound = cost.build_report(session, to_turn=1)
+        assert bound.agents == 1
+        assert bound.by_role["other"]["requests"] == 3, "all three agent calls are still billed"
+        assert bound.usage["output_tokens"] == 3 * 500 + 2 * 100
+
+
+def test_an_agent_that_began_just_before_the_bound_still_did_its_work_inside_it():
+    """The start edge, which "started inside the window" got wrong. On a real transcript moving
+    `--from-turn` by ONE lead turn — 1.49 seconds of clock — deleted a whole trace agent: 41 API
+    calls and $4.49, whose 4.56-minute span was work from end to end and almost all of it inside
+    the window.
+    `lead alone` then rose 6.2m -> 7.4m over an unchanged 28.3m wall, so the report claimed the lead
+    was alone for time it was plainly waiting on that agent."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        # begins one second BEFORE the lead's first in-bound turn, works until 10:08
+        make_spanning_agent(cost.subagent_dir(session), "early", "Trace the sign-in flow",
+                            start="2026-08-02T09:59:59.000Z", end="2026-08-02T10:08:00.000Z")
+        bound = cost.build_report(session, from_turn=0, to_turn=1)
+        assert bound.agents == 1, "one second of head start does not make it another build's agent"
+        assert bound.by_role["trace"]["requests"] == 2, "and it keeps its whole bill"
+        # 10:00 (the window opening, it was already running) to 10:08 (its last record) — NOT the
+        # single instant 10:08, which is all that survives if the clock starts at the first
+        # in-window RECORD instead of the bound.
+        assert round(bound.agent_busy_seconds / 60) == 8, bound.agent_busy_seconds
+        assert round(bound.lead_only_seconds / 60) == 2, "the lead was waiting for the other 8"
+
+
+def test_a_block_straddling_the_bound_is_not_billed_as_work():
+    """The window used to filter the TURN LIST the blocked-stretch scan ran over, so a stretch with
+    one end outside lost its pair and the whole gap read as work. Measured on a real build at
+    `--from-turn 525 --to-turn 570`: an agent that worked 0.07 of the window's 14.63 minutes
+    reported 14.55 minutes busy — round one's lie inverted, and larger."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        # answers at 09:58, blocked across the 10:00 opening, resumes at 10:09 and works one minute
+        make_spanning_agent(cost.subagent_dir(session), "b1", "Trace the blocked one",
+                            start="2026-08-02T09:57:00.000Z", end="2026-08-02T09:58:00.000Z",
+                            woken="2026-08-02T10:09:00.000Z",
+                            woke_until="2026-08-02T10:10:00.000Z")
+        bound = cost.build_report(session, from_turn=0, to_turn=1)
+        assert round(bound.agent_busy_seconds / 60) == 1, bound.agent_busy_seconds
+        agent = cost.read_run(session, from_turn=0, to_turn=1)[1][0]
+        assert round(agent.duration / 60) == 1, "it worked one of the window's ten minutes"
+        assert round(agent.blocked_seconds / 60) == 9, "the other nine were the block"
+
+
+def test_a_bound_does_not_merge_two_fanouts_into_one():
+    """`stagger` is printed to stop a reader reaching for the launch-order lever, and a window
+    clamped every running agent to one start — so waves fused and the number collapsed. Measured
+    across one build's 564 usable `--from-turn` values: fan-outs merged on 86 of them, and stagger
+    was wrong on 291, under-reported as far as 0.0 s against a true 27.8 s."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        agents = cost.subagent_dir(session)
+        # wave one launches before the window opens, wave two four minutes later
+        make_spanning_agent(agents, "w1a", "Trace one", start="2026-08-02T09:59:00.000Z",
+                            end="2026-08-02T10:03:00.000Z")
+        make_spanning_agent(agents, "w1b", "Trace two", start="2026-08-02T09:59:20.000Z",
+                            end="2026-08-02T10:03:00.000Z")
+        make_spanning_agent(agents, "w2", "Trace three", start="2026-08-02T10:06:00.000Z",
+                            end="2026-08-02T10:08:00.000Z")
+        bound = cost.build_report(session, from_turn=0, to_turn=1)
+        assert len(bound.batches) == 2, "two launches four minutes apart are two fan-outs"
+        assert round(bound.batches[0]["stagger"]) == 20, bound.batches[0]["stagger"]
+
+
+def test_an_agent_spawned_after_the_bound_is_not_this_builds_agent():
+    """A post-build question that fans out is the session's work, not the build's — it must leave
+    the agent count and the bill alone, the way the lead's own post-build turns already do."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        make_spanning_agent(cost.subagent_dir(session), "late", "Harvest the leftovers",
+                            start="2026-08-02T10:25:00.000Z", end="2026-08-02T10:27:00.000Z")
+        assert cost.build_report(session).agents == 1
+        after = cost.build_report(session, to_turn=1)
+        assert after.agents == 0
+        assert after.usage["output_tokens"] == 2 * 100, "only the lead's two build turns are billed"
 
 
 def test_a_window_with_nothing_in_it_is_an_error_not_a_zero_report():
@@ -603,3 +781,82 @@ def test_a_batch_whose_agents_have_no_billed_turns_costs_nothing() -> None:
                            agents=(cost.Actor(name="dead", role="trace", turns=()),))
         assert batch.cost("5m") == 0.0
         assert batch.thinking_share() == 0.0
+
+
+def make_straddling_session(tmp: Path) -> Path:
+    """A lead of four turns, 10:00 to 10:30, with an agent that works across the middle two.
+
+    The shape a mid-build `--from-turn` makes: the agent is dispatched at 10:05, spends before the
+    bound and spends after it, so neither "keep it all" nor "drop it all" can be right."""
+    records = [
+        {"type": "assistant", "timestamp": f"2026-08-02T{stamp}.000Z",
+         "message": {"id": f"m{i}", "model": "claude-opus-5", "usage": {"output_tokens": 100},
+                     "content": [{"type": "text", "text": str(i)}]}}
+        for i, stamp in enumerate(("10:00:00", "10:10:00", "10:20:00", "10:30:00"))
+    ]
+    session = write_jsonl(tmp / "s.jsonl", records)
+    make_spanning_agent(cost.subagent_dir(session), "w1", "Harvest the backend slice",
+                        start="2026-08-02T10:05:00.000Z", end="2026-08-02T10:08:00.000Z",
+                        woken="2026-08-02T10:23:00.000Z", woke_until="2026-08-02T10:25:00.000Z")
+    return session
+
+
+def test_a_leading_bound_cuts_the_bill_and_a_trailing_bound_never_does():
+    """The two edges are not symmetric, and one rule cannot be right at both.
+
+    Past a trailing bound the build still pays: it spawned the straggler, and "dollars, except the
+    ones a straggler spent after the commit" is a quantity nobody can compare across builds.
+    Before a leading bound the build never owed: that spend belongs to whatever ran first. Kept
+    whole at both edges, `--from-turn 500` on the reminderrepo build billed 464 calls and $61.47
+    against a windowed 90 calls and $27.77 — 55% of the bill for work that finished before the
+    window opened, while the clock had already dropped to match the window."""
+    with tempfile.TemporaryDirectory() as td:
+        session = make_straddling_session(Path(td))
+        whole = cost.build_report(session)
+        assert whole.requests == 7, "4 lead turns + 3 agent calls"
+
+        trailing = cost.build_report(session, to_turn=1)
+        assert trailing.requests == 5, "the agent's post-bound wake is still billed"
+        assert trailing.wall_seconds / 60 == 10, "while its clock stops at the bound"
+
+        leading = cost.build_report(session, from_turn=2)
+        assert leading.requests == 3, "2 lead turns + only the agent's post-bound wake"
+        assert leading.cost < trailing.cost
+
+
+def make_growing_agent(dir_path: Path, name: str, description: str,
+                       stamps_and_context: list[tuple[str, int]]) -> None:
+    """A sub-agent whose context GROWS call by call, as a real one's does.
+
+    `make_spanning_agent` gives every call the same usage, so a test written on it cannot tell the
+    first call from the last and any assertion about base context passes whatever the code reads.
+    That is the defect this whole pass keeps finding, in a test instead of in a check."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    records: list[dict[str, object]] = []
+    for n, (stamp, context) in enumerate(stamps_and_context):
+        records.append({"type": "assistant", "isSidechain": True, "timestamp": stamp,
+                        "message": {"id": f"{name}-{n}", "model": "claude-opus-5",
+                                    "usage": {"input_tokens": 1, "output_tokens": 500,
+                                              "cache_read_input_tokens": context - 1},
+                                    "content": [{"type": "text", "text": str(n)}]}})
+    write_jsonl(dir_path / f"agent-{name}.jsonl", records)
+    (dir_path / f"agent-{name}.meta.json").write_text(
+        json.dumps({"description": description}), encoding="utf-8")
+
+
+def test_a_leading_bound_does_not_move_an_agents_base_context():
+    """The fixed overhead is paid at DISPATCH, so a bound landing after it changes nothing.
+
+    Read off the first call INSIDE the window instead, an agent already running would report its
+    accumulated context as its fixed cost — the one number this property exists to isolate. Here
+    the agent opens at 20,000 tokens of brief and overhead and is at 90,000 by its last call."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        session = make_bounded_session(tmp)
+        make_growing_agent(cost.subagent_dir(session), "g1", "Harvest the backend slice",
+                           [("2026-08-02T10:02:00.000Z", 20_000),
+                            ("2026-08-02T10:14:00.000Z", 50_000),
+                            ("2026-08-02T10:16:00.000Z", 90_000)])
+        assert cost.build_report(session).base_context_median == 20_000
+        assert cost.build_report(session, from_turn=1).base_context_median == 20_000, (
+            "the brief was paid at dispatch, before the bound")

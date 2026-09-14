@@ -373,6 +373,253 @@ def test_a_why_containing_the_delimiter_does_not_swallow_the_key():
     assert malformed == []
 
 
+# --- a nudge inside one definition, vs a re-anchor onto another ---------------------------------
+#
+# The 2026-09-13 reminderrepo build. `anchor-drift` reported "C146 calls D31: stored
+# [deployment/scripts/auto-deploy.sh:87] — skeptics found line 261 (174 off)" and `fix apply-drift`
+# wrote it, unattended, inside `ship`. Line 87 is `sh get-docker.sh`, the container-engine install
+# the edge's own `why` describes; line 261 is a `docker build`. `drifted` is a LOWER bound only, so
+# a 4-line nudge and that relocation were the same fact and the writer could not tell them apart.
+#
+# The cut is the ENCLOSING DEFINITION, not a line count, and the third test below is why: the
+# commonest drift the adversarial pass finds is an anchor parked on a function header, and moving it
+# onto the operative statement of a long function is a big move that is entirely right. An upper
+# distance bound would refuse exactly the correction this command exists to make.
+
+
+def make_extents(rows: dict[str, list[tuple[int, int, str, str]]]) -> dict:
+    """The pre-index symbol table, in the shape `impact_git.load_map_extents` returns."""
+    return {path: [(lo, hi, name, kind) for lo, hi, name, kind in v] for path, v in rows.items()}
+
+
+def confirmed(anchor: str, evidence: str, extents: dict | None = None):
+    """The single drift finding for one confirmed claim whose anchor is `anchor`."""
+    wl = [make_item("C1 reads E1", anchor)]
+    votes = [make_vote("C1 reads E1", True, evidence)] * 2
+    found = ad.drift_findings(wl, votes, tolerance=2, extents=extents)
+    assert len(found) == 1, f"{anchor} → {evidence} is not one finding: {found}"
+    return found[0][1]
+
+
+def test_a_correction_onto_another_definition_is_reported_and_refused():
+    ext = make_extents({"a.py": [(5, 20, "save", "function"), (50, 70, "render", "function")]})
+    d = confirmed("a.py:10", "a.py:60", ext)
+    assert d.drifted is True, "it is still drift — the map's anchor is still wrong"
+    assert d.refusal is not None
+    assert "save" in d.refusal and "render" in d.refusal, d.refusal
+
+
+def test_a_correction_inside_the_same_definition_is_applied():
+    ext = make_extents({"a.py": [(5, 70, "save", "function")]})
+    assert confirmed("a.py:10", "a.py:60", ext).refusal is None
+
+
+def test_a_long_move_inside_ONE_definition_is_still_applied():
+    """The case an upper distance bound would get wrong, and the reason there is not one. An anchor
+    parked on the header of a 300-line function, corrected onto the operative statement 250 lines
+    down, is the nudge `apply-drift` exists for — and 250 is bigger than the relocation this check
+    was built to refuse."""
+    ext = make_extents({"a.py": [(10, 320, "handle", "function")]})
+    assert confirmed("a.py:10", "a.py:260", ext).refusal is None
+
+
+def test_a_long_move_with_no_definition_on_either_side_is_refused():
+    """The reminderrepo shape, exactly: a shell script the pre-index carries no symbols for, with
+    both lines at the file's top level. There is no boundary to reason about, so the only signal
+    left is distance — and 174 lines is not a nudge."""
+    d = confirmed("deploy.sh:87", "deploy.sh:261", make_extents({"other.py": [(1, 9, "x", "f")]}))
+    assert d.refusal is not None and "174 lines away" in d.refusal, d.refusal
+    assert "neither line" in d.refusal, d.refusal
+
+
+def test_a_short_move_with_no_definition_on_either_side_is_applied():
+    """The other half of the same rule: with no symbol table, a small move is still a nudge. Left
+    generous on purpose — refusing everything unplaced would turn `apply-drift` into a no-op on
+    every map with no pre-index beside it."""
+    assert confirmed("deploy.sh:87", "deploy.sh:100", make_extents({})).refusal is None
+
+
+def test_a_decorator_moving_onto_the_line_it_decorates_is_applied():
+    """Only a crossing the tool can SEE BOTH SIDES of is refused. Most extractors put a decorator
+    outside the function it decorates, so `@app.post(...)` → the operative line inside the handler
+    has no definition on the stored side — the ordinary nudge, and refusing it would kill a whole
+    legitimate family."""
+    ext = make_extents({"routes.py": [(41, 90, "create_user", "function")]})
+    assert confirmed("routes.py:40", "routes.py:45", ext).refusal is None
+
+
+def test_a_refused_finding_survives_both_head_and_tail_of_the_report():
+    """The build that motivated this read `ship` output through both pipes and saw neither the
+    174-line move nor any sign that something had been decided on its behalf. So a refusal leads
+    the listing AND is counted on its last line."""
+    ext = make_extents({"a.py": [(5, 20, "save", "function"), (50, 70, "render", "function")]})
+    wl = [make_item("C1 reads E1", "a.py:10"), make_item("C2 reads E2", "a.py:12")]
+    votes = [make_vote("C1 reads E1", True, "a.py:60")] * 2 + \
+            [make_vote("C2 reads E2", True, "a.py:16")] * 2
+    report = ad._format(ad.drift_findings(wl, votes, tolerance=2, extents=ext), 2)
+    head, tail = report.splitlines()[:4], report.splitlines()[-1]
+    assert any("NOT be written" in ln for ln in head), report
+    assert "1 of 2 finding(s) are REFUSED" in tail, tail
+
+
+def make_map_and_verdicts(td: str, stored: str, evidence: str,
+                          extents: dict | None = None) -> tuple[Path, Path]:
+    """A one-edge map, its verdicts, and — when `extents` is given — the `preindex.json` the real
+    command reads from the map's own directory. Exercises the wiring, not just the predicate."""
+    doc = {"format": FORMAT, "title": "t", "goal": "g",
+           "components": [{"id": "C1", "name": "A", "source": "a.py:1"},
+                          {"id": "C2", "name": "B", "source": "b.py:1"}],
+           "edges": [{"src": "C1", "verb": "reads", "dst": "C2", "where": stored}]}
+    mp, vp = Path(td) / "map.json", Path(td) / "verdicts.json"
+    mp.write_text(json.dumps(doc), encoding="utf-8")
+    claim = l2_worklist_model(load_model(json.dumps(doc)))[0].claim
+    vp.write_text(json.dumps({"grounding": [make_vote(claim, True, evidence)] * 2}),
+                  encoding="utf-8")
+    if extents is not None:
+        (Path(td) / "preindex.json").write_text(json.dumps({"symbols": {"extents": extents}}),
+                                                encoding="utf-8")
+    return mp, vp
+
+
+def test_the_cli_report_marks_a_move_onto_another_definition_not_applied():
+    """End to end, through the command the build actually runs: the pre-index is read from beside
+    the map, the row is still REPORTED as drift, and it now says out loud that `fix apply-drift`
+    will not write it. Before this, the row read exactly like the small nudges beside it."""
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = make_map_and_verdicts(
+            td, "a.py:10", "a.py:60",
+            {"a.py": [[5, 20, "save", "function"], [50, 70, "render", "function"]]})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert ad.main(["--map", str(mp), "--verdicts", str(vp), "--tolerance", "0"]) == 0
+    out = buf.getvalue()
+    assert "C1 reads C2" in out, "still reported as drift"
+    assert "NOT APPLIED" in out and "save" in out and "render" in out, out
+    assert "1 of 1 finding(s) are REFUSED" in out.splitlines()[-1], out.splitlines()[-1]
+
+
+def test_the_cli_says_so_when_there_is_no_pre_index_to_judge_a_move_with():
+    """Without the symbol table the check is WEAKER — a move onto another function in the same file
+    is invisible to it. Silence there would read exactly like a full pass, which is the failure
+    `finalize` exists to prevent."""
+    doc = {"format": FORMAT, "title": "t", "goal": "g",
+           "components": [{"id": "C1", "name": "A", "source": "a.py:1"},
+                          {"id": "C2", "name": "B", "source": "b.py:1"}],
+           "edges": [{"src": "C1", "verb": "reads", "dst": "C2", "where": "a.py:245"}]}
+    claim = l2_worklist_model(load_model(json.dumps(doc)))[0].claim
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = Path(td) / "map.json", Path(td) / "verdicts.json"
+        mp.write_text(json.dumps(doc), encoding="utf-8")
+        vp.write_text(json.dumps({"grounding": [make_vote(claim, True, "a.py:243")] * 2}),
+                      encoding="utf-8")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            assert ad.main(["--map", str(mp), "--verdicts", str(vp), "--tolerance", "0"]) == 0
+    assert "no `preindex.json` beside" in err.getvalue(), err.getvalue()
+
+
+def test_a_closer_appeal_is_never_counted_as_a_vote_in_the_drift_tally():
+    """A closer re-reads ONE refutation and returns `uphold`/`reject`/`unsure`. It settles whether
+    that refutation still blocks the gate; it votes on nothing. `ship` hands the closer files to
+    step 2 AND step 3 through the same `--verdicts` list as the skeptics', so counted as a vote a
+    single `reject` turns a 1-1 tie into a 2-1 majority and MINTS an anchor correction — which step
+    3 (`fix apply-drift --to-reconcile`) writes into `reconcile.json`, where every rebuild replays
+    it. A permanent map edit from a row that decides nothing. This tally was the ninth reader of the
+    verdict pile and the one that was not split."""
+    wl = [make_item("C1 reads E1", "a.py:10")]
+    yes = make_vote("C1 reads E1", True, "a.py:60")
+    no = make_vote("C1 reads E1", False, "")
+    closer = {"claim": "C1 reads E1", "verdict": "reject", "grounded": True}
+    assert ad.drift_findings(wl, [yes, no], tolerance=2) == [], "a 1-1 tie is not a majority"
+    assert ad.drift_findings(wl, [yes, no, closer], tolerance=2) == [], \
+        "and one closer appeal must not turn that tie into one"
+    assert ad.drift_records(wl, [yes, no, closer], tolerance=2) == [], \
+        "so nothing reaches `fix apply-drift` to be written into reconcile.json"
+    # The suppression is of APPEALS, not of evidence: two real skeptics still confirm and still drift.
+    assert [w.claim for w, _d in ad.drift_findings(wl, [yes, dict(yes)], tolerance=2)] == ["C1 reads E1"]
+
+
+def test_a_closer_appeal_alone_does_not_count_as_a_claim_being_challenged():
+    """`challenged N of M` means "what the SKEPTICS examined", and an appeal is not an examination.
+
+    The invariant that would have saved the unsplit version — every closer row answers a claim some
+    skeptic already voted on — is enforced nowhere. `grounding lint` refuses a `closer-*.json` whose
+    rows carry no verdict word; it never checks the claim text against what the skeptics saw. A
+    hand-written appeal, a paraphrased claim, or a claim reworded between the wave and the appeal
+    each put an uncovered row in the pile, and the count then goes UP because an appeal was heard.
+    `finalize` quotes this line into the committed gate block, so it is the one number where "the
+    gate did not run" must never read as "the gate passed"."""
+    wl = [make_item("C1 reads E1", "a.py:10")]
+    closer_only = [{"claim": "C1 reads E1", "verdict": "uphold", "grounded": False}]
+    assert "NO verdict" in ad.coverage_note(wl, closer_only), \
+        "a claim only an appeal mentions was examined by nobody"
+    assert ad.coverage_note(wl, closer_only) == ad.coverage_note(wl, [])
+    # A real skeptic vote still counts, with the appeal sitting beside it.
+    both = [make_vote("C1 reads E1", False, ""), *closer_only]
+    assert "every claim has a verdict" in ad.coverage_note(wl, both)
+
+
+def test_a_move_DEEPER_INTO_the_same_definition_is_applied():
+    """`enclosing_extent` returns the INNERMOST definition, so a class header and a line inside one
+    of that class's own methods come back as two different extents. Comparing them with `==` refused
+    the header-to-operative-line nudge this command exists for — on reminderrepo's real pre-index,
+    `FirebaseAuthService` (a class, 10-40) three lines down into its own `onModuleInit` (12-27). It
+    never left the class; it went in. Containment, not equality."""
+    ts = make_extents({"svc.ts": [(10, 40, "FirebaseAuthService", "class"),
+                                  (12, 27, "onModuleInit", "method"),
+                                  (29, 35, "verifyToken", "method")]})
+    assert confirmed("svc.ts:10", "svc.ts:13", ts).refusal is None, "class header → inside its method"
+    assert confirmed("svc.ts:13", "svc.ts:10", ts).refusal is None, "and the same move outward"
+    # mcpolis' real shape, in another language: a closure nested in the function that builds it.
+    py = make_extents({"factory.py": [(253, 343, "build_cloud_storage", "function"),
+                                      (278, 279, "scoped", "function")]})
+    assert confirmed("factory.py:273", "factory.py:279", py).refusal is None
+    # Two SIBLING definitions still refuse — containment must not loosen the real cut.
+    assert confirmed("svc.ts:13", "svc.ts:30", ts).refusal is not None
+
+
+#: The six anchor corrections the 2026-09-13 reminderrepo build applied, with the real pre-index
+#: extents for each line — the stored anchors recovered from that build's own fragments, the
+#: corrected ones from its `reconcile.json`. Carried as DATA because the shipped map has already had
+#: them applied: re-judging that map yields zero findings, so the survey behind "4 of 6" cannot be
+#: reproduced from the artifact and was reported once as unverifiable.
+_REMINDERREPO_2026_09_13: tuple[tuple[str, str, str, list[tuple[int, int, str, str]], bool], ...] = (
+    ("C85 calls D27", "inv.page.ts:193", "inv.page.ts:200",
+     [(174, 212, "openInvitation", "method")], False),
+    ("C104 reads E5", "groups.service.ts:242", "groups.service.ts:237",
+     [(230, 249, "getContactsByGroupId", "method")], False),
+    ("C146 calls D31", "auto-deploy.sh:87", "auto-deploy.sh:261", [], True),
+    ("C43 calls C45", "signup.component.ts:127", "signup.component.ts:172",
+     [(87, 144, "signUpWithEmail", "method"), (170, 183, "showModernEmailSentAlert", "method")], True),
+    ("C6 calls C1", "activity.model.ts:178", "activity.model.ts:141",
+     [(173, 227, "createGenerator", "function"), (138, 163, "serializeActivity", "function")], True),
+    ("C158 drives C71", "app.page.ts:23", "app.page.ts:27",
+     [(22, 24, "openSideMenu", "method"), (26, 28, "navigateToHome", "method")], True),
+)
+
+
+def test_the_six_reminderrepo_corrections_split_four_refused_two_applied():
+    """The claim this rule was justified with, pinned so it stops being unverifiable.
+
+    Two of the six were later confirmed wrong by hand: `C146` moved the Docker-install link onto a
+    `docker build` 174 lines away, and `C6` moved "picks and builds the schedule rule" off
+    `createGenerator` onto `serializeActivity`. The two APPLIED rows are 7-line and 5-line nudges
+    inside one method — the corrections the command exists to make."""
+    refused = []
+    for claim, stored, corrected, rows, want_refused in _REMINDERREPO_2026_09_13:
+        path = stored.rsplit(":", 1)[0]
+        d = confirmed(stored, corrected, make_extents({path: rows}))
+        assert d.drifted is True, f"{claim} is drift either way"
+        assert (d.refusal is not None) is want_refused, f"{claim}: refusal={d.refusal!r}"
+        if d.refusal:
+            refused.append(claim)
+    assert len(refused) == 4 and len(_REMINDERREPO_2026_09_13) == 6, refused
+    # C146 is caught by the DISTANCE backstop, not the definition rule: the pre-index carries no
+    # extents for `.sh` at all, so an enclosing-definition test alone would have applied it.
+    why = confirmed("auto-deploy.sh:87", "auto-deploy.sh:261", make_extents({})).refusal
+    assert why is not None and "174 lines away" in why, why
+
+
 # --- coverage at the pinned worklist's tier ------------------------------------------------------
 
 def test_with_behavioural_counts_the_behavioural_surface_in_the_coverage_line():

@@ -945,8 +945,9 @@ components/deps/entities), drawn as a flow map and read as a numbered narrative.
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).
   Each entity is a **real named type** whose `SOURCE` anchors its definition (don't synthesize
-  unnamed concepts). Entity↔entity relations are authored on the source card only, never in the
-  backbone edge list. Full spec: [domain cards](method/domain-cards.md).
+  unnamed concepts), and its NAME is the reader's word for it, never the class's spelling — one
+  build named 52 of 59 entities after their classes. Entity↔entity relations are authored on the
+  source card only, never in the backbone edge list. Full spec: [domain cards](method/domain-cards.md).
 - **Subdomains (SD)** *(optional; recommended above ~15 entities)*: `ID | Subdomain | Purpose | Parent |
   Source | Conf.` — the domain analog of Subsystems: T5 entities grouped into bounded contexts,
   optionally nested. Membership is carried on each card (a `SUBDOMAIN:` line holding one `SD`); the
@@ -1597,7 +1598,8 @@ DERIVED from the flows and must never be written by hand.
 under its own id, and one undoored step there is drawn in every story that rides it. **Halves 1–3
 belong to the TRACE, written with the steps; half 4 is the lead's, after the trace.** A trace agent
 that has the `In` rows doors its own arrival, its own hand-off and its own mid-story crossings while
-it still knows what each step does — give it `coyomap contract doors` alongside its trace contract.
+it still knows what each step does — compose the doors half INTO its trace brief with
+`coyomap contract trace --from-slots <slots-dir> --out-dir <briefs-dir> --append doors`.
 Half 4 stays with the lead because a `Cn → Dn` step can only migrate to a surface once the flows
 exist. When a build reaches this point with flows already traced door-blind — a rebuild of an older
 map, or a trace that skipped it — retrofit them here, which is what this step used to be.
@@ -1787,11 +1789,13 @@ summary carries only the top-5 dirs and the whole-repo E — while the harvest p
 tree** and the **per-slice E**, which live only inside the JSON. So there is a read command:
 
 ```
-.venv/bin/coyomap preindex --report --root <repo> [--depth N] [--top N]   # weight tree + per-dir E + coverage
+.venv/bin/coyomap preindex --report --root <repo> [--depth N] [--top N | --dirs a,b,c]   # weight tree + per-dir E + coverage
 ```
 
 Use it instead of hand-parsing — it reads the file and writes nothing. `preindex --help` is a real
-help flag.
+help flag. **`--dirs` prints E for exactly the directories you name**, which is what a harvest plan
+asks: the small slices it chose are never in the top-N ranking, and six turns of one build rebuilt
+those counts with `git ls-files | awk | uniq -c`.
 
 **Reconcile E with what it is BOUND BY.** The report says whether the file-count ceiling or the LOC
 ceiling produced E, plus the median file size. This matters: on a file-per-UI-component frontend the
@@ -1965,8 +1969,10 @@ synthesis → parallel trace.**
     **Order by MEASURED minutes when there are any: `coyomap timings order --phase <phase>`.** The
     paragraph above asks you to guess which slice is longest, and a guess is what it stays until
     somebody writes the answer down. At each barrier, record what the batch actually took —
-    `coyomap timings record --phase <phase> --slice "<name>" --minutes <m>` — and the NEXT build
-    orders from that instead of from T5-and-entry-points folklore. `order` prints longest-first and
+    `coyomap timings record --phase <phase> --from-agents --slice "<name>" …`, which reads each
+    slice's minutes off its own agent transcript so nothing is hand-timed (name each slice as its
+    pointer prompt was sent) — and the NEXT build orders from that instead of from
+    T5-and-entry-points folklore. `order` prints longest-first and
     says plainly when it has no record yet, so a first build is not blocked waiting for one. It is a
     second-build lever, which is why the recording half is not optional.
 
@@ -1997,8 +2003,9 @@ synthesis → parallel trace.**
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
     whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
     **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). **The owner's brief
-    is the filled harvest contract PLUS the T5 addendum** — `coyomap contract harvest-t5 >> <the
-    owner's brief>`; the addendum reaches the owner ALONE, and the shared contract carries only the
+    is the filled harvest contract PLUS the T5 addendum** — add `--append harvest-t5` to that one
+    agent's fill, never a `>>` (which shipped the T5 brief with `«COYOMAP_HOME»` unfilled on the
+    2026-09-13 build); the addendum reaches the owner ALONE, and the shared contract carries only the
     sentence forbidding everyone else, so 13 agents no longer read the spec of a job they must not
     do. This holds even when
     the rest of the harvest is sliced **by directory or by subsystem** for a large repo: the
@@ -2078,8 +2085,12 @@ synthesis → parallel trace.**
   not exist yet. Left to the end, this section was written behind its own consumer and every flow
   was traced door-blind — measured on the 2026-09-01 argus build, **30 of 31 flows owed an opening
   and 96 steps owed a door**, and a whole extra four-agent wave went on the retrofit, after the
-  agents that wrote those steps were gone. Hand each trace agent `coyomap contract doors` alongside
-  its trace contract, and the `In` rows with their `ways_in`.
+  agents that wrote those steps were gone. Compose the doors half into each trace brief with
+  `--append doors`, and fill its `«SURFACES»` with the `In` rows and their `ways_in`. **Never append
+  a contract with `>>`**: the two slot sets do not coincide, `>>` walks around every check `--fill`
+  makes, and 9 of 10 trace briefs on the 2026-09-13 build reached their agent carrying nine literal
+  slot names each — every one of those agents then ran a `lint-fragment --repo «REPO»` that could
+  not run.
 
   **Run every sub-flow name you PRESCRIBE past the naming heuristic before you dispatch it.** A slice
   brief that hands agents `SF20 — Validate and store the token` freezes a fused-goal name into a
@@ -2092,7 +2103,8 @@ synthesis → parallel trace.**
   use case structurally guarantees that components off every traced flow get no edges, so the
   gap-fill is predictable, not a surprise: discovering the edgeless set only after the trace agents
   finish costs a serial dispatch, plus rework of anything written too early. Seed that slice from
-  the post-synthesis edgeless set. Harvest agents may use per-slice *provisional* ids; synthesis
+  the post-synthesis edgeless set, and get its brief from `coyomap contract gapfill` — never by
+  mutating a trace slice's filled slots. Harvest agents may use per-slice *provisional* ids; synthesis
   assigns the final canonical ids here. This is the safe place to renumber: Phase 1 produced only
   nodes (no edges yet — those are Phase 3), so the only intra-slice references to fix up are
   `entry_point.component`, `entity.subdomain`, and the `E↔E` `relation.target` / `FK→En` markers.
@@ -2220,11 +2232,13 @@ synthesis → parallel trace.**
   sub-flow between them).
   **The copyable contract is
   [method/templates/trace-contract.md](method/templates/trace-contract.md)** — hand every trace agent
-  a POINTER to its filled copy (the pointer-dispatch rule in Phase 1), changing only the
-  «angle-bracket» slots. **Get it with the verb:**
-  `coyomap contract trace > <scratch>/trace-contract.md`, then fill them in
-  place; a `Read` followed by a `Write` is one keystroke from a rewrite, and the verb prints only
-  the agent's half, so the lead-facing header cannot travel with it. This was the largest fan-out
+  a POINTER to its filled copy (the pointer-dispatch rule in Phase 1). **The verb fills it; you
+  never edit a contract by hand:** `coyomap contract trace --slots > <slots-dir>/<agent-id>.json`
+  per agent — the skeleton says what goes in each slot beside it — then ONE
+  `coyomap contract trace --from-slots <slots-dir> --out-dir <briefs-dir> --append doors`, which
+  checks every slots file before it writes any brief. A `Read` followed by a `Write` is one keystroke
+  from a rewrite, and the verb prints only the agent's half, so the lead-facing header cannot travel
+  with it. This was the largest fan-out
   with no contract of its own, and the rules fan-out shows what that costs: composed from memory, it
   told eleven agents to author a field they must never author, which lint treats as blocking.
   Trace-prompt discipline — the LEAD's half only. The agent's half (entity steps, the sub-flow
@@ -2520,9 +2534,15 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   **closer** agent with only the refuted claims — each with its skeptic's `evidence` and `note` —
   and the repo; never the build reasoning, and never the confirming rows. It opens each
   refutation's file and returns **uphold / reject** per refutation with the line it read.
-  **Use `coyomap contract closer`; do not compose the brief from this paragraph.** And note what
-  that contract requires of YOU: a refuted claim is a claim about a MAP ROW, so paste
-  `dump --id <element>` and `dump --edges <element>` under each claim. The closer is denied
+  **Build the brief with `coyomap contract closer --from-verdicts <verify-dir> --map <map>`; do not
+  compose it from this paragraph and do not hand-build the claims block.** A refuted claim is a claim
+  about a MAP ROW, and that verb pastes each claim's own `dump --id`, `--record` and `--edges` output
+  under it, for every claim kind. Hand-building it is how one build sent 4 of 20 refutations with no
+  map row at all — and the closer answered `uphold` on all four instead of the `unsure` its contract
+  asks for. A SECOND wave excludes what the first settled with `--settled <the first closer's
+  verdicts file>` or `--exclude <id>`; an `--exclude` that matches nothing is an error, because the
+  hand-written filter that matched 0 of 20 re-sent four settled refutations. **Dispatch once, when
+  the wave closes.** The closer is denied
   `.coyomap/` on purpose — seeing the map whole would hand it the build's reasoning back — so a row
   you leave out is a row it cannot get. A brief that forbade `.coyomap/` and then asked a map-only
   question got a wrong answer, blocked the ship gate, and cost 5 turns to undo. WHY not
@@ -2530,7 +2550,10 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   fresh-context rule exists to break, reintroduced at the very step that decides what the map ends
   up saying (the same reason a lead tie-break is refused below). The lead applies the upheld ones
   through the destination table below and rejects the rest. Rejecting a refutation is a normal
-  outcome — say so in `grounding.note`.
+  outcome — say so in `grounding.note`. **The closer writes its verdicts to
+  `.coyomap/verify/closer-<agent-id>.json`**, beside the skeptics' own, in the same row shape: its
+  answer is what decides the map, and on one build 22 of 24 such judgements survived only as a
+  sentence in a chat nobody can reopen.
 - **Do NOT pre-gather a skeptic's evidence. It was tried, measured, and it cost more.** The
   reasoning was good: 52-62% of a skeptic's bill is re-reading its own accumulated context, so hand
   it what it was going to fetch. `coyomap context` builds exactly that bundle. On a controlled A/B
@@ -2732,7 +2755,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   re-serialize. (It also still rewrites a legacy `security[].source`. **`fix security-row` and `fix
   dedup-security` act on `security[]` only**, which the T7 fold leaves empty — on a map built with
   the current method they print "no security rows" and exit 0, so a rule's TEXT is fixed in its
-  fragment, not with a verb.) To drop a **refuted** edge as a terminal post-assemble fix, `coyomap
+  fragment — with `fix row`, which is the verb for exactly that.) To drop a **refuted** edge as a terminal post-assemble fix, `coyomap
   fix drop-edge` removes it and reports (or, with `--repoint`/`--drop-steps`, heals) the flow steps
   that rode it; **`--to-reconcile <file>` records the drop as a `drop_edges` directive instead of
   editing the map**, which is what makes it survive the next assemble. Reconcile every refutation
@@ -2744,12 +2767,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
   | what came back | where it goes |
   | --- | --- |
-  | refuted, an edge | `coyomap fix drop-edge` (or repoint) |
-  | refuted, an anchor moved | `coyomap fix apply-drift` |
-  | refuted, an ACCESS rule's TEXT is wrong ("that line guards nothing, the real gate is X") | fix the owning T7 fragment's rule (`statement` / `why` / `risk` / `access`) and re-assemble — there is no `fix` verb for a rule's text |
+  | refuted, an edge | `coyomap fix drop-edge` (or `--repoint`), **with `--to-reconcile <file>`** — without it the next assemble re-derives the edge from the fragments |
+  | refuted, an anchor moved | `coyomap fix apply-drift`, **with `--to-reconcile <file>`** — without it the next assemble discards the corrected anchor |
+  | refuted, an ACCESS rule's TEXT is wrong ("that line guards nothing, the real gate is X") | `coyomap fix row --id <Rn> --set-<field> <text>` — reaches the rule's `statement`, `why` and `risk`, and edits the OWNING T7 fragment, so it survives every re-assemble; never hand-edit the fragment |
   | refuted, an access rule's SITE is wrong (the enforcement line moved) | `coyomap fix apply-drift` — a rule site is a claim-shaped, drift-eligible anchor like any other |
   | two fragments harvested one auth check | fuse them in the fragment: one decision enforced in several places is ONE `access` rule with several sites |
-  | **true, but your note / list / transition is wrong** | fix the fragment, or `coyomap record` the decision — it is NOT a refutation and no counter will miss it |
+  | **true, but your note / list / transition is wrong** | fix the fragment with `coyomap fix row` (the same verb as the ACCESS-text row above), or `coyomap record` the decision — it is NOT a refutation and no counter will miss it |
   | unverifiable | the `unverifiable` verdict, and a line in `grounding.note` |
 
   The *true, but your note / list / transition is wrong* row is the one that disappears, because
@@ -2926,8 +2949,8 @@ the ones that have gone missing) from the contract every agent is handed.
 
 **Business-rule contract (Phase 3).** The copyable contract is
 [method/templates/rules-contract.md](method/templates/rules-contract.md). Get it the same way —
-`coyomap contract rules > <scratch>/rules-contract.md` — then fill the «angle-bracket» slots, and
-for the same reason. A rule agent authors every `statement` and every `risk`, the two fields a
+`coyomap contract rules --slots > <slots-dir>/<agent-id>.json` per agent, then one
+`coyomap contract rules --from-slots <slots-dir> --out-dir <briefs-dir>` — and for the same reason. A rule agent authors every `statement` and every `risk`, the two fields a
 reader meets when asking what the product decides. This template exists because one build had none:
 the lead composed the rules contract from prose and told all eleven rule agents to put a `block`
 field on every rule, which `lint-fragment` treats as BLOCKING. The failure fired in 13 of that
@@ -3130,7 +3153,9 @@ It adds no check of its own. What it adds is a record and an answer:
   memory; a piped gate does not. **This binds the MID-BUILD gate runs too, not only this pre-commit
   one.** Reading each gate through `| tail -40` / `| head -14` costs serial rounds — one `validate`
   run per warning family, each with its own patch turn, where one whole read produces one batch of
-  fixes. **And never re-check a warning with a filter narrower than the run that surfaced it**: a
+  fixes. **When the human report is too wide to read whole, the whole report is `validate --json`**
+  — a `cut -c1-200` is a clip, not a read, and one build clipped 8 of its 9 validate runs that way.
+  **And never re-check a warning with a filter narrower than the run that surfaced it**: a
   grep whose pattern no longer matches the wording makes the finding vanish from view, and it then
   ships unrecorded and unfixed. Narrowing the view is what a waved-through advisory looks like from
   the inside. (L3 assertion 15 watches this.) **A COUNT is the narrowest view of all, and it is not
