@@ -3740,9 +3740,21 @@ function flowReveal(els, i) {
 // where they used to be. `onPan` cannot do this: it fires on every frame of a reader's own drag too,
 // and a card hopping about under their hand is worse than one left where they put it. This fires once,
 // after a move the APP made.
+// THE CARD WAITS FOR THE DRAWING TO ARRIVE. It used to be placed at once, against where the boxes
+// were mid-flight, and again when the timer below fired — so it landed and then hopped, with no input
+// from the reader at all. Measured on one step of the player, mouse parked on the button: (388, 501)
+// at 16ms, (401, 555) at 442ms.
+//
+// While this is set, `placeCard` positions nothing and the card stays INVISIBLE (it keeps its box, so
+// the placement at the end can still measure it). The card therefore appears once, already in the
+// right place, about 420ms after the click — the same wait the reader is already watching the drawing
+// make. A card that lands twice is worse than a card that lands late.
+let cameraEasing = false;
 function easeCameraMove() {
   const vp = diagram.querySelector('.svg-pan-zoom_viewport');
   if (!vp) return;
+  cameraEasing = true;
+  if (!PANEL_HOST.hidden) PANEL_HOST.classList.add('card-unplaced');
   vp.classList.add('pan-anim');
   // A TIMER, never `transitionend`: with motion turned off the stylesheet runs no transition and that
   // event never fires. And `onPan` cannot
@@ -3750,6 +3762,7 @@ function easeCameraMove() {
   // already fired while the drawing is still travelling. 420 clears the 300ms transition with room.
   setTimeout(() => {
     vp.classList.remove('pan-anim');
+    cameraEasing = false;
     if (!PANEL_HOST.hidden) placeCard();
   }, 420);
 }
@@ -8032,6 +8045,10 @@ function scheduleCallout(alsoDodge) {
 // Synchronously first, so the card never flickers through a wrong position — then again after the next
 // paint, because a refit or a camera move scheduled alongside this has not landed yet.
 function placeCard() {
+  // NOT WHILE THE DRAWING IS STILL TRAVELLING — see `cameraEasing`. The card keeps its box and its
+  // content and only its paint waits, so the placement at the end measures the real thing.
+  if (cameraEasing) { PANEL_HOST.classList.add('card-unplaced'); hideCallout(); return; }
+  PANEL_HOST.classList.remove('card-unplaced');
   placeCardNear(soleSelectedEl());
   syncCallout();
   scheduleCallout(true);

@@ -1301,6 +1301,10 @@ body.tree-browsing #codeview { display: none; }
          background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
          box-shadow: 0 6px 22px rgba(15, 23, 42, .16); }
 #panel[hidden] { display: none; }
+/* PLACED BUT NOT YET SHOWN: the card is measured (it keeps its box) and painted nothing, while the
+   drawing finishes travelling under it. `visibility`, never `display`, because the placement at the
+   end of the move has to measure the real card's width and height. */
+#panel.card-unplaced { visibility: hidden; }
 /* THE CALLOUT LAYER. Fills the drawing area, catches no clicks, and sits at z-index 3 — one below the
    card (4) and above the diagram — so the line ends UNDER the card's edge and never crosses its face.
    `overflow: visible` because the dot at the element end can sit on the very edge of the box.
