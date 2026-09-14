@@ -79,6 +79,10 @@ _FRONTEND_DIR = Path(__file__).resolve().parent
 _STATIC_FILES = {  # exact-name whitelist (no path traversal possible) -> content type
     "viewer.js": "text/javascript; charset=utf-8",
     "viewer.css": "text/css; charset=utf-8",
+    # The product's mark. Here rather than inline in each page for the reason viewer.html gives, and
+    # in THIS table so the one entry feeds three readers at once: this server, the project index's
+    # /static/ path, and `coyomap export`, which copies everything the table names.
+    "favicon.png": "image/png",
 }
 _STATE_LOCK = threading.Lock()  # guards recents mutation + the derived projects map
 
@@ -1028,7 +1032,7 @@ def main(argv: list[str] | None = None) -> int:
 # X-Coyomap CSRF header. Themed for light + dark via CSS variables + prefers-color-scheme.
 INDEX_HTML = r"""<!doctype html><html><head><meta charset="utf-8"><title>coyomap maps</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
+<link rel="icon" type="image/png" href="/static/favicon.png">
 <style>
 :root{color-scheme:light dark;
   --bg:#fff;--fg:#111827;--muted:#6b7280;--faint:#9ca3af;--line:#e5e7eb;--line2:#f1f2f4;

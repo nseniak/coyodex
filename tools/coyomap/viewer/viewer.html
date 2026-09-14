@@ -4,9 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>coyomap viewer</title>
-<!-- Inline data-URI favicon (two nodes + an edge, the viewer's palette): gives the page an icon AND
-     stops the browser's default /favicon.ico request 404ing. -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
+<!-- THE COYOTE, the product's own mark. A real file rather than the inline data URI that used to be
+     here, because the same icon has to appear in two places — this shell and the server's project
+     index — and an image pasted twice as base64 is one place to change and one to forget. It is in
+     `_STATIC_FILES`, so the server answers for it AND `coyomap export` copies it into a static site
+     without anything else being told. Asked for RELATIVELY, like the script and the stylesheet, so the
+     one spelling works served and exported. It still stops the browser's default /favicon.ico 404. -->
+<link rel="icon" type="image/png" href="favicon.png">
 <!-- The generic frontend: shipped once by `coyomap serve`, shared by every project. Its CSS + JS are
      asked for RELATIVELY, so the same shell works served (from /coyomap/<slug>/) and exported (from
      whatever folder a file host puts it in); the per-project data arrives at runtime from ./api/view. -->
@@ -214,11 +218,12 @@
            tabs of coyomap's own map, four of them zoom, eight left the buttons dim, and Interfaces left
            them lit over a card list where every press did nothing. A control that is absent more often
            than it works does not belong in the bar that is always there.
-           BOTTOM-RIGHT, and its own corner rather than a place in the #overlays column: it is the only
-           free corner on the right. The top-right is the selection card's (#panel, 380px wide), which
-           appears the moment a reader clicks a box, so a control parked there would spend its life
-           under one. The left is #overlays, whose members change what the diagram SAYS — an environment
-           filter, a step player — while this one only moves the camera.
+           TOP-RIGHT, and its own corner rather than a place in the #overlays column on the left: that
+           column's members change what the diagram SAYS — an environment filter, a step player — while
+           this one only moves the camera. It shares the corner with the selection card (#panel, 380px
+           wide), which starts under it rather than beside it: the two make a right-hand column, the
+           mirror of the left one. The card yields because it comes and goes on every click, while the
+           control is there for as long as the drawing is.
            `hidden` toggles from JS (syncZoomControls), on whether a pan/zoom map exists at all. -->
       <div id="zoomctl" hidden>
         <button id="zoomout" title="Zoom out">−</button>
