@@ -325,7 +325,13 @@ def make_roles_then_usecases_map() -> str:
 
 
 def make_broken_map() -> str:
-    """References an undefined component C9 — a blocking validation problem (validate_ok is False)."""
+    """An EDGE pointing at an undefined component C9 — a blocking validation problem
+    (validate_ok is False).
+
+    The reference used to be `depends_on: "C9"`, which is free-text summary prose and no reference at
+    all: what actually failed this map was a malformed `entry_point` anchor ("f", not `path:line`), a
+    field that no longer exists. So the fixture asserted the right thing for the wrong reason, and the
+    docstring named a problem the map did not have. The edge below is the real one."""
     return """{
   "format": "coyomap-map",
   "title": "",
@@ -384,7 +390,8 @@ def make_broken_map() -> str:
       ]
     }
   ],
-  "edges": [],
+  "edges": [{"src": "C1", "verb": "calls", "dst": "C9", "why": "a dangling reference",
+             "where": "src/v.py:2"}],
   "deployment": [],
   "observability": [],
   "security": [],
